@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Swiftlet.Domain/Swiftlet.Domain.csproj" />
+    <Project Path="src/Swiftlet.Application/Swiftlet.Application.csproj" />
+    <Project Path="src/Swiftlet.Infrastructure/Swiftlet.Infrastructure.csproj" />
+    <Project Path="src/Swiftlet.Desktop/Swiftlet.Desktop.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Swiftlet.Domain.Tests/Swiftlet.Domain.Tests.csproj" />
+    <Project Path="tests/Swiftlet.Application.Tests/Swiftlet.Application.Tests.csproj" />
+    <Project Path="tests/Swiftlet.Infrastructure.Tests/Swiftlet.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>
