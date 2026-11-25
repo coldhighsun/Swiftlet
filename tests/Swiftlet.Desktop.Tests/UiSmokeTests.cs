@@ -149,7 +149,9 @@ public class UiSmokeTests
                 Render(addAccount, "add-account-en", "en");
                 addAccount.Title.Should().Be("Add mail account");
                 addAccount.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string)
-                    .Should().Contain("Server settings").And.Contain("Cancel").And.Contain("Add");
+                    .Should().Contain("Server settings").And.Contain("Cancel").And.Contain("Add")
+                    .And.Contain("Sign in with Google").And.Contain("Sign in with Microsoft");
+                addAccount.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).Should().Contain("or use a password");
                 addAccount.Close();
 
                 var account = TestData.Account();

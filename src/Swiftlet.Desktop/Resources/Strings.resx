@@ -60,6 +60,12 @@
   <data name="AddAccount_Add" xml:space="preserve"><value>Add</value></data>
   <data name="AddAccount_PortMustBeNumber" xml:space="preserve"><value>Ports must be numbers</value></data>
   <data name="AddAccount_HintAppPassword" xml:space="preserve"><value>{0}: use an app-specific password or authorization code, not your login password.</value></data>
+  <data name="AddAccount_SignInGoogle" xml:space="preserve"><value>Sign in with Google</value></data>
+  <data name="AddAccount_SignInMicrosoft" xml:space="preserve"><value>Sign in with Microsoft</value></data>
+  <data name="AddAccount_OrPassword" xml:space="preserve"><value>or use a password</value></data>
+  <data name="AddAccount_WaitingBrowser" xml:space="preserve"><value>Complete the sign-in in your browser…</value></data>
+  <data name="AddAccount_OAuthNotConfigured" xml:space="preserve"><value>{0} sign-in is not configured yet. {1}</value></data>
+  <data name="AddAccount_SignInFailed" xml:space="preserve"><value>Sign-in failed: {0}</value></data>
   <data name="AddAccount_HintUnknown" xml:space="preserve"><value>Unrecognized mail provider; please enter the server settings.</value></data>
 
   <data name="Compose_TitleNew" xml:space="preserve"><value>New message</value></data>

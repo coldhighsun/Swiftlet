@@ -54,6 +54,19 @@ public static class ProviderPresets
     }
 
     /// <summary>
+    /// Gets the server settings used for accounts signed in through an OAuth provider.
+    /// </summary>
+    /// <param name="provider">The OAuth provider.</param>
+    /// <returns>The preset of the provider's mail service.</returns>
+    public static ProviderPreset For(OAuthProvider provider)
+    {
+        var sample = provider == OAuthProvider.Google ? "user@gmail.com" : "user@outlook.com";
+        return TryGet(sample, out var preset)
+            ? preset
+            : throw new InvalidOperationException($"No preset is defined for {provider}.");
+    }
+
+    /// <summary>
     /// Builds the domain lookup table.
     /// </summary>
     /// <returns>The lookup table.</returns>

@@ -11,10 +11,12 @@ namespace Swiftlet.Infrastructure.Mail;
 /// Sends messages with MailKit's SMTP client and optionally archives a copy in the Sent folder.
 /// </summary>
 /// <param name="secrets">The secret store holding account passwords.</param>
+/// <param name="accessTokens">The OAuth 2.0 access token provider.</param>
 /// <param name="imapFactory">The IMAP connection factory used to archive sent copies.</param>
 /// <param name="logger">The logger.</param>
 internal sealed class MailKitMailSender(
     ISecretStore secrets,
+    IAccessTokenProvider accessTokens,
     IImapSessionFactory imapFactory,
     ILogger<MailKitMailSender> logger) : IMailSender
 {
@@ -32,20 +34,14 @@ internal sealed class MailKitMailSender(
     {
         ArgumentNullException.ThrowIfNull(account);
         ArgumentNullException.ThrowIfNull(message);
-        if (account.AuthMethod != AuthMethod.Password)
-        {
-            throw new NotSupportedException("OAuth2 authentication is not implemented yet.");
-        }
 
         var mime = OutgoingMimeBuilder.Build(account, message);
-        var password = await secrets.GetAsync(AccountSecrets.PasswordKey(account.Id), cancellationToken)
-            ?? throw new InvalidOperationException($"No password is stored for account {account.EmailAddress}.");
 
         using (var smtp = new SmtpClient { Timeout = (int)NetworkTimeout.TotalMilliseconds })
         {
             var options = account.Smtp.UseSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls;
             await smtp.ConnectAsync(account.Smtp.Host, account.Smtp.Port, options, cancellationToken);
-            await smtp.AuthenticateAsync(account.EmailAddress, password, cancellationToken);
+            await MailAuthentication.AuthenticateAsync(smtp, account, secrets, accessTokens, cancellationToken);
             await smtp.SendAsync(mime, cancellationToken);
             await smtp.DisconnectAsync(true, cancellationToken);
         }

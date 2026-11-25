@@ -14,4 +14,14 @@ public static class AccountSecrets
     {
         return $"account:{accountId:N}:password";
     }
+
+    /// <summary>
+    /// Gets the secret key holding the OAuth 2.0 tokens of an account.
+    /// </summary>
+    /// <param name="accountId">The account identifier.</param>
+    /// <returns>The secret key.</returns>
+    public static string OAuthKey(Guid accountId)
+    {
+        return $"account:{accountId:N}:oauth";
+    }
 }

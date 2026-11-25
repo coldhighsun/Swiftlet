@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Swiftlet.Application.Abstractions;
 using Swiftlet.Application.Accounts;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
@@ -22,6 +23,11 @@ public sealed partial class AddAccountViewModel : ObservableObject
     /// The localizer.
     /// </summary>
     private readonly ILocalizer _localizer;
+
+    /// <summary>
+    /// Cancels the pending browser sign-in, if any.
+    /// </summary>
+    private CancellationTokenSource? _signInCancellation;
 
     /// <summary>
     /// Whether the advanced section was opened automatically because the provider is unknown.
@@ -174,12 +180,71 @@ public sealed partial class AddAccountViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Closes the dialog without adding an account.
+    /// Signs in with Google in the browser and adds the account.
+    /// </summary>
+    /// <returns>A task that completes when the sign-in finished, failed or was cancelled.</returns>
+    [RelayCommand(CanExecute = nameof(CanSignIn))]
+    private Task SignInWithGoogleAsync()
+    {
+        return SignInAsync(OAuthProvider.Google);
+    }
+
+    /// <summary>
+    /// Signs in with Microsoft in the browser and adds the account.
+    /// </summary>
+    /// <returns>A task that completes when the sign-in finished, failed or was cancelled.</returns>
+    [RelayCommand(CanExecute = nameof(CanSignIn))]
+    private Task SignInWithMicrosoftAsync()
+    {
+        return SignInAsync(OAuthProvider.Microsoft);
+    }
+
+    /// <summary>
+    /// Closes the dialog without adding an account, abandoning a sign-in that is waiting for the browser.
     /// </summary>
     [RelayCommand]
     private void Cancel()
     {
+        _signInCancellation?.Cancel();
         CloseRequested?.Invoke(this, false);
+    }
+
+    /// <summary>
+    /// Runs the browser sign-in of a provider and closes the dialog on success.
+    /// </summary>
+    /// <param name="provider">The identity provider.</param>
+    /// <returns>A task that completes when the sign-in finished, failed or was cancelled.</returns>
+    private async Task SignInAsync(OAuthProvider provider)
+    {
+        ErrorMessage = string.Empty;
+        ProviderHint = _localizer["AddAccount_WaitingBrowser"];
+        IsBusy = true;
+        using var cancellation = new CancellationTokenSource();
+        _signInCancellation = cancellation;
+        try
+        {
+            await _dispatcher.SendAsync(new AddOAuthAccountCommand(provider), cancellation.Token);
+            CloseRequested?.Invoke(this, true);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            // The user cancelled the dialog while the browser sign-in was pending; nothing to report.
+        }
+        catch (OAuthNotConfiguredException ex)
+        {
+            ErrorMessage = _localizer.Format("AddAccount_OAuthNotConfigured", ex.Provider, ex.Hint);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Sign-in, verification or saving failed; show the reason so the user can retry.
+            ErrorMessage = _localizer.Format("AddAccount_SignInFailed", ex.Message);
+        }
+        finally
+        {
+            _signInCancellation = null;
+            IsBusy = false;
+            ProviderHint = string.Empty;
+        }
     }
 
     /// <summary>
@@ -191,6 +256,11 @@ public sealed partial class AddAccountViewModel : ObservableObject
         ShowAdvanced = !ShowAdvanced;
         _advancedOpenedAutomatically = false;
     }
+
+    /// <summary>
+    /// Gets a value indicating whether a browser sign-in can be started.
+    /// </summary>
+    private bool CanSignIn => !IsBusy;
 
     /// <summary>
     /// Gets a value indicating whether the entered data is sufficient to attempt adding the account.
@@ -215,6 +285,8 @@ public sealed partial class AddAccountViewModel : ObservableObject
         }
 
         AddCommand.NotifyCanExecuteChanged();
+        SignInWithGoogleCommand.NotifyCanExecuteChanged();
+        SignInWithMicrosoftCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>

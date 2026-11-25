@@ -60,6 +60,12 @@
   <data name="AddAccount_Add" xml:space="preserve"><value>添加</value></data>
   <data name="AddAccount_PortMustBeNumber" xml:space="preserve"><value>端口必须是数字</value></data>
   <data name="AddAccount_HintAppPassword" xml:space="preserve"><value>{0}：请使用应用专用密码或授权码，而不是登录密码。</value></data>
+  <data name="AddAccount_SignInGoogle" xml:space="preserve"><value>使用 Google 登录</value></data>
+  <data name="AddAccount_SignInMicrosoft" xml:space="preserve"><value>使用 Microsoft 登录</value></data>
+  <data name="AddAccount_OrPassword" xml:space="preserve"><value>或使用密码</value></data>
+  <data name="AddAccount_WaitingBrowser" xml:space="preserve"><value>请在浏览器中完成登录…</value></data>
+  <data name="AddAccount_OAuthNotConfigured" xml:space="preserve"><value>尚未配置 {0} 登录。{1}</value></data>
+  <data name="AddAccount_SignInFailed" xml:space="preserve"><value>登录失败：{0}</value></data>
   <data name="AddAccount_HintUnknown" xml:space="preserve"><value>未识别的邮箱服务商，请填写服务器设置。</value></data>
 
   <data name="Compose_TitleNew" xml:space="preserve"><value>写邮件</value></data>

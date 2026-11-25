@@ -49,6 +49,22 @@ public class MailAccountTests
     }
 
     /// <summary>
+    /// Verifies OAuth accounts need a provider and password accounts never keep one.
+    /// </summary>
+    [Fact]
+    public void Create_OAuthProviderRules_AreEnforced()
+    {
+        var withoutProvider = () => MailAccount.Create("Me", "me@example.com", AuthMethod.OAuth2, Imap, Smtp, DateTimeOffset.UtcNow);
+        withoutProvider.Should().Throw<ArgumentException>();
+
+        var oauth = MailAccount.Create("Me", "me@example.com", AuthMethod.OAuth2, Imap, Smtp, DateTimeOffset.UtcNow, OAuthProvider.Google);
+        oauth.OAuthProvider.Should().Be(OAuthProvider.Google);
+
+        var password = MailAccount.Create("Me", "me@example.com", AuthMethod.Password, Imap, Smtp, DateTimeOffset.UtcNow, OAuthProvider.Google);
+        password.OAuthProvider.Should().BeNull();
+    }
+
+    /// <summary>
     /// Verifies a too-short interval is rejected.
     /// </summary>
     [Fact]

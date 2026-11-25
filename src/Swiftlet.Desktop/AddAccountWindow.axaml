@@ -7,6 +7,13 @@
         Title="{loc:Loc AddAccount_Title}" Width="480" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterOwner">
   <StackPanel Margin="20" Spacing="10">
+    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+      <Button Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+              Content="{loc:Loc AddAccount_SignInGoogle}" Command="{Binding SignInWithGoogleCommand}" />
+      <Button Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+              Content="{loc:Loc AddAccount_SignInMicrosoft}" Command="{Binding SignInWithMicrosoftCommand}" />
+    </Grid>
+    <TextBlock Text="{loc:Loc AddAccount_OrPassword}" HorizontalAlignment="Center" Opacity="0.6" />
     <TextBox Text="{Binding DisplayName}" PlaceholderText="{loc:Loc AddAccount_DisplayName}" />
     <TextBox Text="{Binding Email}" PlaceholderText="{loc:Loc AddAccount_Email}" />
     <TextBox Text="{Binding Password}" PlaceholderText="{loc:Loc AddAccount_Password}" PasswordChar="●" />

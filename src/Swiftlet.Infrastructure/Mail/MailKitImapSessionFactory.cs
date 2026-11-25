@@ -10,7 +10,8 @@ namespace Swiftlet.Infrastructure.Mail;
 /// Opens IMAP connections with MailKit.
 /// </summary>
 /// <param name="secrets">The secret store holding account passwords.</param>
-internal sealed class MailKitImapSessionFactory(ISecretStore secrets) : IImapSessionFactory
+/// <param name="accessTokens">The OAuth 2.0 access token provider.</param>
+internal sealed class MailKitImapSessionFactory(ISecretStore secrets, IAccessTokenProvider accessTokens) : IImapSessionFactory
 {
     /// <summary>
     /// The network timeout for IMAP operations.
@@ -21,13 +22,6 @@ internal sealed class MailKitImapSessionFactory(ISecretStore secrets) : IImapSes
     public async Task<IImapSession> ConnectAsync(MailAccount account, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(account);
-        if (account.AuthMethod != AuthMethod.Password)
-        {
-            throw new NotSupportedException("OAuth2 authentication is not implemented yet.");
-        }
-
-        var password = await secrets.GetAsync(AccountSecrets.PasswordKey(account.Id), cancellationToken)
-            ?? throw new InvalidOperationException($"No password is stored for account {account.EmailAddress}.");
 
         var client = new ImapClient { Timeout = (int)NetworkTimeout.TotalMilliseconds };
         try
@@ -41,7 +35,7 @@ internal sealed class MailKitImapSessionFactory(ISecretStore secrets) : IImapSes
                 await client.IdentifyAsync(new ImapImplementation { Name = "Swiftlet", Version = "1.0" }, cancellationToken);
             }
 
-            await client.AuthenticateAsync(account.EmailAddress, password, cancellationToken);
+            await MailAuthentication.AuthenticateAsync(client, account, secrets, accessTokens, cancellationToken);
         }
         catch
         {

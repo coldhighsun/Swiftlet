@@ -24,7 +24,8 @@ public class AccountAndFolderRepositoryTests
             AuthMethod.OAuth2,
             new ServerEndpoint("imap.example.com", 993, true),
             new ServerEndpoint("smtp.example.com", 587, false),
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            OAuthProvider.Microsoft);
         account.ChangeSyncInterval(TimeSpan.FromMinutes(15));
         await new AccountRepository(db.Context).AddAsync(account, ct);
 
@@ -33,6 +34,7 @@ public class AccountAndFolderRepositoryTests
 
         loaded.Should().NotBeNull();
         loaded!.AuthMethod.Should().Be(AuthMethod.OAuth2);
+        loaded.OAuthProvider.Should().Be(OAuthProvider.Microsoft);
         loaded.Imap.Should().Be(new ServerEndpoint("imap.example.com", 993, true));
         loaded.Smtp.Should().Be(new ServerEndpoint("smtp.example.com", 587, false));
         loaded.SyncInterval.Should().Be(TimeSpan.FromMinutes(15));

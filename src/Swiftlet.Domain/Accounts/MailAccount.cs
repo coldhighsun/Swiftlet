@@ -26,6 +26,11 @@ public sealed class MailAccount
     public AuthMethod AuthMethod { get; private set; }
 
     /// <summary>
+    /// Gets the OAuth 2.0 token issuer, or <see langword="null"/> for password accounts.
+    /// </summary>
+    public OAuthProvider? OAuthProvider { get; private set; }
+
+    /// <summary>
     /// Gets the IMAP server settings.
     /// </summary>
     public ServerEndpoint Imap { get; private set; } = default!;
@@ -61,6 +66,7 @@ public sealed class MailAccount
     /// <param name="imap">The IMAP server settings.</param>
     /// <param name="smtp">The SMTP server settings.</param>
     /// <param name="now">The creation time.</param>
+    /// <param name="oauthProvider">The token issuer; required when <paramref name="authMethod"/> is OAuth 2.0.</param>
     /// <returns>The created account.</returns>
     public static MailAccount Create(
         string displayName,
@@ -68,8 +74,14 @@ public sealed class MailAccount
         AuthMethod authMethod,
         ServerEndpoint imap,
         ServerEndpoint smtp,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        OAuthProvider? oauthProvider = null)
     {
+        if (authMethod == AuthMethod.OAuth2 && oauthProvider is null)
+        {
+            throw new ArgumentException("An OAuth provider is required for OAuth 2.0 accounts.", nameof(oauthProvider));
+        }
+
         ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
         ArgumentException.ThrowIfNullOrWhiteSpace(emailAddress);
         ArgumentNullException.ThrowIfNull(imap);
@@ -87,6 +99,7 @@ public sealed class MailAccount
             DisplayName = displayName.Trim(),
             EmailAddress = trimmed,
             AuthMethod = authMethod,
+            OAuthProvider = authMethod == AuthMethod.OAuth2 ? oauthProvider : null,
             Imap = imap,
             Smtp = smtp,
             CreatedAt = now,

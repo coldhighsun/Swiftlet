@@ -16,7 +16,7 @@ internal sealed class FakeDispatcher : IRequestDispatcher
     /// <summary>
     /// The registered handlers keyed by request type.
     /// </summary>
-    private readonly Dictionary<Type, Func<object, object?>> _handlers = [];
+    private readonly Dictionary<Type, Func<object, CancellationToken, Task<object?>>> _handlers = [];
 
     /// <summary>
     /// Gets the requests received, in order.
@@ -30,7 +30,17 @@ internal sealed class FakeDispatcher : IRequestDispatcher
     /// <param name="handler">The handler producing the response.</param>
     public void On<TRequest>(Func<TRequest, object?> handler)
     {
-        _handlers[typeof(TRequest)] = request => handler((TRequest)request);
+        _handlers[typeof(TRequest)] = (request, _) => Task.FromResult(handler((TRequest)request));
+    }
+
+    /// <summary>
+    /// Registers an asynchronous handler that observes cancellation.
+    /// </summary>
+    /// <typeparam name="TRequest">The request type.</typeparam>
+    /// <param name="handler">The handler producing the response.</param>
+    public void OnAsync<TRequest>(Func<TRequest, CancellationToken, Task<object?>> handler)
+    {
+        _handlers[typeof(TRequest)] = (request, token) => handler((TRequest)request, token);
     }
 
     /// <summary>
@@ -46,13 +56,13 @@ internal sealed class FakeDispatcher : IRequestDispatcher
     /// <inheritdoc />
     public Task<TResponse> SendAsync<TResponse>(ICommand<TResponse> command, CancellationToken cancellationToken = default)
     {
-        return Dispatch<TResponse>(command);
+        return Dispatch<TResponse>(command, cancellationToken);
     }
 
     /// <inheritdoc />
     public Task<TResponse> SendAsync<TResponse>(IQuery<TResponse> query, CancellationToken cancellationToken = default)
     {
-        return Dispatch<TResponse>(query);
+        return Dispatch<TResponse>(query, cancellationToken);
     }
 
     /// <summary>
@@ -60,8 +70,9 @@ internal sealed class FakeDispatcher : IRequestDispatcher
     /// </summary>
     /// <typeparam name="TResponse">The response type.</typeparam>
     /// <param name="request">The request.</param>
+    /// <param name="cancellationToken">The cancellation token passed to the handler.</param>
     /// <returns>The response.</returns>
-    private Task<TResponse> Dispatch<TResponse>(object request)
+    private async Task<TResponse> Dispatch<TResponse>(object request, CancellationToken cancellationToken)
     {
         Requests.Add(request);
         if (!_handlers.TryGetValue(request.GetType(), out var handler))
@@ -69,14 +80,7 @@ internal sealed class FakeDispatcher : IRequestDispatcher
             throw new InvalidOperationException($"No fake handler for {request.GetType().Name}.");
         }
 
-        try
-        {
-            return Task.FromResult((TResponse)handler(request)!);
-        }
-        catch (Exception ex)
-        {
-            return Task.FromException<TResponse>(ex);
-        }
+        return (TResponse)(await handler(request, cancellationToken))!;
     }
 }
 
