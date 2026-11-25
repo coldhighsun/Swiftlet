@@ -5,6 +5,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Swiftlet.Application\Swiftlet.Application.csproj" />
     <PackageReference Include="MailKit" />
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
   </ItemGroup>
 </Project>

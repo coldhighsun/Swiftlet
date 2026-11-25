@@ -22,6 +22,29 @@ internal sealed class MessageRepository(SwiftletDbContext context) : IMessageRep
     }
 
     /// <inheritdoc />
+    public async Task AddRangeAsync(IReadOnlyCollection<MailMessage> messages, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        context.Messages.AddRange(messages);
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<uint> GetMaxUidAsync(Guid folderId, CancellationToken cancellationToken = default)
+    {
+        var max = await context.Messages
+            .Where(m => m.FolderId == folderId)
+            .MaxAsync(m => (uint?)m.Uid, cancellationToken);
+        return max ?? 0;
+    }
+
+    /// <inheritdoc />
+    public async Task DeleteByFolderAsync(Guid folderId, CancellationToken cancellationToken = default)
+    {
+        await context.Messages.Where(m => m.FolderId == folderId).ExecuteDeleteAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task<bool> ExistsAsync(Guid folderId, uint uid, CancellationToken cancellationToken = default)
     {
         return await context.Messages.AnyAsync(m => m.FolderId == folderId && m.Uid == uid, cancellationToken);
@@ -88,6 +111,7 @@ internal sealed class MessageRepository(SwiftletDbContext context) : IMessageRep
         }
 
         return await source
+            .Include(m => m.Attachments)
             .OrderByDescending(m => m.SentAt)
             .Take(take)
             .ToListAsync(cancellationToken);

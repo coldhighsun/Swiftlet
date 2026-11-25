@@ -1,0 +1,245 @@
+using Swiftlet.Application.Abstractions;
+using Swiftlet.Domain.Accounts;
+using Swiftlet.Domain.Folders;
+
+namespace Swiftlet.Infrastructure.Tests;
+
+/// <summary>
+/// An in-memory <see cref="ISecretStore"/>.
+/// </summary>
+internal sealed class InMemorySecretStore : ISecretStore
+{
+    /// <summary>
+    /// Gets the stored secrets.
+    /// </summary>
+    public Dictionary<string, string> Values { get; } = [];
+
+    /// <inheritdoc />
+    public Task<string?> GetAsync(string key, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(Values.GetValueOrDefault(key));
+    }
+
+    /// <inheritdoc />
+    public Task SetAsync(string key, string value, CancellationToken cancellationToken = default)
+    {
+        Values[key] = value;
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task RemoveAsync(string key, CancellationToken cancellationToken = default)
+    {
+        Values.Remove(key);
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// A scriptable <see cref="IImapSession"/> that mimics server paging semantics.
+/// </summary>
+internal sealed class FakeImapSession : IImapSession
+{
+    /// <summary>
+    /// Gets the folders reported by the fake server.
+    /// </summary>
+    public List<RemoteFolder> Folders { get; } = [];
+
+    /// <summary>
+    /// Gets the UIDVALIDITY per folder full name.
+    /// </summary>
+    public Dictionary<string, uint> UidValidity { get; } = [];
+
+    /// <summary>
+    /// Gets the messages per folder full name.
+    /// </summary>
+    public Dictionary<string, List<RemoteMessage>> Messages { get; } = [];
+
+    /// <summary>
+    /// Gets the folders whose fetch should fail.
+    /// </summary>
+    public HashSet<string> FailingFolders { get; } = [];
+
+    /// <summary>
+    /// Gets the recorded fetch calls.
+    /// </summary>
+    public List<(string Folder, uint AfterUid, int MaxCount)> FetchCalls { get; } = [];
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the session was disposed.
+    /// </summary>
+    public bool Disposed { get; set; }
+
+    /// <summary>
+    /// Gets the messages appended to Sent.
+    /// </summary>
+    public List<byte[]> AppendedToSent { get; } = [];
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<RemoteFolder>> ListFoldersAsync(CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult<IReadOnlyList<RemoteFolder>>(Folders);
+    }
+
+    /// <inheritdoc />
+    public Task<uint> GetUidValidityAsync(string folderFullName, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(UidValidity.GetValueOrDefault(folderFullName, 1u));
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<RemoteMessage>> FetchNewMessagesAsync(
+        string folderFullName,
+        uint afterUid,
+        int maxCount,
+        CancellationToken cancellationToken = default)
+    {
+        FetchCalls.Add((folderFullName, afterUid, maxCount));
+        if (FailingFolders.Contains(folderFullName))
+        {
+            throw new IOException($"Simulated failure in {folderFullName}.");
+        }
+
+        var all = Messages.GetValueOrDefault(folderFullName) ?? [];
+        var newer = all.Where(m => m.Uid > afterUid).OrderBy(m => m.Uid);
+        var page = afterUid == 0 ? newer.TakeLast(maxCount) : newer.Take(maxCount);
+        return Task.FromResult<IReadOnlyList<RemoteMessage>>(page.ToList());
+    }
+
+    /// <inheritdoc />
+    public Task<bool> AppendToSentAsync(ReadOnlyMemory<byte> rfc822, CancellationToken cancellationToken = default)
+    {
+        AppendedToSent.Add(rfc822.ToArray());
+        return Task.FromResult(true);
+    }
+
+    /// <inheritdoc />
+    public ValueTask DisposeAsync()
+    {
+        Disposed = true;
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <summary>
+/// An <see cref="IImapSessionFactory"/> returning one scripted session.
+/// </summary>
+internal sealed class FakeImapSessionFactory : IImapSessionFactory
+{
+    /// <summary>
+    /// Gets the session returned on every connect.
+    /// </summary>
+    public FakeImapSession Session { get; } = new();
+
+    /// <summary>
+    /// Gets or sets an exception to throw instead of connecting.
+    /// </summary>
+    public Exception? Failure { get; set; }
+
+    /// <summary>
+    /// Gets the number of connection attempts.
+    /// </summary>
+    public int ConnectCount { get; private set; }
+
+    /// <inheritdoc />
+    public Task<IImapSession> ConnectAsync(MailAccount account, CancellationToken cancellationToken = default)
+    {
+        ConnectCount++;
+        return Failure is null ? Task.FromResult<IImapSession>(Session) : Task.FromException<IImapSession>(Failure);
+    }
+}
+
+/// <summary>
+/// An <see cref="IMailSender"/> recording what it was asked to send.
+/// </summary>
+internal sealed class RecordingMailSender : IMailSender
+{
+    /// <summary>
+    /// Gets the recorded sends.
+    /// </summary>
+    public List<(MailAccount Account, OutgoingMessage Message, bool SaveToSent)> Sent { get; } = [];
+
+    /// <inheritdoc />
+    public Task SendAsync(
+        MailAccount account,
+        OutgoingMessage message,
+        bool saveToSent,
+        CancellationToken cancellationToken = default)
+    {
+        Sent.Add((account, message, saveToSent));
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// A clock whose time is set by the test.
+/// </summary>
+internal sealed class ManualTimeProvider : TimeProvider
+{
+    /// <summary>
+    /// Gets or sets the current time.
+    /// </summary>
+    public DateTimeOffset Now { get; set; } = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+    /// <inheritdoc />
+    public override DateTimeOffset GetUtcNow()
+    {
+        return Now;
+    }
+}
+
+/// <summary>
+/// Helpers for building test data.
+/// </summary>
+internal static class TestData
+{
+    /// <summary>
+    /// Creates a downloaded message.
+    /// </summary>
+    /// <param name="uid">The UID.</param>
+    /// <param name="subject">The subject.</param>
+    /// <param name="body">The body.</param>
+    /// <returns>The message.</returns>
+    public static RemoteMessage Remote(uint uid, string subject = "Hello", string body = "body text")
+    {
+        return new RemoteMessage(
+            uid,
+            $"<{uid}@example.com>",
+            subject,
+            "Alice",
+            "alice@example.com",
+            "me@example.com",
+            new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero).AddMinutes(uid),
+            body,
+            null,
+            false,
+            []);
+    }
+
+    /// <summary>
+    /// Creates a selectable folder description.
+    /// </summary>
+    /// <param name="fullName">The full name.</param>
+    /// <param name="role">The role.</param>
+    /// <returns>The folder.</returns>
+    public static RemoteFolder Folder(string fullName, FolderRole role = FolderRole.Other)
+    {
+        return new RemoteFolder(fullName, fullName, role, true);
+    }
+
+    /// <summary>
+    /// Creates an account for the given email address.
+    /// </summary>
+    /// <param name="email">The email address.</param>
+    /// <returns>The account.</returns>
+    public static MailAccount Account(string email)
+    {
+        return MailAccount.Create(
+            "Me",
+            email,
+            AuthMethod.Password,
+            new ServerEndpoint("imap.example.com", 993, true),
+            new ServerEndpoint("smtp.example.com", 465, true),
+            DateTimeOffset.UtcNow);
+    }
+}

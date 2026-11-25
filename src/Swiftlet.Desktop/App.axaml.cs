@@ -7,7 +7,7 @@ namespace Swiftlet.Desktop;
 /// <summary>
 /// The Avalonia application.
 /// </summary>
-public sealed class App : Application
+public sealed class App : Avalonia.Application
 {
     /// <summary>
     /// Loads the application XAML.

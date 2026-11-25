@@ -14,6 +14,30 @@ public interface IMessageRepository
     Task AddAsync(MailMessage message, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Adds several messages in one transaction.
+    /// </summary>
+    /// <param name="messages">The messages to add.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the messages are saved.</returns>
+    Task AddRangeAsync(IReadOnlyCollection<MailMessage> messages, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the highest cached UID in a folder.
+    /// </summary>
+    /// <param name="folderId">The folder.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The highest UID, or 0 if the folder has no cached messages.</returns>
+    Task<uint> GetMaxUidAsync(Guid folderId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes all cached messages of a folder.
+    /// </summary>
+    /// <param name="folderId">The folder.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the messages are deleted.</returns>
+    Task DeleteByFolderAsync(Guid folderId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Determines whether a message with the given UID is already cached in a folder.
     /// </summary>
     /// <param name="folderId">The folder.</param>
