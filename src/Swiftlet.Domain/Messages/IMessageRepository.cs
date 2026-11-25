@@ -14,6 +14,21 @@ public interface IMessageRepository
     Task AddAsync(MailMessage message, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Gets a message with its attachments.
+    /// </summary>
+    /// <param name="id">The message identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The message, or <see langword="null"/> if not found.</returns>
+    Task<MailMessage?> GetAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Saves changes made to tracked messages.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when changes are saved.</returns>
+    Task SaveChangesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Adds several messages in one transaction.
     /// </summary>
     /// <param name="messages">The messages to add.</param>

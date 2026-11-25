@@ -38,6 +38,20 @@ public interface IImapSession : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Downloads and decodes one attachment of a message.
+    /// </summary>
+    /// <param name="folderFullName">The full server-side path of the folder.</param>
+    /// <param name="uid">The IMAP UID of the message.</param>
+    /// <param name="ordinal">The zero-based attachment position, as reported when the message was synchronized.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The decoded content, or <see langword="null"/> if the message or attachment no longer exists.</returns>
+    Task<byte[]?> DownloadAttachmentAsync(
+        string folderFullName,
+        uint uid,
+        int ordinal,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Appends an RFC 5322 message to the Sent folder, marked as read.
     /// </summary>
     /// <param name="rfc822">The raw message.</param>

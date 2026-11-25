@@ -16,6 +16,11 @@ public sealed class MailAttachment
     public Guid MessageId { get; private set; }
 
     /// <summary>
+    /// Gets the zero-based position of the attachment among the attachments of the message on the server.
+    /// </summary>
+    public int Ordinal { get; private set; }
+
+    /// <summary>
     /// Gets the file name.
     /// </summary>
     public string FileName { get; private set; } = string.Empty;
@@ -41,18 +46,21 @@ public sealed class MailAttachment
     /// Creates attachment metadata.
     /// </summary>
     /// <param name="messageId">The owning message.</param>
+    /// <param name="ordinal">The zero-based position among the message's attachments.</param>
     /// <param name="fileName">The file name.</param>
     /// <param name="contentType">The MIME content type.</param>
     /// <param name="size">The size in bytes.</param>
     /// <returns>The created attachment.</returns>
-    internal static MailAttachment Create(Guid messageId, string fileName, string contentType, long size)
+    internal static MailAttachment Create(Guid messageId, int ordinal, string fileName, string contentType, long size)
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(ordinal);
         ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
         ArgumentOutOfRangeException.ThrowIfNegative(size);
 
         return new MailAttachment
         {
             MessageId = messageId,
+            Ordinal = ordinal,
             FileName = fileName,
             ContentType = contentType,
             Size = size,

@@ -10,7 +10,7 @@
     <NoWarn>$(NoWarn);CA1848;CA1873</NoWarn>
     <RootNamespace>$(MSBuildProjectName)</RootNamespace>
     <UseArtifactsOutputPath>true</UseArtifactsOutputPath>
-    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <SatelliteResourceLanguages>en;zh-Hans</SatelliteResourceLanguages>
     <DebugType>embedded</DebugType>
   </PropertyGroup>
 

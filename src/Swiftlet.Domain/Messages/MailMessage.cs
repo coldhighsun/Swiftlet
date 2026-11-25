@@ -190,7 +190,7 @@ public sealed class MailMessage
     /// <param name="size">The size in bytes.</param>
     public void AddAttachment(string fileName, string contentType, long size)
     {
-        _attachments.Add(MailAttachment.Create(Id, fileName, contentType, size));
+        _attachments.Add(MailAttachment.Create(Id, _attachments.Count, fileName, contentType, size));
     }
 
     /// <summary>

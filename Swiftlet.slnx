@@ -9,5 +9,6 @@
     <Project Path="tests/Swiftlet.Domain.Tests/Swiftlet.Domain.Tests.csproj" />
     <Project Path="tests/Swiftlet.Application.Tests/Swiftlet.Application.Tests.csproj" />
     <Project Path="tests/Swiftlet.Infrastructure.Tests/Swiftlet.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Swiftlet.Desktop.Tests/Swiftlet.Desktop.Tests.csproj" />
   </Folder>
 </Solution>

@@ -49,6 +49,8 @@ public static class SqliteSchemaInitializer
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        // WAL lets the UI read while the background worker writes; it is a no-op for in-memory databases.
+        await context.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", cancellationToken);
         await context.Database.EnsureCreatedAsync(cancellationToken);
         foreach (var statement in FullTextStatements)
         {

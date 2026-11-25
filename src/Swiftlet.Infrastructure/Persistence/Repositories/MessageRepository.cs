@@ -22,6 +22,20 @@ internal sealed class MessageRepository(SwiftletDbContext context) : IMessageRep
     }
 
     /// <inheritdoc />
+    public async Task<MailMessage?> GetAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return await context.Messages
+            .Include(m => m.Attachments)
+            .FirstOrDefaultAsync(m => m.Id == id, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task AddRangeAsync(IReadOnlyCollection<MailMessage> messages, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(messages);

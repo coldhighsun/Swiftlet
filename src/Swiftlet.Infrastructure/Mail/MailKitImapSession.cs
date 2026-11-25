@@ -84,6 +84,38 @@ internal sealed class MailKitImapSession(ImapClient client) : IImapSession
     }
 
     /// <inheritdoc />
+    public async Task<byte[]?> DownloadAttachmentAsync(
+        string folderFullName,
+        uint uid,
+        int ordinal,
+        CancellationToken cancellationToken = default)
+    {
+        var folder = await client.GetFolderAsync(folderFullName, cancellationToken);
+        await folder.OpenAsync(FolderAccess.ReadOnly, cancellationToken);
+
+        MimeMessage message;
+        try
+        {
+            message = await folder.GetMessageAsync(new UniqueId(uid), cancellationToken);
+        }
+        catch (MessageNotFoundException)
+        {
+            // The message was deleted on the server since it was synchronized.
+            return null;
+        }
+
+        var part = message.Attachments.OfType<MimePart>().ElementAtOrDefault(ordinal);
+        if (part?.Content is null)
+        {
+            return null;
+        }
+
+        using var buffer = new MemoryStream();
+        await part.Content.DecodeToAsync(buffer, cancellationToken);
+        return buffer.ToArray();
+    }
+
+    /// <inheritdoc />
     public async Task<bool> AppendToSentAsync(ReadOnlyMemory<byte> rfc822, CancellationToken cancellationToken = default)
     {
         IMailFolder? sent;

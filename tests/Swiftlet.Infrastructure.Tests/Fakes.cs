@@ -106,6 +106,21 @@ internal sealed class FakeImapSession : IImapSession
         return Task.FromResult<IReadOnlyList<RemoteMessage>>(page.ToList());
     }
 
+    /// <summary>
+    /// Gets the attachment contents keyed by folder, UID and ordinal.
+    /// </summary>
+    public Dictionary<(string Folder, uint Uid, int Ordinal), byte[]> AttachmentContents { get; } = [];
+
+    /// <inheritdoc />
+    public Task<byte[]?> DownloadAttachmentAsync(
+        string folderFullName,
+        uint uid,
+        int ordinal,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(AttachmentContents.GetValueOrDefault((folderFullName, uid, ordinal)));
+    }
+
     /// <inheritdoc />
     public Task<bool> AppendToSentAsync(ReadOnlyMemory<byte> rfc822, CancellationToken cancellationToken = default)
     {

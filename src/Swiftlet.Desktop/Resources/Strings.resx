@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+
+  <data name="Common_Cancel" xml:space="preserve"><value>Cancel</value></data>
+
+  <data name="Toolbar_Compose" xml:space="preserve"><value>Compose</value></data>
+  <data name="Toolbar_Reply" xml:space="preserve"><value>Reply</value></data>
+  <data name="Toolbar_Forward" xml:space="preserve"><value>Forward</value></data>
+  <data name="Toolbar_Star" xml:space="preserve"><value>★ Star</value></data>
+  <data name="Toolbar_ViewInBrowser" xml:space="preserve"><value>View in browser</value></data>
+  <data name="Toolbar_Sync" xml:space="preserve"><value>Sync</value></data>
+  <data name="Toolbar_AddAccount" xml:space="preserve"><value>Add account</value></data>
+  <data name="Toolbar_Language" xml:space="preserve"><value>Language</value></data>
+
+  <data name="Language_System" xml:space="preserve"><value>Follow system</value></data>
+  <data name="Language_ChineseSimplified" xml:space="preserve"><value>简体中文</value></data>
+  <data name="Language_English" xml:space="preserve"><value>English</value></data>
+
+  <data name="Search_Placeholder" xml:space="preserve"><value>Search mail (press Enter)</value></data>
+  <data name="Reader_Placeholder" xml:space="preserve"><value>Select a message to read</value></data>
+  <data name="Reader_From" xml:space="preserve"><value>From:</value></data>
+  <data name="Reader_To" xml:space="preserve"><value>To:</value></data>
+  <data name="Reader_Time" xml:space="preserve"><value>Time:</value></data>
+
+  <data name="Folder_Inbox" xml:space="preserve"><value>Inbox</value></data>
+  <data name="Folder_Sent" xml:space="preserve"><value>Sent</value></data>
+  <data name="Folder_Drafts" xml:space="preserve"><value>Drafts</value></data>
+  <data name="Folder_Trash" xml:space="preserve"><value>Trash</value></data>
+  <data name="Folder_Junk" xml:space="preserve"><value>Junk</value></data>
+  <data name="Folder_Archive" xml:space="preserve"><value>Archive</value></data>
+  <data name="Message_NoSubject" xml:space="preserve"><value>(No subject)</value></data>
+
+  <data name="Error_Format" xml:space="preserve"><value>{0}: {1}</value></data>
+  <data name="Error_LoadAccounts" xml:space="preserve"><value>Failed to load accounts</value></data>
+  <data name="Error_Refresh" xml:space="preserve"><value>Refresh failed</value></data>
+  <data name="Error_Search" xml:space="preserve"><value>Search failed</value></data>
+  <data name="Error_LoadMessages" xml:space="preserve"><value>Failed to load messages</value></data>
+  <data name="Error_SaveAttachment" xml:space="preserve"><value>Failed to save attachment</value></data>
+  <data name="Error_Flag" xml:space="preserve"><value>Failed to update star</value></data>
+  <data name="Error_MarkRead" xml:space="preserve"><value>Failed to mark as read</value></data>
+
+  <data name="Status_Downloading" xml:space="preserve"><value>Downloading {0}…</value></data>
+  <data name="Status_Saved" xml:space="preserve"><value>Saved to {0}</value></data>
+  <data name="Status_Syncing" xml:space="preserve"><value>Syncing {0}…</value></data>
+  <data name="Status_SyncDone" xml:space="preserve"><value>Sync complete, {0} new message(s)</value></data>
+  <data name="Status_SyncDoneWithProblems" xml:space="preserve"><value>Sync complete, {0} new message(s); problems: {1}</value></data>
+  <data name="Status_AccountFoldersFailed" xml:space="preserve"><value>{0}: {1} folder(s) failed to sync</value></data>
+  <data name="Status_ProblemSeparator" xml:space="preserve"><value>; </value></data>
+  <data name="Status_SearchResults" xml:space="preserve"><value>Found {0} message(s)</value></data>
+
+  <data name="AddAccount_Title" xml:space="preserve"><value>Add mail account</value></data>
+  <data name="AddAccount_DisplayName" xml:space="preserve"><value>Display name (optional)</value></data>
+  <data name="AddAccount_Email" xml:space="preserve"><value>Email address</value></data>
+  <data name="AddAccount_Password" xml:space="preserve"><value>Password / app password / authorization code</value></data>
+  <data name="AddAccount_ServerSettings" xml:space="preserve"><value>Server settings</value></data>
+  <data name="AddAccount_Add" xml:space="preserve"><value>Add</value></data>
+  <data name="AddAccount_PortMustBeNumber" xml:space="preserve"><value>Ports must be numbers</value></data>
+  <data name="AddAccount_HintAppPassword" xml:space="preserve"><value>{0}: use an app-specific password or authorization code, not your login password.</value></data>
+  <data name="AddAccount_HintUnknown" xml:space="preserve"><value>Unrecognized mail provider; please enter the server settings.</value></data>
+
+  <data name="Compose_TitleNew" xml:space="preserve"><value>New message</value></data>
+  <data name="Compose_TitleReply" xml:space="preserve"><value>Reply</value></data>
+  <data name="Compose_TitleForward" xml:space="preserve"><value>Forward</value></data>
+  <data name="Compose_From" xml:space="preserve"><value>From</value></data>
+  <data name="Compose_To" xml:space="preserve"><value>To</value></data>
+  <data name="Compose_Cc" xml:space="preserve"><value>Cc</value></data>
+  <data name="Compose_Bcc" xml:space="preserve"><value>Bcc</value></data>
+  <data name="Compose_Subject" xml:space="preserve"><value>Subject</value></data>
+  <data name="Compose_RecipientsPlaceholder" xml:space="preserve"><value>Separate addresses with commas or semicolons</value></data>
+  <data name="Compose_AddAttachment" xml:space="preserve"><value>Add attachment…</value></data>
+  <data name="Compose_Send" xml:space="preserve"><value>Send</value></data>
+  <data name="Compose_NoRecipients" xml:space="preserve"><value>Please enter at least one recipient</value></data>
+  <data name="Compose_InvalidRecipient" xml:space="preserve"><value>Invalid recipient address: {0}</value></data>
+  <data name="Compose_SendFailed" xml:space="preserve"><value>Send failed: {0}</value></data>
+
+  <data name="Template_ReplyHeader" xml:space="preserve"><value>On {0}, {1} wrote:</value></data>
+  <data name="Template_ForwardMarker" xml:space="preserve"><value>---------- Forwarded message ----------</value></data>
+  <data name="Template_From" xml:space="preserve"><value>From: {0}</value></data>
+  <data name="Template_Date" xml:space="preserve"><value>Date: {0}</value></data>
+  <data name="Template_Subject" xml:space="preserve"><value>Subject: {0}</value></data>
+  <data name="Template_To" xml:space="preserve"><value>To: {0}</value></data>
+</root>

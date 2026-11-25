@@ -42,7 +42,11 @@ internal static class OutgoingMimeBuilder
         var body = new BodyBuilder { TextBody = outgoing.TextBody, HtmlBody = outgoing.HtmlBody };
         foreach (var attachment in outgoing.Attachments)
         {
-            body.Attachments.Add(attachment.FileName, attachment.Content.ToArray(), ContentType.Parse(attachment.ContentType));
+            var contentType = string.IsNullOrWhiteSpace(attachment.ContentType)
+                || attachment.ContentType == "application/octet-stream"
+                ? MimeTypes.GetMimeType(attachment.FileName)
+                : attachment.ContentType;
+            body.Attachments.Add(attachment.FileName, attachment.Content.ToArray(), ContentType.Parse(contentType));
         }
 
         message.Body = body.ToMessageBody();

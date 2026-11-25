@@ -31,7 +31,7 @@ public static class ServiceCollectionExtensions
         Directory.CreateDirectory(dataDirectory);
         var databasePath = Path.Combine(dataDirectory, "swiftlet.db");
 
-        services.AddDbContext<SwiftletDbContext>(options => options.UseSqlite($"Data Source={databasePath}"));
+        services.AddDbContext<SwiftletDbContext>(options => options.UseSqlite($"Data Source={databasePath};Default Timeout=30"));
         services.AddScoped<IAccountRepository, AccountRepository>();
         services.AddScoped<IFolderRepository, FolderRepository>();
         services.AddScoped<IMessageRepository, MessageRepository>();

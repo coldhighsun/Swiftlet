@@ -17,6 +17,12 @@ internal sealed class FolderRepository(SwiftletDbContext context) : IFolderRepos
     }
 
     /// <inheritdoc />
+    public async Task<MailFolder?> GetAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return await context.Folders.FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<MailFolder>> GetByAccountAsync(
         Guid accountId,
         CancellationToken cancellationToken = default)

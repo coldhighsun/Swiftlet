@@ -14,6 +14,7 @@ internal sealed class MailAttachmentConfiguration : IEntityTypeConfiguration<Mai
     {
         builder.ToTable("Attachments");
         builder.HasKey(a => a.Id);
+        builder.HasIndex(a => new { a.MessageId, a.Ordinal });
         builder.Property(a => a.FileName).IsRequired().HasMaxLength(512);
         builder.Property(a => a.ContentType).IsRequired().HasMaxLength(256);
     }
