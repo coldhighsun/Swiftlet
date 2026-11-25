@@ -1,5 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <InternalsVisibleTo Include="Swiftlet.Infrastructure.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Swiftlet.Application\Swiftlet.Application.csproj" />
     <PackageReference Include="MailKit" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
