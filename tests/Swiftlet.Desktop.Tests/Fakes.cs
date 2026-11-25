@@ -1,5 +1,6 @@
 using System.Globalization;
 using Mediator;
+using Swiftlet.Application.Sync;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
 using Swiftlet.Desktop.Settings;
@@ -375,5 +376,51 @@ internal static class TestData
             html,
             $"<{uid}@example.com>",
             isRead);
+    }
+}
+
+/// <summary>
+/// A sync notification source the tests raise by hand.
+/// </summary>
+internal sealed class FakeSyncEvents : ISyncEvents
+{
+    /// <inheritdoc />
+    public event EventHandler<AccountSyncedEventArgs>? AccountSynced;
+
+    /// <summary>
+    /// Raises <see cref="AccountSynced"/> on the calling thread.
+    /// </summary>
+    /// <param name="accountId">The account identifier.</param>
+    public void Raise(Guid accountId)
+    {
+        AccountSynced?.Invoke(this, new AccountSyncedEventArgs(accountId, 1));
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether anyone is subscribed.
+    /// </summary>
+    public bool HasSubscribers => AccountSynced is not null;
+}
+
+/// <summary>
+/// A UI-thread marshaller that runs the action inline and records every call.
+/// </summary>
+internal sealed class FakeUiThread : IUiThread
+{
+    /// <summary>
+    /// Gets the tasks returned for each marshalled action.
+    /// </summary>
+    public List<Task> Invocations { get; } = [];
+
+    /// <inheritdoc />
+    public Task InvokeAsync(Func<Task> action)
+    {
+        var task = action();
+        lock (Invocations)
+        {
+            Invocations.Add(task);
+        }
+
+        return task;
     }
 }

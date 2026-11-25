@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using MailKit;
 using MailKit.Net.Imap;
 using MailKit.Search;
@@ -13,6 +14,11 @@ namespace Swiftlet.Infrastructure.Mail;
 /// <param name="client">The connected and authenticated client; owned by the session.</param>
 internal sealed class MailKitImapSession(ImapClient client) : IImapSession
 {
+    /// <summary>
+    /// The last observed state of each waited-on folder.
+    /// </summary>
+    private readonly FolderChangeTracker _changes = new();
+
     /// <inheritdoc />
     public async Task<IReadOnlyList<RemoteFolder>> ListFoldersAsync(CancellationToken cancellationToken = default)
     {
@@ -281,6 +287,79 @@ internal sealed class MailKitImapSession(ImapClient client) : IImapSession
                     flags.HasFlag(MessageFlags.Deleted));
             })
             .ToList();
+    }
+
+    /// <inheritdoc />
+    public bool SupportsIdle => client.Capabilities.Contains(ImapCapability.Idle);
+
+    /// <inheritdoc />
+    public async Task<bool> WaitForInboxChangeAsync(
+        string folderFullName,
+        TimeSpan maxWait,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(maxWait, TimeSpan.Zero);
+
+        var folder = await client.GetFolderAsync(folderFullName, cancellationToken);
+        await folder.OpenAsync(FolderAccess.ReadOnly, cancellationToken);
+
+        // The first observation on this session counts as a change, and changes delivered outside IDLE (between two waits)
+        // never reach the handlers below, which are attached only after the SELECT so that it does not raise a spurious
+        // CountChanged. Compare against the last observed state.
+        if (_changes.Observe(folderFullName, folder.Count, folder.UidNext?.Id ?? 0))
+        {
+            return true;
+        }
+
+        // The handlers run on MailKit's reading thread, so the flag is written with Interlocked and read with Volatile.
+        // Any event ends the IDLE by cancelling the done token, which makes MailKit send DONE; so does the timeout.
+        // Not unit-testable without a real IMAP server.
+        var changed = new StrongBox<int>();
+        using var done = new CancellationTokenSource();
+
+        // A user cancellation first ends the IDLE cleanly (DONE); the token passed to IdleAsync then aborts it.
+        using var registration = cancellationToken.Register(done.Cancel);
+
+        void OnChanged()
+        {
+            Interlocked.Exchange(ref changed.Value, 1);
+            try
+            {
+                done.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // The wait already finished and the source was disposed; the late event is irrelevant.
+            }
+        }
+
+        void OnCountChanged(object? sender, EventArgs e) => OnChanged();
+        void OnExpunged(object? sender, MessageEventArgs e) => OnChanged();
+        void OnFlagsChanged(object? sender, MessageFlagsChangedEventArgs e) => OnChanged();
+
+        folder.CountChanged += OnCountChanged;
+        folder.MessageExpunged += OnExpunged;
+        folder.MessageFlagsChanged += OnFlagsChanged;
+        try
+        {
+            done.CancelAfter(maxWait);
+            await client.IdleAsync(done.Token, cancellationToken);
+        }
+        finally
+        {
+            folder.CountChanged -= OnCountChanged;
+            folder.MessageExpunged -= OnExpunged;
+            folder.MessageFlagsChanged -= OnFlagsChanged;
+        }
+
+        // Record the count reached during the IDLE so the next wait compares against the latest folder state. MailKit updates
+        // Count on an unsolicited EXISTS but UidNext only on SELECT/STATUS, so UidNext is recorded as unknown (0): the next
+        // SELECT is then compared by count only, instead of reporting the already handled message a second time.
+        _changes.Observe(folderFullName, folder.Count, 0);
+
+        // A done-token cancellation is the normal way out, but a user cancellation must not look like a timeout.
+        cancellationToken.ThrowIfCancellationRequested();
+        return Volatile.Read(ref changed.Value) == 1;
     }
 
     /// <inheritdoc />

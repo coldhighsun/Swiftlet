@@ -47,12 +47,13 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Stops the periodic refresh.
+    /// Stops the periodic refresh and the sync-triggered refreshes.
     /// </summary>
     /// <param name="sender">The event sender.</param>
     /// <param name="e">The event arguments.</param>
     private void OnClosed(object? sender, EventArgs e)
     {
         _refreshTimer?.Stop();
+        (DataContext as MainWindowViewModel)?.Dispose();
     }
 }

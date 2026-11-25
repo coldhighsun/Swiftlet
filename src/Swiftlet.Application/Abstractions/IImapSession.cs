@@ -92,6 +92,27 @@ public interface IImapSession : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Gets a value indicating whether the server supports the IDLE extension, so <see cref="WaitForInboxChangeAsync"/> can be used.
+    /// </summary>
+    bool SupportsIdle { get; }
+
+    /// <summary>
+    /// Waits until the server reports a change in a folder, or until the maximum wait has elapsed.
+    /// Also returns <see langword="true"/> at once on the first wait of a session (which records the baseline) and whenever the folder
+    /// changed since the previous wait on this session, so changes that arrived between two waits are not missed.
+    /// The connection is occupied for the whole wait and no other command may be issued on it meanwhile.
+    /// </summary>
+    /// <param name="folderFullName">The full server-side path of the folder to watch.</param>
+    /// <param name="maxWait">The longest time to wait before returning without a change.</param>
+    /// <param name="cancellationToken">The cancellation token; cancelling it throws <see cref="OperationCanceledException"/>.</param>
+    /// <returns><see langword="true"/> if new, removed or changed messages were reported; <see langword="false"/> if <paramref name="maxWait"/> elapsed first.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxWait"/> is zero or negative.</exception>
+    Task<bool> WaitForInboxChangeAsync(
+        string folderFullName,
+        TimeSpan maxWait,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Appends an RFC 5322 message to the Sent folder, marked as read.
     /// </summary>
     /// <param name="rfc822">The raw message.</param>

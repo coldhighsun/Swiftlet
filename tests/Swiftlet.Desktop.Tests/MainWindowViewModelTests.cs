@@ -57,7 +57,9 @@ public class MainWindowViewModelTests
                 Dispatcher,
                 Dialogs,
                 Localizer,
-                new LanguageSelectorViewModel(Localizer, LanguageStore, NullLogger<LanguageSelectorViewModel>.Instance));
+                new LanguageSelectorViewModel(Localizer, LanguageStore, NullLogger<LanguageSelectorViewModel>.Instance),
+                SyncEvents,
+                UiThread);
         }
 
         /// <summary>
@@ -79,6 +81,16 @@ public class MainWindowViewModelTests
         /// Gets the dispatcher.
         /// </summary>
         public FakeDispatcher Dispatcher { get; } = new();
+
+        /// <summary>
+        /// Gets the sync notification source.
+        /// </summary>
+        public FakeSyncEvents SyncEvents { get; } = new();
+
+        /// <summary>
+        /// Gets the UI-thread marshaller.
+        /// </summary>
+        public FakeUiThread UiThread { get; } = new();
 
         /// <summary>
         /// Gets the dialogs.
@@ -124,6 +136,78 @@ public class MainWindowViewModelTests
             await ViewModel.InitializeAsync();
             await ViewModel.WhenIdleAsync();
         }
+    }
+
+    /// <summary>
+    /// A sync raised on a background thread refreshes exactly once, through the UI marshaller.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task AccountSynced_RaisedOnBackgroundThread_RefreshesOnceThroughMarshaller()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        var before = scenario.Dispatcher.Sent<GetAccountsQuery>().Count;
+
+        await Task.Run(() => scenario.SyncEvents.Raise(scenario.Account.Id), TestContext.Current.CancellationToken);
+        await Task.WhenAll(scenario.UiThread.Invocations);
+
+        scenario.UiThread.Invocations.Should().HaveCount(1);
+        (scenario.Dispatcher.Sent<GetAccountsQuery>().Count - before).Should().Be(1);
+    }
+
+    /// <summary>
+    /// A burst of syncs during a running refresh produces exactly one follow-up refresh.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task AccountSynced_BurstWhileRefreshing_ProducesOneFollowUpRefresh()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        var before = scenario.Dispatcher.Sent<GetAccountsQuery>().Count;
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        scenario.Dispatcher.OnAsync<GetAccountsQuery>(async (_, _) =>
+        {
+            if (Interlocked.Increment(ref calls) == 1)
+            {
+                await gate.Task;
+            }
+
+            return new List<MailAccount> { scenario.Account };
+        });
+
+        scenario.SyncEvents.Raise(scenario.Account.Id);
+        for (var i = 0; i < 5; i++)
+        {
+            scenario.SyncEvents.Raise(scenario.Account.Id);
+        }
+
+        gate.SetResult();
+        await Task.WhenAll(scenario.UiThread.Invocations);
+
+        scenario.UiThread.Invocations.Should().HaveCount(1);
+        (scenario.Dispatcher.Sent<GetAccountsQuery>().Count - before).Should().Be(2);
+    }
+
+    /// <summary>
+    /// After dispose a sync notification no longer refreshes and the subscription is gone.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task AccountSynced_AfterDispose_DoesNothing()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        var before = scenario.Dispatcher.Sent<GetAccountsQuery>().Count;
+
+        scenario.ViewModel.Dispose();
+        scenario.SyncEvents.Raise(scenario.Account.Id);
+
+        scenario.SyncEvents.HasSubscribers.Should().BeFalse();
+        scenario.UiThread.Invocations.Should().BeEmpty();
+        scenario.Dispatcher.Sent<GetAccountsQuery>().Count.Should().Be(before);
     }
 
     /// <summary>

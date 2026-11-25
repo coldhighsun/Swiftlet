@@ -60,6 +60,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IImapSessionFactory, MailKitImapSessionFactory>();
         services.AddSingleton<IMailSender, MailKitMailSender>();
         services.AddHostedService<AccountSyncWorker>();
+        services.AddHostedService<InboxWatcher>();
         return services;
     }
 }

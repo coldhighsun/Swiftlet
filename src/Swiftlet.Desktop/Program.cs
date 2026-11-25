@@ -33,6 +33,7 @@ internal static class Program
         builder.Services.AddSingleton<LanguageSelectorViewModel>();
         builder.Services.AddSingleton<IRequestDispatcher, ScopedRequestDispatcher>();
         builder.Services.AddSingleton<IDialogService, AvaloniaDialogService>();
+        builder.Services.AddSingleton<IUiThread, AvaloniaUiThread>();
         builder.Services.AddSingleton<MainWindowViewModel>();
         builder.Services.AddTransient<AddAccountViewModel>();
         builder.Services.AddTransient<LabelManagerViewModel>();

@@ -19,7 +19,7 @@ namespace Swiftlet.Desktop.ViewModels;
 /// <summary>
 /// The view model of the main three-pane window: folder tree, message list and reading pane.
 /// </summary>
-public sealed partial class MainWindowViewModel : ObservableObject
+public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 {
     /// <summary>
     /// The maximum number of messages shown per folder or search.
@@ -67,18 +67,54 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private Task _selectionTask = Task.CompletedTask;
 
     /// <summary>
+    /// The sync notifications.
+    /// </summary>
+    private readonly ISyncEvents _syncEvents;
+
+    /// <summary>
+    /// Marshals sync-triggered refreshes to the UI thread.
+    /// </summary>
+    private readonly IUiThread _uiThread;
+
+    /// <summary>
+    /// Guards the coalescing flags, which are touched from background threads.
+    /// </summary>
+    private readonly Lock _refreshGate = new();
+
+    /// <summary>
+    /// Whether a sync-triggered refresh is scheduled or running.
+    /// </summary>
+    private bool _syncRefreshRunning;
+
+    /// <summary>
+    /// Whether another sync arrived while a refresh was running.
+    /// </summary>
+    private bool _syncRefreshPending;
+
+    /// <summary>
+    /// Whether the view model was disposed.
+    /// </summary>
+    private bool _disposed;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="MainWindowViewModel"/> class.
     /// </summary>
     /// <param name="dispatcher">The request dispatcher.</param>
     /// <param name="dialogs">The dialog service.</param>
     /// <param name="localizer">The localizer.</param>
     /// <param name="languageSelector">The language picker view model.</param>
+    /// <param name="syncEvents">The sync notifications that trigger a refresh.</param>
+    /// <param name="uiThread">The UI thread marshaller.</param>
     public MainWindowViewModel(
         IRequestDispatcher dispatcher,
         IDialogService dialogs,
         ILocalizer localizer,
-        LanguageSelectorViewModel languageSelector)
+        LanguageSelectorViewModel languageSelector,
+        ISyncEvents syncEvents,
+        IUiThread uiThread)
     {
+        _syncEvents = syncEvents;
+        _uiThread = uiThread;
         _dispatcher = dispatcher;
         _dialogs = dialogs;
         _localizer = localizer;
@@ -88,6 +124,105 @@ public sealed partial class MainWindowViewModel : ObservableObject
         UnifiedInbox = new UnifiedInboxNodeViewModel(localizer);
         TreeRoots.Add(UnifiedInbox);
         localizer.LanguageChanged += (_, _) => RefreshLanguage();
+        _syncEvents.AccountSynced += OnAccountSynced;
+    }
+
+    /// <summary>
+    /// Stops reacting to sync notifications.
+    /// </summary>
+    public void Dispose()
+    {
+        lock (_refreshGate)
+        {
+            _disposed = true;
+        }
+
+        _syncEvents.AccountSynced -= OnAccountSynced;
+    }
+
+    /// <summary>
+    /// Schedules a coalesced refresh on the UI thread; may be called from any thread.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OnAccountSynced(object? sender, AccountSyncedEventArgs e)
+    {
+        lock (_refreshGate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            if (_syncRefreshRunning)
+            {
+                _syncRefreshPending = true;
+                return;
+            }
+
+            _syncRefreshRunning = true;
+        }
+
+        _ = ObserveAsync(_uiThread.InvokeAsync(RunSyncRefreshesAsync));
+    }
+
+    /// <summary>
+    /// Refreshes, then once more if syncs arrived meanwhile; never overlaps and never runs more than one follow-up.
+    /// </summary>
+    /// <returns>A task that completes when no refresh is pending.</returns>
+    private async Task RunSyncRefreshesAsync()
+    {
+        while (true)
+        {
+            try
+            {
+                await RefreshAsync();
+            }
+            catch
+            {
+                // Release the running flag so later syncs can refresh again, then let the observer handle the failure.
+                lock (_refreshGate)
+                {
+                    _syncRefreshRunning = false;
+                    _syncRefreshPending = false;
+                }
+
+                throw;
+            }
+
+            lock (_refreshGate)
+            {
+                if (_disposed || !_syncRefreshPending)
+                {
+                    _syncRefreshRunning = false;
+                    return;
+                }
+
+                _syncRefreshPending = false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Observes a fire-and-forget task so a failure never goes unobserved or crashes the process.
+    /// </summary>
+    /// <param name="task">The task to observe.</param>
+    /// <returns>A task that completes when the observed task has finished.</returns>
+    private async Task ObserveAsync(Task task)
+    {
+        try
+        {
+            await task;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // This is the UI boundary of a background notification: RefreshAsync already reports failures, so anything left (e.g. a marshaller error) is dropped and the next sync or timer tick retries.
+            lock (_refreshGate)
+            {
+                _syncRefreshRunning = false;
+                _syncRefreshPending = false;
+            }
+        }
     }
 
     /// <summary>

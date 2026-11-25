@@ -301,6 +301,70 @@ internal sealed class FakeImapSession : IImapSession
         return Task.FromResult<IReadOnlyList<RemoteFlagState>>(states);
     }
 
+    /// <summary>
+    /// The number of waits so far; updated with <see cref="Interlocked"/> because loops of several accounts share this fake.
+    /// </summary>
+    private int _waitCount;
+
+    /// <summary>
+    /// The folder names of the waits so far, guarded by its own lock.
+    /// </summary>
+    private readonly List<string> _waitFolders = [];
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the simulated server advertises IDLE.
+    /// </summary>
+    public bool SupportsIdle { get; set; } = true;
+
+    /// <summary>
+    /// Gets the number of <see cref="WaitForInboxChangeAsync"/> calls.
+    /// </summary>
+    public int WaitCount => Volatile.Read(ref _waitCount);
+
+    /// <summary>
+    /// Gets a snapshot of the folder names passed to <see cref="WaitForInboxChangeAsync"/>, in call order.
+    /// </summary>
+    public IReadOnlyList<string> WaitFolders
+    {
+        get
+        {
+            lock (_waitFolders)
+            {
+                return [.. _waitFolders];
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the behaviour of <see cref="WaitForInboxChangeAsync"/> given the folder, the maximum wait and the token.
+    /// It may return true or false, throw, or block (for example on a task completion source or the token).
+    /// When it is <see langword="null"/> the first wait returns <see langword="true"/> and later waits return <see langword="false"/> immediately,
+    /// like the real session (which reports a change on its first wait) with a maximum wait that then elapses.
+    /// </summary>
+    public Func<string, TimeSpan, CancellationToken, Task<bool>>? OnWaitForChange { get; set; }
+
+    /// <inheritdoc />
+    public async Task<bool> WaitForInboxChangeAsync(
+        string folderFullName,
+        TimeSpan maxWait,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(maxWait, TimeSpan.Zero);
+        cancellationToken.ThrowIfCancellationRequested();
+        var number = Interlocked.Increment(ref _waitCount);
+        lock (_waitFolders)
+        {
+            _waitFolders.Add(folderFullName);
+        }
+
+        if (OnWaitForChange is null)
+        {
+            return number == 1;
+        }
+
+        return await OnWaitForChange(folderFullName, maxWait, cancellationToken);
+    }
+
     /// <inheritdoc />
     public Task<bool> AppendToSentAsync(ReadOnlyMemory<byte> rfc822, CancellationToken cancellationToken = default)
     {
