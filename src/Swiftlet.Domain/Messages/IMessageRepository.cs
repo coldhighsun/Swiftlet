@@ -122,4 +122,46 @@ public interface IMessageRepository
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that completes when the message is deleted.</returns>
     Task DeleteAsync(Guid messageId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the flag state of all messages of a folder without tracking or loading bodies, ordered by UID.
+    /// </summary>
+    /// <param name="folderId">The folder.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The flag states.</returns>
+    Task<IReadOnlyList<MessageFlagState>> GetFlagStatesAsync(Guid folderId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the flag state of the messages of a folder whose local change still has to be written to the server.
+    /// </summary>
+    /// <param name="folderId">The folder.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The pending flag states, ordered by UID.</returns>
+    Task<IReadOnlyList<MessageFlagState>> GetPendingFlagStatesAsync(Guid folderId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Copies server flags onto a message directly in the database, unless a local change is pending.
+    /// </summary>
+    /// <param name="messageId">The message identifier.</param>
+    /// <param name="isRead">The server's read state.</param>
+    /// <param name="isFlagged">The server's flagged state.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The number of updated rows; 0 if the message is pending or gone.</returns>
+    Task<int> ApplyServerFlagsAsync(Guid messageId, bool isRead, bool isFlagged, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Clears the pending marker of pushed messages, but only where the stored values still equal the pushed ones.
+    /// </summary>
+    /// <param name="pushed">The states that were written to the server.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The number of rows whose marker was cleared.</returns>
+    Task<int> ClearFlagSyncPendingAsync(IReadOnlyCollection<MessageFlagState> pushed, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes several cached messages with their attachments and label links in bulk.
+    /// </summary>
+    /// <param name="messageIds">The message identifiers.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the messages are deleted.</returns>
+    Task DeleteRangeAsync(IReadOnlyCollection<Guid> messageIds, CancellationToken cancellationToken = default);
 }

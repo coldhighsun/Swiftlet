@@ -61,6 +61,12 @@ public interface IDialogService
     Task<bool> ShowAddAccountAsync();
 
     /// <summary>
+    /// Shows the settings dialog.
+    /// </summary>
+    /// <returns>A task that completes when the dialog has been closed.</returns>
+    Task ShowSettingsAsync();
+
+    /// <summary>
     /// Shows the label manager dialog.
     /// </summary>
     /// <returns>A task that completes when the dialog has been closed.</returns>

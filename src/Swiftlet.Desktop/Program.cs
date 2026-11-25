@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Swiftlet.Application;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
+using Swiftlet.Desktop.Settings;
 using Swiftlet.Desktop.ViewModels;
 using Swiftlet.Infrastructure;
 using Swiftlet.Infrastructure.Persistence;
@@ -26,9 +27,8 @@ internal static class Program
         var dataDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Swiftlet");
         builder.Services.AddApplication();
         builder.Services.AddInfrastructure(dataDirectory);
-        var languageStore = new JsonLanguagePreferenceStore(Path.Combine(dataDirectory, "settings.json"));
-        LocalizationManager.Instance.SetPreference(languageStore.Load());
-        builder.Services.AddSingleton<ILanguagePreferenceStore>(languageStore);
+        var settings = builder.Services.AddAppSettings(Path.Combine(dataDirectory, "settings.json"));
+        LocalizationManager.Instance.SetPreference(settings.Load());
         builder.Services.AddSingleton<ILocalizer>(LocalizationManager.Instance);
         builder.Services.AddSingleton<LanguageSelectorViewModel>();
         builder.Services.AddSingleton<IRequestDispatcher, ScopedRequestDispatcher>();
@@ -36,6 +36,7 @@ internal static class Program
         builder.Services.AddSingleton<MainWindowViewModel>();
         builder.Services.AddTransient<AddAccountViewModel>();
         builder.Services.AddTransient<LabelManagerViewModel>();
+        builder.Services.AddTransient<SettingsViewModel>();
 
         using var host = builder.Build();
         InitializeDatabaseAsync(host.Services).GetAwaiter().GetResult();

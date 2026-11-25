@@ -49,6 +49,7 @@
           <Button Content="{loc:Loc Toolbar_ViewInBrowser}" Command="{Binding OpenHtmlCommand}" />
           <Button Content="{loc:Loc Toolbar_Sync}" Command="{Binding SyncCommand}" />
           <Button Content="{loc:Loc Toolbar_AddAccount}" Command="{Binding AddAccountCommand}" />
+          <Button Content="{loc:Loc Toolbar_Settings}" Command="{Binding OpenSettingsCommand}" />
         </StackPanel>
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
           <ComboBox Width="140" ItemsSource="{Binding LanguageSelector.Options}"
@@ -60,7 +61,7 @@
               </DataTemplate>
             </ComboBox.ItemTemplate>
           </ComboBox>
-          <TextBox Width="260" PlaceholderText="{loc:Loc Search_Placeholder}" Text="{Binding SearchText}">
+          <TextBox Width="190" PlaceholderText="{loc:Loc Search_Placeholder}" Text="{Binding SearchText}">
             <TextBox.KeyBindings>
               <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}" />
             </TextBox.KeyBindings>

@@ -8,6 +8,7 @@ using Swiftlet.Application.Queries;
 using Swiftlet.Application.Sync;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
+using Swiftlet.Desktop.Settings;
 using Swiftlet.Desktop.ViewModels;
 using Swiftlet.Domain.Folders;
 
@@ -278,17 +279,17 @@ public partial class LocalizationTests
     /// Verifies the JSON store round-trips, defaults to system when missing and survives a corrupt file.
     /// </summary>
     [Fact]
-    public void JsonLanguagePreferenceStore_MissingSavedAndCorrupt_BehavesSafely()
+    public void AppSettings_LanguageMissingSavedAndCorrupt_BehavesSafely()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"swiftlet-test-{Guid.NewGuid():N}");
         var path = Path.Combine(directory, "nested", "settings.json");
         try
         {
-            var store = new JsonLanguagePreferenceStore(path);
+            var store = new AppSettings(path);
             store.Load().Should().Be("system");
 
             store.Save("zh-Hans");
-            new JsonLanguagePreferenceStore(path).Load().Should().Be("zh-Hans");
+            new AppSettings(path).Load().Should().Be("zh-Hans");
 
             File.WriteAllText(path, "{ not json");
             store.Load().Should().Be("system");

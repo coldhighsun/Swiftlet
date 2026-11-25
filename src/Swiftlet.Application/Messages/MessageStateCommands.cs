@@ -4,7 +4,7 @@ using Swiftlet.Domain.Messages;
 namespace Swiftlet.Application.Messages;
 
 /// <summary>
-/// Marks a cached message as read or unread. The state is local; it is not written back to the server.
+/// Marks a cached message as read or unread. The change is applied locally at once and written to the server by the next sync.
 /// </summary>
 /// <param name="MessageId">The message identifier.</param>
 /// <param name="IsRead">The new read state.</param>
@@ -29,7 +29,7 @@ public sealed class SetMessageReadCommandHandler(IMessageRepository messages) : 
 }
 
 /// <summary>
-/// Flags or unflags (stars) a cached message. The state is local; it is not written back to the server.
+/// Flags or unflags (stars) a cached message. The change is applied locally at once and written to the server by the next sync.
 /// </summary>
 /// <param name="MessageId">The message identifier.</param>
 /// <param name="IsFlagged">The new flagged state.</param>

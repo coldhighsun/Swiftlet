@@ -70,6 +70,128 @@ public class MailMessageAndFolderTests
     }
 
     /// <summary>
+    /// Verifies changing the read state marks the flags as pending sync.
+    /// </summary>
+    [Fact]
+    public void SetRead_ChangedValue_MarksPending()
+    {
+        var message = CreateMessage("b");
+
+        message.SetRead(true);
+
+        message.IsFlagSyncPending.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies setting the same read state does not mark the flags as pending.
+    /// </summary>
+    [Fact]
+    public void SetRead_SameValue_DoesNotMarkPending()
+    {
+        var message = CreateMessage("b");
+
+        message.SetRead(false);
+
+        message.IsFlagSyncPending.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies changing the flagged state marks the flags as pending sync.
+    /// </summary>
+    [Fact]
+    public void SetFlagged_ChangedValue_MarksPending()
+    {
+        var message = CreateMessage("b");
+
+        message.SetFlagged(true);
+
+        message.IsFlagSyncPending.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies marking flags as synced clears the pending marker.
+    /// </summary>
+    [Fact]
+    public void MarkFlagsSynced_ClearsPending()
+    {
+        var message = CreateMessage("b");
+        message.SetRead(true);
+
+        message.MarkFlagsSynced();
+
+        message.IsFlagSyncPending.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies server flags are copied when nothing is pending.
+    /// </summary>
+    [Fact]
+    public void ApplyServerFlags_NotPending_CopiesValuesAndReturnsTrue()
+    {
+        var message = CreateMessage("b");
+
+        var changed = message.ApplyServerFlags(true, true);
+
+        changed.Should().BeTrue();
+        message.IsRead.Should().BeTrue();
+        message.IsFlagged.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies applying identical server flags reports no change.
+    /// </summary>
+    [Fact]
+    public void ApplyServerFlags_NoChange_ReturnsFalse()
+    {
+        var message = CreateMessage("b");
+
+        var changed = message.ApplyServerFlags(false, false);
+
+        changed.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies local pending changes win over server values.
+    /// </summary>
+    [Fact]
+    public void ApplyServerFlags_Pending_IgnoresServerValuesAndReturnsFalse()
+    {
+        var message = CreateMessage("b");
+        message.SetRead(true);
+
+        var changed = message.ApplyServerFlags(false, true);
+
+        changed.Should().BeFalse();
+        message.IsRead.Should().BeTrue();
+        message.IsFlagged.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies applying server flags does not mark the message as pending.
+    /// </summary>
+    [Fact]
+    public void ApplyServerFlags_DoesNotMarkPending()
+    {
+        var message = CreateMessage("b");
+
+        message.ApplyServerFlags(true, true);
+
+        message.IsFlagSyncPending.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies a newly created message is not pending, even when created as read.
+    /// </summary>
+    [Fact]
+    public void Create_NewMessage_IsNotPending()
+    {
+        var message = MailMessage.Create(
+            Guid.NewGuid(), Guid.NewGuid(), 1, "s", "A", "a@example.com", "r", DateTimeOffset.UtcNow, "b", isRead: true);
+
+        message.IsFlagSyncPending.Should().BeFalse();
+    }
+
+    /// <summary>
     /// Verifies attachments are linked to the message.
     /// </summary>
     [Fact]

@@ -109,4 +109,9 @@
   <data name="Labels_ErrorInvalid" xml:space="preserve"><value>标签名称不能为空，且不能超过 50 个字符。</value></data>
   <data name="Labels_ErrorFailed" xml:space="preserve"><value>标签操作失败</value></data>
   <data name="Error_SetLabel" xml:space="preserve"><value>更新标签失败</value></data>
+  <data name="Toolbar_Settings" xml:space="preserve"><value>设置</value></data>
+  <data name="Settings_Title" xml:space="preserve"><value>设置</value></data>
+  <data name="Settings_RemoveServerDeleted" xml:space="preserve"><value>删除服务器上已删除的邮件的本地副本</value></data>
+  <data name="Settings_RemoveServerDeletedHint" xml:space="preserve"><value>只会删除本地副本，不会改动服务器上的邮件。在其他应用或网页端删除的邮件，也会从 Swiftlet 中消失。默认关闭。</value></data>
+  <data name="Settings_SaveFailed" xml:space="preserve"><value>保存设置失败</value></data>
 </root>

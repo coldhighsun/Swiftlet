@@ -109,4 +109,9 @@
   <data name="Labels_ErrorInvalid" xml:space="preserve"><value>The label name must not be empty or longer than 50 characters.</value></data>
   <data name="Labels_ErrorFailed" xml:space="preserve"><value>Label operation failed</value></data>
   <data name="Error_SetLabel" xml:space="preserve"><value>Failed to update labels</value></data>
+  <data name="Toolbar_Settings" xml:space="preserve"><value>Settings</value></data>
+  <data name="Settings_Title" xml:space="preserve"><value>Settings</value></data>
+  <data name="Settings_RemoveServerDeleted" xml:space="preserve"><value>Remove local messages that were deleted on the server</value></data>
+  <data name="Settings_RemoveServerDeletedHint" xml:space="preserve"><value>Only your local copy is removed; nothing changes on the server. Messages you delete in another app or on the web will then disappear from Swiftlet too. Off by default.</value></data>
+  <data name="Settings_SaveFailed" xml:space="preserve"><value>Failed to save settings</value></data>
 </root>

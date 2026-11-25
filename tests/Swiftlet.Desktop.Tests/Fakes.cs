@@ -2,6 +2,7 @@ using System.Globalization;
 using Mediator;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
+using Swiftlet.Desktop.Settings;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Folders;
 using Swiftlet.Domain.Messages;
@@ -159,6 +160,18 @@ internal sealed class FakeDialogService : IDialogService
         return Task.FromResult(AddAccountResult);
     }
 
+    /// <summary>
+    /// Gets the number of times the settings window was shown.
+    /// </summary>
+    public int SettingsCalls { get; private set; }
+
+    /// <inheritdoc />
+    public Task ShowSettingsAsync()
+    {
+        SettingsCalls++;
+        return Task.CompletedTask;
+    }
+
     /// <inheritdoc />
     public Task ShowLabelManagerAsync()
     {
@@ -223,6 +236,37 @@ internal sealed class FakeLanguageStore : ILanguagePreferenceStore
         }
 
         Preference = preference;
+    }
+}
+
+/// <summary>
+/// In-memory application settings.
+/// </summary>
+internal sealed class FakeAppSettings : IAppSettings
+{
+    /// <summary>
+    /// Gets the values passed to <see cref="SetRemoveServerDeletedMessages"/>.
+    /// </summary>
+    public List<bool> SetCalls { get; } = [];
+
+    /// <summary>
+    /// Gets or sets an exception thrown on save.
+    /// </summary>
+    public Exception? Failure { get; set; }
+
+    /// <inheritdoc />
+    public bool RemoveServerDeletedMessages { get; set; }
+
+    /// <inheritdoc />
+    public void SetRemoveServerDeletedMessages(bool value)
+    {
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+
+        SetCalls.Add(value);
+        RemoveServerDeletedMessages = value;
     }
 }
 

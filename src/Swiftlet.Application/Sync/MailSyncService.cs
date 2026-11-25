@@ -27,6 +27,7 @@ public sealed record MailSyncOptions(int MaxMessagesPerFolderPerSync = 200);
 /// <param name="folders">The folder repository.</param>
 /// <param name="messages">The message repository.</param>
 /// <param name="imapFactory">The IMAP connection factory.</param>
+/// <param name="settings">The user-configurable sync behavior, read on every run.</param>
 /// <param name="options">The synchronization limits.</param>
 /// <param name="logger">The logger.</param>
 public sealed class MailSyncService(
@@ -34,6 +35,7 @@ public sealed class MailSyncService(
     IFolderRepository folders,
     IMessageRepository messages,
     IImapSessionFactory imapFactory,
+    ISyncSettings settings,
     MailSyncOptions options,
     ILogger<MailSyncService> logger)
 {
@@ -122,6 +124,11 @@ public sealed class MailSyncService(
             logger.LogInformation("UIDVALIDITY of {Folder} changed; discarding cached messages.", folder.FullName);
             await messages.DeleteByFolderAsync(folder.Id, cancellationToken);
         }
+        else
+        {
+            // Local flag changes go up before anything is pulled, so a pull never reverts them.
+            await PushPendingFlagsAsync(session, folder, cancellationToken);
+        }
 
         var afterUid = await messages.GetMaxUidAsync(folder.Id, cancellationToken);
         var remote = await session.FetchNewMessagesAsync(
@@ -129,14 +136,113 @@ public sealed class MailSyncService(
             afterUid,
             options.MaxMessagesPerFolderPerSync,
             cancellationToken);
-        if (remote.Count == 0)
+        var created = remote.Select(r => ToMessage(folder, r)).ToList();
+        if (created.Count > 0)
         {
-            return 0;
+            await messages.AddRangeAsync(created, cancellationToken);
         }
 
-        var created = remote.Select(r => ToMessage(folder, r)).ToList();
-        await messages.AddRangeAsync(created, cancellationToken);
+        if (!invalidated)
+        {
+            await PullFlagsAsync(session, folder, cancellationToken);
+        }
+
         return created.Count;
+    }
+
+    /// <summary>
+    /// Writes the read and starred state of locally changed messages to the server.
+    /// </summary>
+    /// <param name="session">The IMAP session.</param>
+    /// <param name="folder">The folder.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the pending changes are pushed.</returns>
+    private async Task PushPendingFlagsAsync(IImapSession session, MailFolder folder, CancellationToken cancellationToken)
+    {
+        var pending = await messages.GetPendingFlagStatesAsync(folder.Id, cancellationToken);
+        if (pending.Count == 0)
+        {
+            return;
+        }
+
+        var updates = pending.Select(m => new FlagUpdate(m.Uid, m.IsRead, m.IsFlagged)).ToList();
+
+        try
+        {
+            await session.SetFlagsAsync(folder.FullName, updates, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // A failed push is recoverable: the messages stay pending and are retried at the next sync, and the pending
+            // marker also protects them from the pull. A persistently failing STORE (read-only mailbox, permissions)
+            // must not stop new mail from being received for this folder.
+            logger.LogWarning(
+                ex,
+                "Failed to push flags of {Count} messages in {Folder}; they stay pending.",
+                pending.Count,
+                folder.FullName);
+            return;
+        }
+
+        // The sync runs on its own scope, so the user may change a message while the push was in flight. The marker is
+        // therefore cleared in the database only where the stored values still equal what was pushed; a message the user
+        // changed meanwhile stays pending and its newer value goes up at the next sync.
+        var cleared = await messages.ClearFlagSyncPendingAsync(pending, cancellationToken);
+        logger.LogInformation("Pushed flags of {Count} messages in {Folder}.", cleared, folder.FullName);
+    }
+
+    /// <summary>
+    /// Copies server-side flags onto cached messages and optionally removes messages deleted on the server.
+    /// </summary>
+    /// <param name="session">The IMAP session.</param>
+    /// <param name="folder">The folder.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the pull is applied.</returns>
+    private async Task PullFlagsAsync(IImapSession session, MailFolder folder, CancellationToken cancellationToken)
+    {
+        var cached = await messages.GetFlagStatesAsync(folder.Id, cancellationToken);
+        if (cached.Count == 0)
+        {
+            return;
+        }
+
+        var remote = await session.FetchFlagsAsync(folder.FullName, cached[0].Uid, cancellationToken);
+        var remoteByUid = remote.ToDictionary(r => r.Uid);
+        var gone = new List<Guid>();
+        foreach (var message in cached)
+        {
+            if (remoteByUid.TryGetValue(message.Uid, out var state) && !state.IsDeleted)
+            {
+                // The repository skips pending rows in the statement itself, so a change the user made after the
+                // snapshot was taken is not overwritten either.
+                if (!message.IsFlagSyncPending && (message.IsRead != state.IsRead || message.IsFlagged != state.IsFlagged))
+                {
+                    await messages.ApplyServerFlagsAsync(message.Id, state.IsRead, state.IsFlagged, cancellationToken);
+                }
+            }
+            else
+            {
+                gone.Add(message.Id);
+            }
+        }
+
+        if (gone.Count == 0 || !settings.RemoveServerDeletedMessages)
+        {
+            return;
+        }
+
+        if (remote.Count == 0)
+        {
+            // An empty answer for a non-empty cache is more likely a server hiccup than a wiped mailbox.
+            logger.LogWarning(
+                "Server returned no flags for {Folder} although {Count} messages are cached; removing nothing.",
+                folder.FullName,
+                cached.Count);
+            return;
+        }
+
+        await messages.DeleteRangeAsync(gone, cancellationToken);
+        logger.LogInformation("Removed {Count} messages deleted on the server from {Folder}.", gone.Count, folder.FullName);
     }
 
     /// <summary>

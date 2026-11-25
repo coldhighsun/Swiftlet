@@ -1,0 +1,16 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Swiftlet.Desktop.ViewModels"
+        xmlns:loc="using:Swiftlet.Desktop.Localization"
+        x:Class="Swiftlet.Desktop.SettingsWindow"
+        x:DataType="vm:SettingsViewModel"
+        Title="{loc:Loc Settings_Title}" Width="480" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner">
+  <StackPanel Margin="20" Spacing="12">
+    <CheckBox Content="{loc:Loc Settings_RemoveServerDeleted}" IsChecked="{Binding RemoveServerDeletedMessages}" />
+    <TextBlock Text="{loc:Loc Settings_RemoveServerDeletedHint}" TextWrapping="Wrap" Opacity="0.7" Margin="28,0,0,0" />
+    <TextBlock Text="{Binding ErrorText}" Foreground="IndianRed" TextWrapping="Wrap"
+               IsVisible="{Binding ErrorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+    <Button HorizontalAlignment="Right" Content="{loc:Loc Common_Close}" Command="{Binding CloseCommand}" IsCancel="True" />
+  </StackPanel>
+</Window>

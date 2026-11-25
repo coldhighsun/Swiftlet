@@ -1,4 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Swiftlet.Application.Abstractions;
 using Swiftlet.Application.Sync;
 
 namespace Swiftlet.Application;
@@ -22,6 +24,7 @@ public static class DependencyInjection
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new MailSyncOptions());
         services.AddSingleton<SyncSchedule>();
+        services.TryAddSingleton<ISyncSettings, DefaultSyncSettings>();
         services.AddScoped<MailSyncService>();
         return services;
     }

@@ -52,9 +52,31 @@ public static class SqliteSchemaInitializer
         // WAL lets the UI read while the background worker writes; it is a no-op for in-memory databases.
         await context.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", cancellationToken);
         await context.Database.EnsureCreatedAsync(cancellationToken);
+        await EnsureFlagSyncColumnAsync(context, cancellationToken);
         foreach (var statement in FullTextStatements)
         {
             await context.Database.ExecuteSqlRawAsync(statement, cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Adds the <c>IsFlagSyncPending</c> column to a Messages table created by an earlier version; does nothing when it exists.
+    /// </summary>
+    /// <param name="context">The database context.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the column exists.</returns>
+    internal static async Task EnsureFlagSyncColumnAsync(SwiftletDbContext context, CancellationToken cancellationToken = default)
+    {
+        var existing = await context.Database
+            .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM pragma_table_info('Messages') WHERE name = 'IsFlagSyncPending'")
+            .SingleAsync(cancellationToken);
+        if (existing > 0)
+        {
+            return;
+        }
+
+        await context.Database.ExecuteSqlRawAsync(
+            "ALTER TABLE Messages ADD COLUMN IsFlagSyncPending INTEGER NOT NULL DEFAULT 0;",
+            cancellationToken);
     }
 }

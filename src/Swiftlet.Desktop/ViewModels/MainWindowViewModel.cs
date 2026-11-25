@@ -362,6 +362,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Opens the settings dialog.
+    /// </summary>
+    /// <returns>A task that completes when the dialog has been closed.</returns>
+    [RelayCommand]
+    private async Task OpenSettingsAsync()
+    {
+        await _dialogs.ShowSettingsAsync();
+    }
+
+    /// <summary>
     /// Opens the label manager and reloads the labels, and the list they decorate, afterwards.
     /// </summary>
     /// <returns>A task that completes when the manager has been closed and the view is up to date.</returns>

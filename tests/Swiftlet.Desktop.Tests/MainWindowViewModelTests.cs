@@ -702,6 +702,20 @@ public class MainWindowViewModelTests
     }
 
     /// <summary>
+    /// Verifies the settings command opens the settings dialog.
+    /// </summary>
+    [Fact]
+    public async Task OpenSettings_Executed_ShowsSettingsDialog()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+
+        await scenario.ViewModel.OpenSettingsCommand.ExecuteAsync(null);
+
+        scenario.Dialogs.SettingsCalls.Should().Be(1);
+    }
+
+    /// <summary>
     /// Verifies the manage-labels command opens the manager and reloads the label nodes afterwards.
     /// </summary>
     [Fact]

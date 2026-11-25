@@ -375,4 +375,237 @@ public class MessageRepositoryTests
 
         result.Should().ContainSingle().Which.Labels.Should().ContainSingle();
     }
+
+    /// <summary>
+    /// Verifies only pending messages of the requested folder are returned, untracked and ordered by UID.
+    /// </summary>
+    [Fact]
+    public async Task GetPendingFlagStatesAsync_ReturnsOnlyPendingOfThatFolder()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var other = MailFolder.Create(account.Id, "Archive", "Archive", FolderRole.Archive);
+        db.Context.Folders.Add(other);
+        await db.Context.SaveChangesAsync(ct);
+        var repository = new MessageRepository(db.Context);
+        var pending = Build(account, folder, 1, "pending", "b", DateTimeOffset.UtcNow);
+        var clean = Build(account, folder, 2, "clean", "b", DateTimeOffset.UtcNow);
+        var otherFolder = Build(account, other, 1, "other", "b", DateTimeOffset.UtcNow);
+        await repository.AddRangeAsync([pending, clean, otherFolder], ct);
+        pending.SetRead(true);
+        otherFolder.SetRead(true);
+        await repository.SaveChangesAsync(ct);
+        await using var verify = db.CreateContext();
+
+        var result = await new MessageRepository(verify).GetPendingFlagStatesAsync(folder.Id, ct);
+
+        result.Should().ContainSingle().Which.Should().Be(new MessageFlagState(pending.Id, 1, true, false, true));
+        verify.ChangeTracker.Entries().Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies the flag state query returns every message of the folder ordered by UID without tracking them.
+    /// </summary>
+    [Fact]
+    public async Task GetFlagStatesAsync_ReturnsFolderMessagesOrderedByUidUntracked()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var other = MailFolder.Create(account.Id, "Archive", "Archive", FolderRole.Archive);
+        db.Context.Folders.Add(other);
+        await db.Context.SaveChangesAsync(ct);
+        var repository = new MessageRepository(db.Context);
+        var nine = Build(account, folder, 9, "nine", "b", DateTimeOffset.UtcNow);
+        nine.SetFlagged(true);
+        await repository.AddRangeAsync(
+            [
+                Build(account, folder, 5, "five", "b", DateTimeOffset.UtcNow),
+                Build(account, folder, 2, "two", "b", DateTimeOffset.UtcNow),
+                nine,
+                Build(account, other, 1, "elsewhere", "b", DateTimeOffset.UtcNow),
+            ],
+            ct);
+        await using var verify = db.CreateContext();
+
+        var result = await new MessageRepository(verify).GetFlagStatesAsync(folder.Id, ct);
+
+        result.Select(m => m.Uid).Should().Equal(2u, 5u, 9u);
+        result[2].Should().Be(new MessageFlagState(nine.Id, 9, false, true, true));
+        verify.ChangeTracker.Entries().Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies applying server flags updates clean rows and skips rows with a pending local change.
+    /// </summary>
+    [Fact]
+    public async Task ApplyServerFlagsAsync_UpdatesCleanRowAndSkipsPendingRow()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var repository = new MessageRepository(db.Context);
+        var clean = Build(account, folder, 1, "clean", "b", DateTimeOffset.UtcNow);
+        var pending = Build(account, folder, 2, "pending", "b", DateTimeOffset.UtcNow);
+        await repository.AddRangeAsync([clean, pending], ct);
+        pending.SetRead(true);
+        await repository.SaveChangesAsync(ct);
+
+        var cleanRows = await repository.ApplyServerFlagsAsync(clean.Id, true, true, ct);
+        var pendingRows = await repository.ApplyServerFlagsAsync(pending.Id, false, true, ct);
+
+        cleanRows.Should().Be(1);
+        pendingRows.Should().Be(0);
+        await using var verify = db.CreateContext();
+        var states = await new MessageRepository(verify).GetFlagStatesAsync(folder.Id, ct);
+        states[0].Should().Be(new MessageFlagState(clean.Id, 1, true, true, false));
+        states[1].Should().Be(new MessageFlagState(pending.Id, 2, true, false, true));
+    }
+
+    /// <summary>
+    /// Verifies the pending marker is cleared only for rows whose values still equal the pushed ones.
+    /// </summary>
+    [Fact]
+    public async Task ClearFlagSyncPendingAsync_ClearsOnlyRowsWhoseValuesStillMatch()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var repository = new MessageRepository(db.Context);
+        var same = Build(account, folder, 1, "same", "b", DateTimeOffset.UtcNow);
+        var changed = Build(account, folder, 2, "changed", "b", DateTimeOffset.UtcNow);
+        await repository.AddRangeAsync([same, changed], ct);
+        same.SetRead(true);
+        changed.SetRead(true);
+        await repository.SaveChangesAsync(ct);
+        var pushed = await repository.GetPendingFlagStatesAsync(folder.Id, ct);
+        // The user stars the second message after the states were loaded.
+        await using (var other = db.CreateContext())
+        {
+            var loaded = await other.Messages.SingleAsync(m => m.Id == changed.Id, ct);
+            loaded.SetFlagged(true);
+            await other.SaveChangesAsync(ct);
+        }
+
+        var cleared = await repository.ClearFlagSyncPendingAsync(pushed, ct);
+
+        cleared.Should().Be(1);
+        await using var verify = db.CreateContext();
+        var states = await new MessageRepository(verify).GetFlagStatesAsync(folder.Id, ct);
+        states[0].IsFlagSyncPending.Should().BeFalse();
+        states[1].Should().Be(new MessageFlagState(changed.Id, 2, true, true, true));
+    }
+
+    /// <summary>
+    /// Verifies clearing with no pushed states does nothing.
+    /// </summary>
+    [Fact]
+    public async Task ClearFlagSyncPendingAsync_Empty_ReturnsZero()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+
+        var cleared = await new MessageRepository(db.Context).ClearFlagSyncPendingAsync([], ct);
+
+        cleared.Should().Be(0);
+    }
+
+    /// <summary>
+    /// Verifies a range delete removes messages, attachments and label links but keeps other messages and labels.
+    /// </summary>
+    [Fact]
+    public async Task DeleteRangeAsync_RemovesMessagesAttachmentsAndLabelLinks()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var label = Label.Create("Work", "#112233");
+        db.Context.Labels.Add(label);
+        var first = Build(account, folder, 1, "first", "b", DateTimeOffset.UtcNow);
+        var second = Build(account, folder, 2, "second", "b", DateTimeOffset.UtcNow);
+        var keep = Build(account, folder, 3, "keepme", "b", DateTimeOffset.UtcNow);
+        first.AddAttachment("a.pdf", "application/pdf", 10);
+        second.AddLabel(label);
+        keep.AddAttachment("k.pdf", "application/pdf", 10);
+        var repository = new MessageRepository(db.Context);
+        await repository.AddRangeAsync([first, second, keep], ct);
+
+        await repository.DeleteRangeAsync([first.Id, second.Id], ct);
+
+        await using var verifyContext = db.CreateContext();
+        verifyContext.Messages.Should().ContainSingle().Which.Subject.Should().Be("keepme");
+        verifyContext.Attachments.Should().ContainSingle().Which.FileName.Should().Be("k.pdf");
+        verifyContext.Labels.Should().ContainSingle();
+        var links = await verifyContext.Database
+            .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM MessageLabels")
+            .SingleAsync(ct);
+        links.Should().Be(0);
+        (await repository.SearchAsync("second", null, 10, ct)).Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies a range delete with no ids does nothing.
+    /// </summary>
+    [Fact]
+    public async Task DeleteRangeAsync_Empty_IsNoOp()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var repository = new MessageRepository(db.Context);
+        await repository.AddAsync(Build(account, folder, 1, "keep", "b", DateTimeOffset.UtcNow), ct);
+
+        await repository.DeleteRangeAsync([], ct);
+
+        (await repository.GetByFolderAsync(folder.Id, 0, 10, ct)).Should().ContainSingle();
+    }
+
+    /// <summary>
+    /// Verifies deleting more ids than one batch removes every one of them.
+    /// </summary>
+    [Fact]
+    public async Task DeleteRangeAsync_MoreThanOneBatch_DeletesAll()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var repository = new MessageRepository(db.Context);
+        var messages = Enumerable.Range(1, 1100)
+            .Select(i => Build(account, folder, (uint)i, $"m{i}", "b", DateTimeOffset.UtcNow))
+            .ToList();
+        await repository.AddRangeAsync(messages, ct);
+
+        await repository.DeleteRangeAsync(messages.Select(m => m.Id).ToList(), ct);
+
+        await using var verifyContext = db.CreateContext();
+        verifyContext.Messages.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies the pending marker is persisted and cleared.
+    /// </summary>
+    [Fact]
+    public async Task PendingMarker_RoundTripsThroughDatabase()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var repository = new MessageRepository(db.Context);
+        var message = Build(account, folder, 1, "s", "b", DateTimeOffset.UtcNow);
+        await repository.AddAsync(message, ct);
+        message.SetFlagged(true);
+        await repository.SaveChangesAsync(ct);
+
+        await using (var verifyContext = db.CreateContext())
+        {
+            var loaded = await new MessageRepository(verifyContext).GetAsync(message.Id, ct);
+            loaded!.IsFlagSyncPending.Should().BeTrue();
+            loaded.MarkFlagsSynced();
+            await verifyContext.SaveChangesAsync(ct);
+        }
+
+        await using var finalContext = db.CreateContext();
+        (await new MessageRepository(finalContext).GetAsync(message.Id, ct))!.IsFlagSyncPending.Should().BeFalse();
+    }
 }

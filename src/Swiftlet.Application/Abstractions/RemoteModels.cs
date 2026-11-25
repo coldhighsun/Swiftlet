@@ -20,6 +20,23 @@ public sealed record RemoteFolder(string FullName, string Name, FolderRole Role,
 public sealed record RemoteAttachment(string FileName, string ContentType, long Size);
 
 /// <summary>
+/// The desired read and starred state of one message, to be written to the server.
+/// </summary>
+/// <param name="Uid">The IMAP UID.</param>
+/// <param name="IsRead">Whether the server should hold the message as seen.</param>
+/// <param name="IsFlagged">Whether the server should hold the message as flagged (starred).</param>
+public sealed record FlagUpdate(uint Uid, bool IsRead, bool IsFlagged);
+
+/// <summary>
+/// The flags the server currently holds for one message.
+/// </summary>
+/// <param name="Uid">The IMAP UID.</param>
+/// <param name="IsRead">Whether the message is flagged as seen.</param>
+/// <param name="IsFlagged">Whether the message is flagged (starred).</param>
+/// <param name="IsDeleted">Whether the message carries the deleted flag.</param>
+public sealed record RemoteFlagState(uint Uid, bool IsRead, bool IsFlagged, bool IsDeleted);
+
+/// <summary>
 /// A message downloaded from an IMAP server.
 /// </summary>
 /// <param name="Uid">The IMAP UID.</param>

@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Application.Sync;
@@ -18,16 +19,521 @@ public class MailSyncServiceTests
     /// <param name="db">The test database.</param>
     /// <param name="factory">The IMAP factory.</param>
     /// <param name="maxPerFolder">The per-folder download limit.</param>
+    /// <param name="settings">The sync settings, or <see langword="null"/> for defaults.</param>
+    /// <param name="context">The context the repositories use, or <see langword="null"/> for the test's own.</param>
     /// <returns>The service.</returns>
-    private static MailSyncService CreateService(TestDatabase db, FakeImapSessionFactory factory, int maxPerFolder = 200)
+    private static MailSyncService CreateService(
+        TestDatabase db,
+        FakeImapSessionFactory factory,
+        int maxPerFolder = 200,
+        FakeSyncSettings? settings = null,
+        Swiftlet.Infrastructure.Persistence.SwiftletDbContext? context = null)
     {
+        context ??= db.Context;
         return new MailSyncService(
-            new AccountRepository(db.Context),
-            new FolderRepository(db.Context),
-            new MessageRepository(db.Context),
+            new AccountRepository(context),
+            new FolderRepository(context),
+            new MessageRepository(context),
             factory,
+            settings ?? new FakeSyncSettings(),
             new MailSyncOptions(maxPerFolder),
             NullLogger<MailSyncService>.Instance);
+    }
+
+    /// <summary>
+    /// Creates an account with an INBOX holding the given UIDs and runs the first sync.
+    /// </summary>
+    /// <param name="db">The test database.</param>
+    /// <param name="settings">The sync settings.</param>
+    /// <param name="uids">The server UIDs.</param>
+    /// <param name="ct">The cancellation token.</param>
+    /// <returns>The scenario objects.</returns>
+    private static async Task<(MailSyncService Service, FakeImapSession Session, Guid AccountId, Guid FolderId)> SeedSyncedInboxAsync(
+        TestDatabase db,
+        FakeSyncSettings settings,
+        uint[] uids,
+        CancellationToken ct)
+    {
+        var (account, _) = await db.SeedAccountAsync(ct);
+        var factory = new FakeImapSessionFactory();
+        factory.Session.Folders.Add(TestData.Folder("INBOX", FolderRole.Inbox));
+        factory.Session.Messages["INBOX"] = [.. uids.Select(u => TestData.Remote(u))];
+        var service = CreateService(db, factory, settings: settings);
+        await service.SyncAsync(account.Id, ct);
+        var inbox = (await new FolderRepository(db.Context).GetByAccountAsync(account.Id, ct)).Single();
+        return (service, factory.Session, account.Id, inbox.Id);
+    }
+
+    /// <summary>
+    /// Applies a change to the cached message with the given UID through a fresh context, like the UI does.
+    /// </summary>
+    /// <param name="db">The test database.</param>
+    /// <param name="folderId">The folder identifier.</param>
+    /// <param name="uid">The UID.</param>
+    /// <param name="change">The change to apply.</param>
+    /// <param name="ct">The cancellation token.</param>
+    /// <returns>A task that completes when the change is saved.</returns>
+    private static async Task ChangeAsync(
+        TestDatabase db,
+        Guid folderId,
+        uint uid,
+        Action<Swiftlet.Domain.Messages.MailMessage> change,
+        CancellationToken ct)
+    {
+        await using var context = db.CreateContext();
+        var message = await context.Messages.SingleAsync(m => m.FolderId == folderId && m.Uid == uid, ct);
+        change(message);
+        await context.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Reads the flag states of a folder through a fresh context.
+    /// </summary>
+    /// <param name="db">The test database.</param>
+    /// <param name="folderId">The folder identifier.</param>
+    /// <param name="ct">The cancellation token.</param>
+    /// <returns>The flag states ordered by UID.</returns>
+    private static async Task<IReadOnlyList<Swiftlet.Domain.Messages.MessageFlagState>> StatesAsync(
+        TestDatabase db,
+        Guid folderId,
+        CancellationToken ct)
+    {
+        await using var context = db.CreateContext();
+        return await new MessageRepository(context).GetFlagStatesAsync(folderId, ct);
+    }
+
+    /// <summary>
+    /// Reads the flag state of one message through a fresh context.
+    /// </summary>
+    /// <param name="db">The test database.</param>
+    /// <param name="folderId">The folder identifier.</param>
+    /// <param name="uid">The UID.</param>
+    /// <param name="ct">The cancellation token.</param>
+    /// <returns>The flag state.</returns>
+    private static async Task<Swiftlet.Domain.Messages.MessageFlagState> StateAsync(
+        TestDatabase db,
+        Guid folderId,
+        uint uid,
+        CancellationToken ct)
+    {
+        return (await StatesAsync(db, folderId, ct)).Single(m => m.Uid == uid);
+    }
+
+    /// <summary>
+    /// Verifies a locally read message is pushed as seen and no longer pending.
+    /// </summary>
+    [Fact]
+    public async Task Sync_PendingRead_PushesSeenAndClearsPending()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(db, new FakeSyncSettings(), [1, 2], ct);
+        await ChangeAsync(db, folderId, 1, m => m.SetRead(true), ct);
+
+        await service.SyncAsync(accountId, ct);
+
+        var call = session.SetFlagsCalls.Should().ContainSingle().Subject;
+        call.Folder.Should().Be("INBOX");
+        call.Updates.Should().Equal(new FlagUpdate(1, true, false));
+        session.GetServerFlags("INBOX", 1).IsRead.Should().BeTrue();
+        await using var verify = db.CreateContext();
+        (await new MessageRepository(verify).GetPendingFlagStatesAsync(folderId, ct)).Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies marking a message unread pushes a cleared seen flag.
+    /// </summary>
+    [Fact]
+    public async Task Sync_PendingUnread_PushesClearedSeen()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, _) = await db.SeedAccountAsync(ct);
+        var factory = new FakeImapSessionFactory();
+        factory.Session.Folders.Add(TestData.Folder("INBOX", FolderRole.Inbox));
+        factory.Session.Messages["INBOX"] = [TestData.Remote(1) with { IsRead = true }];
+        var service = CreateService(db, factory);
+        await service.SyncAsync(account.Id, ct);
+        var inbox = (await new FolderRepository(db.Context).GetByAccountAsync(account.Id, ct)).Single();
+        (await StateAsync(db, inbox.Id, 1, ct)).IsRead.Should().BeTrue();
+        await ChangeAsync(db, inbox.Id, 1, m => m.SetRead(false), ct);
+
+        await service.SyncAsync(account.Id, ct);
+
+        factory.Session.SetFlagsCalls.Single().Updates.Should().Equal(new FlagUpdate(1, false, false));
+        factory.Session.GetServerFlags("INBOX", 1).IsRead.Should().BeFalse();
+        (await StateAsync(db, inbox.Id, 1, ct)).IsFlagSyncPending.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies starring one message and unstarring another pushes both values.
+    /// </summary>
+    [Fact]
+    public async Task Sync_PendingStarAndUnstar_PushesBothValues()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, _) = await db.SeedAccountAsync(ct);
+        var factory = new FakeImapSessionFactory();
+        factory.Session.Folders.Add(TestData.Folder("INBOX", FolderRole.Inbox));
+        factory.Session.Messages["INBOX"] = [TestData.Remote(1), TestData.Remote(2)];
+        factory.Session.SetServerFlags("INBOX", 2, false, true);
+        var service = CreateService(db, factory);
+        await service.SyncAsync(account.Id, ct);
+        var inbox = (await new FolderRepository(db.Context).GetByAccountAsync(account.Id, ct)).Single();
+        (await StateAsync(db, inbox.Id, 2, ct)).IsFlagged.Should().BeTrue();
+        await ChangeAsync(db, inbox.Id, 1, m => m.SetFlagged(true), ct);
+        await ChangeAsync(db, inbox.Id, 2, m => m.SetFlagged(false), ct);
+
+        await service.SyncAsync(account.Id, ct);
+
+        factory.Session.SetFlagsCalls.Single().Updates.Should().BeEquivalentTo(
+            [new FlagUpdate(1, false, true), new FlagUpdate(2, false, false)]);
+        factory.Session.GetServerFlags("INBOX", 1).IsFlagged.Should().BeTrue();
+        factory.Session.GetServerFlags("INBOX", 2).IsFlagged.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies a failing push leaves the change pending without blocking new mail or failing the folder.
+    /// </summary>
+    [Fact]
+    public async Task Sync_PushFails_KeepsPendingAndStillFetchesNewMessages()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(db, new FakeSyncSettings(), [1], ct);
+        await ChangeAsync(db, folderId, 1, m => m.SetRead(true), ct);
+        session.SetFlagsFailure = new IOException("offline");
+        session.Messages["INBOX"].Add(TestData.Remote(2));
+
+        var result = await service.SyncAsync(accountId, ct);
+
+        result.FailedFolders.Should().BeEmpty();
+        result.FoldersSynced.Should().Be(1);
+        result.NewMessages.Should().Be(1);
+        var kept = await StateAsync(db, folderId, 1, ct);
+        kept.IsFlagSyncPending.Should().BeTrue();
+        kept.IsRead.Should().BeTrue();
+        await using var verify = db.CreateContext();
+        (await new MessageRepository(verify).GetFlagStatesAsync(folderId, ct)).Select(m => m.Uid).Should().Equal(1u, 2u);
+    }
+
+    /// <summary>
+    /// Verifies a change whose push failed is pushed and cleared by the next successful sync.
+    /// </summary>
+    [Fact]
+    public async Task Sync_PushFails_ThenSucceeds_ClearsPendingOnNextSync()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(db, new FakeSyncSettings(), [1], ct);
+        await ChangeAsync(db, folderId, 1, m => m.SetRead(true), ct);
+        session.SetFlagsFailure = new IOException("offline");
+        await service.SyncAsync(accountId, ct);
+        (await StateAsync(db, folderId, 1, ct)).IsFlagSyncPending.Should().BeTrue();
+        session.SetFlagsFailure = null;
+
+        await service.SyncAsync(accountId, ct);
+
+        var synced = await StateAsync(db, folderId, 1, ct);
+        synced.IsFlagSyncPending.Should().BeFalse();
+        synced.IsRead.Should().BeTrue();
+        session.GetServerFlags("INBOX", 1).IsRead.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies a change the user makes while the push is in flight is not marked as synced and goes up next sync.
+    /// </summary>
+    [Fact]
+    public async Task Sync_UserChangesMessageDuringPush_KeepsMessagePendingAndPushesItNextSync()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(db, new FakeSyncSettings(), [1], ct);
+        await ChangeAsync(db, folderId, 1, m => m.SetRead(true), ct);
+        session.OnSetFlags = (_, _) =>
+        {
+            session.OnSetFlags = null;
+            using var other = db.CreateContext();
+            var message = other.Messages.Single(m => m.Uid == 1);
+            message.SetFlagged(true);
+            other.SaveChanges();
+        };
+
+        await service.SyncAsync(accountId, ct);
+
+        var afterFirst = await StateAsync(db, folderId, 1, ct);
+        afterFirst.IsFlagSyncPending.Should().BeTrue();
+        afterFirst.IsRead.Should().BeTrue();
+        afterFirst.IsFlagged.Should().BeTrue();
+        session.GetServerFlags("INBOX", 1).IsFlagged.Should().BeFalse();
+
+        await service.SyncAsync(accountId, ct);
+
+        var afterSecond = await StateAsync(db, folderId, 1, ct);
+        afterSecond.IsFlagSyncPending.Should().BeFalse();
+        afterSecond.IsFlagged.Should().BeTrue();
+        session.SetFlagsCalls.Last().Updates.Should().Equal(new FlagUpdate(1, true, true));
+        session.GetServerFlags("INBOX", 1).Should().Be((true, true, false));
+    }
+
+    /// <summary>
+    /// Verifies a change the user makes while the pull is in flight is not overwritten by the server's flags.
+    /// </summary>
+    [Fact]
+    public async Task Sync_UserChangesMessageDuringPull_NotOverwritten()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(db, new FakeSyncSettings(), [1], ct);
+        session.SetServerFlags("INBOX", 1, true, false);
+        session.OnFetchFlags = (_, _) =>
+        {
+            session.OnFetchFlags = null;
+            using var other = db.CreateContext();
+            var message = other.Messages.Single(m => m.Uid == 1);
+            message.SetFlagged(true);
+            other.SaveChanges();
+        };
+
+        await service.SyncAsync(accountId, ct);
+
+        var state = await StateAsync(db, folderId, 1, ct);
+        state.IsFlagged.Should().BeTrue();
+        state.IsRead.Should().BeFalse();
+        state.IsFlagSyncPending.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies the flag pull leaves no message entities in the sync scope's change tracker.
+    /// </summary>
+    [Fact]
+    public async Task Sync_Pull_DoesNotLoadEntitiesIntoChangeTracker()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (_, session, accountId, _) = await SeedSyncedInboxAsync(db, new FakeSyncSettings(), [1, 2], ct);
+        session.SetServerFlags("INBOX", 2, true, false);
+        var factory = new FakeImapSessionFactory();
+        factory.Session.Folders.AddRange(session.Folders);
+        factory.Session.Messages["INBOX"] = session.Messages["INBOX"];
+        factory.Session.SetServerFlags("INBOX", 2, true, false);
+        await using var syncContext = db.CreateContext();
+
+        await CreateService(db, factory, context: syncContext).SyncAsync(accountId, ct);
+
+        syncContext.ChangeTracker.Entries<Swiftlet.Domain.Messages.MailMessage>().Should().BeEmpty();
+        factory.Session.FetchFlagsCalls.Should().NotBeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies a message read elsewhere becomes read locally.
+    /// </summary>
+    [Fact]
+    public async Task Sync_ServerMarkedRead_UpdatesLocalMessage()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(db, new FakeSyncSettings(), [1, 2], ct);
+        session.SetServerFlags("INBOX", 2, true, false);
+
+        await service.SyncAsync(accountId, ct);
+
+        await using var verify = db.CreateContext();
+        var cached = await new MessageRepository(verify).GetFlagStatesAsync(folderId, ct);
+        cached.Single(m => m.Uid == 2).IsRead.Should().BeTrue();
+        cached.Single(m => m.Uid == 1).IsRead.Should().BeFalse();
+        session.SetFlagsCalls.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies a star removed elsewhere is removed locally.
+    /// </summary>
+    [Fact]
+    public async Task Sync_ServerUnstarred_UpdatesLocalMessage()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(db, new FakeSyncSettings(), [1], ct);
+        session.SetServerFlags("INBOX", 1, false, true);
+        await service.SyncAsync(accountId, ct);
+        (await StateAsync(db, folderId, 1, ct)).IsFlagged.Should().BeTrue();
+        session.SetServerFlags("INBOX", 1, false, false);
+
+        await service.SyncAsync(accountId, ct);
+
+        await using var verify = db.CreateContext();
+        (await new MessageRepository(verify).GetFlagStatesAsync(folderId, ct)).Single().IsFlagged.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies the pull does not overwrite a message whose local change could not be pushed.
+    /// </summary>
+    [Fact]
+    public async Task Sync_PendingLocalChange_NotOverwrittenByServerFlags()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(db, new FakeSyncSettings(), [1], ct);
+        await ChangeAsync(db, folderId, 1, m => m.SetRead(true), ct);
+        // The push fails, so the message stays pending while the server holds different values.
+        session.SetFlagsFailure = new IOException("offline");
+        session.SetServerFlags("INBOX", 1, false, true);
+        session.FetchFlagsCalls.Clear();
+
+        await service.SyncAsync(accountId, ct);
+
+        session.FetchFlagsCalls.Should().ContainSingle().Which.Folder.Should().Be("INBOX");
+        var state = await StateAsync(db, folderId, 1, ct);
+        state.IsRead.Should().BeTrue();
+        state.IsFlagged.Should().BeFalse();
+        state.IsFlagSyncPending.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies a message missing on the server stays cached when the setting is off.
+    /// </summary>
+    [Fact]
+    public async Task Sync_ServerDeleted_SettingOff_KeepsLocalMessage()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(db, new FakeSyncSettings(), [1, 2], ct);
+        session.RemoveFromServer("INBOX", 1);
+
+        await service.SyncAsync(accountId, ct);
+
+        await using var verify = db.CreateContext();
+        (await new MessageRepository(verify).GetFlagStatesAsync(folderId, ct)).Select(m => m.Uid).Should().Equal(1u, 2u);
+    }
+
+    /// <summary>
+    /// Verifies a message missing on the server is removed locally when the setting is on.
+    /// </summary>
+    [Fact]
+    public async Task Sync_ServerDeleted_SettingOn_RemovesLocalMessage()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(
+            db,
+            new FakeSyncSettings { RemoveServerDeletedMessages = true },
+            [1, 2, 3],
+            ct);
+        session.RemoveFromServer("INBOX", 2);
+
+        await service.SyncAsync(accountId, ct);
+
+        await using var verify = db.CreateContext();
+        (await new MessageRepository(verify).GetFlagStatesAsync(folderId, ct)).Select(m => m.Uid).Should().Equal(1u, 3u);
+    }
+
+    /// <summary>
+    /// Verifies a message flagged deleted on the server is removed locally when the setting is on.
+    /// </summary>
+    [Fact]
+    public async Task Sync_ServerFlagsDeleted_SettingOn_RemovesLocalMessage()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(
+            db,
+            new FakeSyncSettings { RemoveServerDeletedMessages = true },
+            [1, 2],
+            ct);
+        session.MarkDeletedOnServer("INBOX", 1);
+
+        await service.SyncAsync(accountId, ct);
+
+        await using var verify = db.CreateContext();
+        (await new MessageRepository(verify).GetFlagStatesAsync(folderId, ct)).Select(m => m.Uid).Should().Equal(2u);
+    }
+
+    /// <summary>
+    /// Verifies an empty server result never wipes the cache.
+    /// </summary>
+    [Fact]
+    public async Task Sync_SettingOn_EmptyServerResult_RemovesNothing()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(
+            db,
+            new FakeSyncSettings { RemoveServerDeletedMessages = true },
+            [1, 2],
+            ct);
+        session.RemoveFromServer("INBOX", 1);
+        session.RemoveFromServer("INBOX", 2);
+
+        await service.SyncAsync(accountId, ct);
+
+        await using var verify = db.CreateContext();
+        (await new MessageRepository(verify).GetFlagStatesAsync(folderId, ct)).Should().HaveCount(2);
+    }
+
+    /// <summary>
+    /// Verifies a UIDVALIDITY reset skips both the push and the pull for the folder.
+    /// </summary>
+    [Fact]
+    public async Task Sync_UidValidityChanged_SkipsPushAndPull()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(
+            db,
+            new FakeSyncSettings { RemoveServerDeletedMessages = true },
+            [1, 2],
+            ct);
+        await ChangeAsync(db, folderId, 1, m => m.SetRead(true), ct);
+        session.UidValidity["INBOX"] = 999;
+        session.Messages["INBOX"].Clear();
+        session.FetchFlagsCalls.Clear();
+
+        await service.SyncAsync(accountId, ct);
+
+        session.SetFlagsCalls.Should().BeEmpty();
+        session.FetchFlagsCalls.Should().BeEmpty();
+        await using var verify = db.CreateContext();
+        (await new MessageRepository(verify).GetFlagStatesAsync(folderId, ct)).Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies an empty cache does not trigger a flag fetch.
+    /// </summary>
+    [Fact]
+    public async Task Sync_NoCachedMessages_DoesNotCallFetchFlags()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, _) = await db.SeedAccountAsync(ct);
+        var factory = new FakeImapSessionFactory();
+        factory.Session.Folders.Add(TestData.Folder("INBOX", FolderRole.Inbox));
+
+        await CreateService(db, factory).SyncAsync(account.Id, ct);
+
+        factory.Session.FetchFlagsCalls.Should().BeEmpty();
+        factory.Session.SetFlagsCalls.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies toggling the setting between two syncs changes the second sync's behavior.
+    /// </summary>
+    [Fact]
+    public async Task Sync_SettingChangedBetweenSyncs_TakesEffectNextSync()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var settings = new FakeSyncSettings();
+        var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(db, settings, [1, 2], ct);
+        session.RemoveFromServer("INBOX", 1);
+        await service.SyncAsync(accountId, ct);
+        (await StatesAsync(db, folderId, ct)).Should().HaveCount(2);
+
+        settings.RemoveServerDeletedMessages = true;
+        await service.SyncAsync(accountId, ct);
+
+        await using var verify = db.CreateContext();
+        (await new MessageRepository(verify).GetFlagStatesAsync(folderId, ct)).Select(m => m.Uid).Should().Equal(2u);
     }
 
     /// <summary>

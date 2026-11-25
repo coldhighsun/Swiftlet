@@ -7,6 +7,7 @@ using Avalonia.VisualTree;
 using Microsoft.Extensions.DependencyInjection;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
+using Swiftlet.Desktop.Settings;
 using Swiftlet.Desktop.ViewModels;
 
 namespace Swiftlet.Desktop.Tests;
@@ -302,6 +303,38 @@ public class UiSmokeTests
                 window.GetVisualDescendants().OfType<ComboBox>().Should().HaveCount(3);
                 window.GetVisualDescendants().OfType<Button>().Count(b => b.Command == viewModel.DeleteCommand).Should().Be(2);
                 window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the settings window shows the checkbox, its hint and the close button, in both languages.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    /// <param name="title">The expected window title.</param>
+    /// <param name="checkbox">The expected checkbox caption.</param>
+    /// <param name="close">The expected close button caption.</param>
+    [Theory]
+    [InlineData("zh-Hans", "设置", "删除服务器上已删除的邮件的本地副本", "关闭")]
+    [InlineData("en", "Settings", "Remove local messages that were deleted on the server", "Close")]
+    public async Task SettingsWindow_Renders(string language, string title, string checkbox, string close)
+    {
+        await Session.Dispatch(
+            () =>
+            {
+                LocalizationManager.Instance.SetPreference(language);
+                var viewModel = new SettingsViewModel(new FakeAppSettings(), LocalizationManager.Instance);
+                var window = new SettingsWindow { DataContext = viewModel };
+                Render(window, $"settings-{language}", language);
+
+                window.Title.Should().Be(title);
+                var box = window.GetVisualDescendants().OfType<CheckBox>().Single();
+                box.IsChecked.Should().BeFalse();
+                (box.Content as string).Should().Be(checkbox);
+                window.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).Should().Contain(close);
+                window.GetVisualDescendants().OfType<TextBlock>().Count(t => !string.IsNullOrEmpty(t.Text) && t.Text.Length > 40).Should().BeGreaterThan(0);
+                window.Close();
+                return Task.CompletedTask;
             },
             TestContext.Current.CancellationToken);
     }

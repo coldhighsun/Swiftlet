@@ -99,6 +99,11 @@ public sealed class MailMessage
     public bool IsFlagged { get; private set; }
 
     /// <summary>
+    /// Gets a value indicating whether a local read or flagged change has not yet been written to the server.
+    /// </summary>
+    public bool IsFlagSyncPending { get; private set; }
+
+    /// <summary>
     /// Gets the attachments.
     /// </summary>
     public IReadOnlyList<MailAttachment> Attachments => _attachments;
@@ -181,7 +186,13 @@ public sealed class MailMessage
     /// <param name="isRead">The new state.</param>
     public void SetRead(bool isRead)
     {
+        if (IsRead == isRead)
+        {
+            return;
+        }
+
         IsRead = isRead;
+        IsFlagSyncPending = true;
     }
 
     /// <summary>
@@ -190,7 +201,44 @@ public sealed class MailMessage
     /// <param name="isFlagged">The new state.</param>
     public void SetFlagged(bool isFlagged)
     {
+        if (IsFlagged == isFlagged)
+        {
+            return;
+        }
+
         IsFlagged = isFlagged;
+        IsFlagSyncPending = true;
+    }
+
+    /// <summary>
+    /// Clears the pending marker after the local flags were written to the server.
+    /// </summary>
+    public void MarkFlagsSynced()
+    {
+        IsFlagSyncPending = false;
+    }
+
+    /// <summary>
+    /// Copies the server's flags unless a local change is still waiting to be pushed.
+    /// </summary>
+    /// <param name="isRead">The server's read state.</param>
+    /// <param name="isFlagged">The server's flagged state.</param>
+    /// <returns>True if the local values changed.</returns>
+    public bool ApplyServerFlags(bool isRead, bool isFlagged)
+    {
+        if (IsFlagSyncPending)
+        {
+            return false;
+        }
+
+        if (IsRead == isRead && IsFlagged == isFlagged)
+        {
+            return false;
+        }
+
+        IsRead = isRead;
+        IsFlagged = isFlagged;
+        return true;
     }
 
     /// <summary>

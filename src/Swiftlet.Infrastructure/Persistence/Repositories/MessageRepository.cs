@@ -15,6 +15,11 @@ internal sealed class MessageRepository(SwiftletDbContext context) : IMessageRep
     /// </summary>
     private const int MinTrigramLength = 3;
 
+    /// <summary>
+    /// The maximum number of identifiers per bulk delete statement.
+    /// </summary>
+    private const int DeleteBatchSize = 500;
+
     /// <inheritdoc />
     public async Task AddAsync(MailMessage message, CancellationToken cancellationToken = default)
     {
@@ -121,6 +126,94 @@ internal sealed class MessageRepository(SwiftletDbContext context) : IMessageRep
     {
         // Bulk delete relies on the database cascades (attachments, label links) and the FTS delete trigger.
         await context.Messages.Where(m => m.Id == messageId).ExecuteDeleteAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<MessageFlagState>> GetFlagStatesAsync(
+        Guid folderId,
+        CancellationToken cancellationToken = default)
+    {
+        // Projected and untracked: bodies are never read and nothing stays in the change tracker.
+        return await context.Messages
+            .AsNoTracking()
+            .Where(m => m.FolderId == folderId)
+            .OrderBy(m => m.Uid)
+            .Select(m => new MessageFlagState(m.Id, m.Uid, m.IsRead, m.IsFlagged, m.IsFlagSyncPending))
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<MessageFlagState>> GetPendingFlagStatesAsync(
+        Guid folderId,
+        CancellationToken cancellationToken = default)
+    {
+        return await context.Messages
+            .AsNoTracking()
+            .Where(m => m.FolderId == folderId && m.IsFlagSyncPending)
+            .OrderBy(m => m.Uid)
+            .Select(m => new MessageFlagState(m.Id, m.Uid, m.IsRead, m.IsFlagged, m.IsFlagSyncPending))
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<int> ApplyServerFlagsAsync(
+        Guid messageId,
+        bool isRead,
+        bool isFlagged,
+        CancellationToken cancellationToken = default)
+    {
+        // The pending check is part of the statement, so a user change made after the caller loaded the row still wins.
+        return await context.Messages
+            .Where(m => m.Id == messageId && !m.IsFlagSyncPending)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(m => m.IsRead, isRead).SetProperty(m => m.IsFlagged, isFlagged),
+                cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<int> ClearFlagSyncPendingAsync(
+        IReadOnlyCollection<MessageFlagState> pushed,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(pushed);
+        if (pushed.Count == 0)
+        {
+            return 0;
+        }
+
+        // One UPDATE per row because every row has its own compare values; a single transaction keeps this to one
+        // commit (one fsync) instead of one per row. A row the user changed after it was loaded no longer matches
+        // and keeps its marker, so the next sync pushes the newer value.
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        var cleared = 0;
+        foreach (var state in pushed)
+        {
+            var id = state.Id;
+            var isRead = state.IsRead;
+            var isFlagged = state.IsFlagged;
+            cleared += await context.Messages
+                .Where(m => m.Id == id && m.IsRead == isRead && m.IsFlagged == isFlagged)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(m => m.IsFlagSyncPending, false), cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return cleared;
+    }
+
+    /// <inheritdoc />
+    public async Task DeleteRangeAsync(IReadOnlyCollection<Guid> messageIds, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(messageIds);
+        if (messageIds.Count == 0)
+        {
+            return;
+        }
+
+        // Batches stay below SQLite's bound-parameter limit; cascades and the FTS trigger do the rest.
+        foreach (var batch in messageIds.Chunk(DeleteBatchSize))
+        {
+            await context.Messages.Where(m => batch.Contains(m.Id)).ExecuteDeleteAsync(cancellationToken);
+        }
     }
 
     /// <inheritdoc />

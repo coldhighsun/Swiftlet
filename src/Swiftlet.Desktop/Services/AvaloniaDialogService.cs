@@ -82,6 +82,21 @@ public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogSe
     }
 
     /// <inheritdoc />
+    public async Task ShowSettingsAsync()
+    {
+        var owner = ActiveWindow;
+        if (owner is null)
+        {
+            return;
+        }
+
+        var viewModel = services.GetRequiredService<SettingsViewModel>();
+        var window = new SettingsWindow { DataContext = viewModel };
+        viewModel.CloseRequested += (_, _) => window.Close();
+        await window.ShowDialog(owner);
+    }
+
+    /// <inheritdoc />
     public async Task ShowLabelManagerAsync()
     {
         var owner = ActiveWindow;

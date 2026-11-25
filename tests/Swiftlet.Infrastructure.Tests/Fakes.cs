@@ -149,6 +149,146 @@ internal sealed class FakeImapSession : IImapSession
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Gets the simulated server-side flags per folder and UID, seeded lazily from <see cref="Messages"/>.
+    /// </summary>
+    private Dictionary<(string Folder, uint Uid), (bool IsRead, bool IsFlagged, bool IsDeleted)> ServerFlags { get; } = [];
+
+    /// <summary>
+    /// Gets the recorded <see cref="SetFlagsAsync"/> calls.
+    /// </summary>
+    public List<(string Folder, IReadOnlyList<FlagUpdate> Updates)> SetFlagsCalls { get; } = [];
+
+    /// <summary>
+    /// Gets the recorded <see cref="FetchFlagsAsync"/> calls.
+    /// </summary>
+    public List<(string Folder, uint MinUid)> FetchFlagsCalls { get; } = [];
+
+    /// <summary>
+    /// Gets or sets an exception to throw from <see cref="SetFlagsAsync"/>.
+    /// </summary>
+    public Exception? SetFlagsFailure { get; set; }
+
+    /// <summary>
+    /// Gets or sets an exception to throw from <see cref="FetchFlagsAsync"/>.
+    /// </summary>
+    public Exception? FetchFlagsFailure { get; set; }
+
+    /// <summary>
+    /// Gets or sets a callback run inside <see cref="SetFlagsAsync"/> before the server state changes, to simulate concurrent user edits.
+    /// </summary>
+    public Action<string, IReadOnlyList<FlagUpdate>>? OnSetFlags { get; set; }
+
+    /// <summary>
+    /// Gets or sets a callback run inside <see cref="FetchFlagsAsync"/> before the flags are read, to simulate concurrent user edits.
+    /// </summary>
+    public Action<string, uint>? OnFetchFlags { get; set; }
+
+    /// <summary>
+    /// Sets the read and starred flags the simulated server holds for a message.
+    /// </summary>
+    /// <param name="folder">The folder full name.</param>
+    /// <param name="uid">The message UID.</param>
+    /// <param name="isRead">Whether the message is seen.</param>
+    /// <param name="isFlagged">Whether the message is flagged.</param>
+    public void SetServerFlags(string folder, uint uid, bool isRead, bool isFlagged)
+    {
+        var current = GetServerFlags(folder, uid);
+        ServerFlags[(folder, uid)] = (isRead, isFlagged, current.IsDeleted);
+    }
+
+    /// <summary>
+    /// Flags a message as deleted on the simulated server without removing it.
+    /// </summary>
+    /// <param name="folder">The folder full name.</param>
+    /// <param name="uid">The message UID.</param>
+    public void MarkDeletedOnServer(string folder, uint uid)
+    {
+        var current = GetServerFlags(folder, uid);
+        ServerFlags[(folder, uid)] = (current.IsRead, current.IsFlagged, true);
+    }
+
+    /// <summary>
+    /// Removes a message from the simulated server entirely.
+    /// </summary>
+    /// <param name="folder">The folder full name.</param>
+    /// <param name="uid">The message UID.</param>
+    public void RemoveFromServer(string folder, uint uid)
+    {
+        Messages.GetValueOrDefault(folder)?.RemoveAll(m => m.Uid == uid);
+        ServerFlags.Remove((folder, uid));
+    }
+
+    /// <summary>
+    /// Gets the flags the simulated server holds for a message, seeding them from the message when first read.
+    /// </summary>
+    /// <param name="folder">The folder full name.</param>
+    /// <param name="uid">The message UID.</param>
+    /// <returns>The current flags.</returns>
+    public (bool IsRead, bool IsFlagged, bool IsDeleted) GetServerFlags(string folder, uint uid)
+    {
+        if (ServerFlags.TryGetValue((folder, uid), out var flags))
+        {
+            return flags;
+        }
+
+        var message = Messages.GetValueOrDefault(folder)?.FirstOrDefault(m => m.Uid == uid);
+        flags = (message?.IsRead ?? false, false, false);
+        ServerFlags[(folder, uid)] = flags;
+        return flags;
+    }
+
+    /// <inheritdoc />
+    public Task SetFlagsAsync(
+        string folderFullName,
+        IReadOnlyList<FlagUpdate> updates,
+        CancellationToken cancellationToken = default)
+    {
+        SetFlagsCalls.Add((folderFullName, updates));
+        OnSetFlags?.Invoke(folderFullName, updates);
+        if (SetFlagsFailure is not null)
+        {
+            return Task.FromException(SetFlagsFailure);
+        }
+
+        var existing = Messages.GetValueOrDefault(folderFullName) ?? [];
+        foreach (var update in updates)
+        {
+            // A real server ignores UIDs that no longer exist.
+            if (existing.Any(m => m.Uid == update.Uid))
+            {
+                SetServerFlags(folderFullName, update.Uid, update.IsRead, update.IsFlagged);
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<RemoteFlagState>> FetchFlagsAsync(
+        string folderFullName,
+        uint minUid,
+        CancellationToken cancellationToken = default)
+    {
+        FetchFlagsCalls.Add((folderFullName, minUid));
+        OnFetchFlags?.Invoke(folderFullName, minUid);
+        if (FetchFlagsFailure is not null)
+        {
+            return Task.FromException<IReadOnlyList<RemoteFlagState>>(FetchFlagsFailure);
+        }
+
+        var states = (Messages.GetValueOrDefault(folderFullName) ?? [])
+            .Where(m => m.Uid >= minUid)
+            .OrderBy(m => m.Uid)
+            .Select(m =>
+            {
+                var flags = GetServerFlags(folderFullName, m.Uid);
+                return new RemoteFlagState(m.Uid, flags.IsRead, flags.IsFlagged, flags.IsDeleted);
+            })
+            .ToList();
+        return Task.FromResult<IReadOnlyList<RemoteFlagState>>(states);
+    }
+
     /// <inheritdoc />
     public Task<bool> AppendToSentAsync(ReadOnlyMemory<byte> rfc822, CancellationToken cancellationToken = default)
     {
@@ -212,6 +352,15 @@ internal sealed class RecordingMailSender : IMailSender
         Sent.Add((account, message, saveToSent));
         return Task.CompletedTask;
     }
+}
+
+/// <summary>
+/// An <see cref="ISyncSettings"/> whose value the test can change between syncs.
+/// </summary>
+internal sealed class FakeSyncSettings : ISyncSettings
+{
+    /// <inheritdoc />
+    public bool RemoveServerDeletedMessages { get; set; }
 }
 
 /// <summary>

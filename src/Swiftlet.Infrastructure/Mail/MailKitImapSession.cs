@@ -198,6 +198,92 @@ internal sealed class MailKitImapSession(ImapClient client) : IImapSession
     }
 
     /// <inheritdoc />
+    public async Task SetFlagsAsync(
+        string folderFullName,
+        IReadOnlyList<FlagUpdate> updates,
+        CancellationToken cancellationToken = default)
+    {
+        if (updates.Count == 0)
+        {
+            return;
+        }
+
+        var folder = await client.GetFolderAsync(folderFullName, cancellationToken);
+        await folder.OpenAsync(FolderAccess.ReadWrite, cancellationToken);
+
+        // Group by target value so at most four STORE commands are issued. Only \Seen and \Flagged are touched, so
+        // other flags such as \Answered survive. A UID that no longer exists is simply ignored by servers on STORE,
+        // and errors are deliberately not swallowed. Not unit-testable without a real IMAP server.
+        await StoreAsync(folder, updates.Where(u => u.IsRead), MessageFlags.Seen, true, cancellationToken);
+        await StoreAsync(folder, updates.Where(u => !u.IsRead), MessageFlags.Seen, false, cancellationToken);
+        await StoreAsync(folder, updates.Where(u => u.IsFlagged), MessageFlags.Flagged, true, cancellationToken);
+        await StoreAsync(folder, updates.Where(u => !u.IsFlagged), MessageFlags.Flagged, false, cancellationToken);
+    }
+
+    /// <summary>
+    /// Adds or removes one flag on a set of messages with a single silent STORE command.
+    /// </summary>
+    /// <param name="folder">The open read-write folder.</param>
+    /// <param name="updates">The updates whose messages should be changed.</param>
+    /// <param name="flag">The flag to add or remove.</param>
+    /// <param name="add"><see langword="true"/> to add the flag, <see langword="false"/> to remove it.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the command has finished.</returns>
+    private static async Task StoreAsync(
+        IMailFolder folder,
+        IEnumerable<FlagUpdate> updates,
+        MessageFlags flag,
+        bool add,
+        CancellationToken cancellationToken)
+    {
+        var uids = updates.Select(u => new UniqueId(u.Uid)).ToList();
+        if (uids.Count == 0)
+        {
+            return;
+        }
+
+        if (add)
+        {
+            await folder.AddFlagsAsync(uids, flag, true, cancellationToken);
+        }
+        else
+        {
+            await folder.RemoveFlagsAsync(uids, flag, true, cancellationToken);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<RemoteFlagState>> FetchFlagsAsync(
+        string folderFullName,
+        uint minUid,
+        CancellationToken cancellationToken = default)
+    {
+        var folder = await client.GetFolderAsync(folderFullName, cancellationToken);
+        await folder.OpenAsync(FolderAccess.ReadOnly, cancellationToken);
+
+        var summaries = await folder.FetchAsync(
+            new UniqueIdRange(new UniqueId(Math.Max(1u, minUid)), UniqueId.MaxValue),
+            MessageSummaryItems.UniqueId | MessageSummaryItems.Flags,
+            cancellationToken);
+
+        // "UID n:*" always matches the last message even when it is older than n, so filter explicitly.
+        // Not unit-testable without a real IMAP server.
+        return summaries
+            .Where(s => s.UniqueId.Id >= minUid)
+            .OrderBy(s => s.UniqueId.Id)
+            .Select(s =>
+            {
+                var flags = s.Flags ?? MessageFlags.None;
+                return new RemoteFlagState(
+                    s.UniqueId.Id,
+                    flags.HasFlag(MessageFlags.Seen),
+                    flags.HasFlag(MessageFlags.Flagged),
+                    flags.HasFlag(MessageFlags.Deleted));
+            })
+            .ToList();
+    }
+
+    /// <inheritdoc />
     public async Task<bool> AppendToSentAsync(ReadOnlyMemory<byte> rfc822, CancellationToken cancellationToken = default)
     {
         IMailFolder? sent;

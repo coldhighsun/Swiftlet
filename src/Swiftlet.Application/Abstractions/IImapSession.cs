@@ -67,6 +67,31 @@ public interface IImapSession : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Writes the read and starred state of messages to the server.
+    /// Only the seen and flagged flags are changed; UIDs that no longer exist on the server are ignored.
+    /// </summary>
+    /// <param name="folderFullName">The full server-side path of the folder holding the messages.</param>
+    /// <param name="updates">The target state per message.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the server holds the requested state.</returns>
+    Task SetFlagsAsync(
+        string folderFullName,
+        IReadOnlyList<FlagUpdate> updates,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reads the flags of every message with a UID at or above a lower bound.
+    /// </summary>
+    /// <param name="folderFullName">The full server-side path of the folder.</param>
+    /// <param name="minUid">Only messages with a UID greater than or equal to this are returned.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The flag states, ordered by UID.</returns>
+    Task<IReadOnlyList<RemoteFlagState>> FetchFlagsAsync(
+        string folderFullName,
+        uint minUid,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Appends an RFC 5322 message to the Sent folder, marked as read.
     /// </summary>
     /// <param name="rfc822">The raw message.</param>

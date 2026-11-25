@@ -259,6 +259,7 @@ public class DeleteMessageCommandTests
             new FolderRepository(db.Context),
             new MessageRepository(db.Context),
             factory,
+            new FakeSyncSettings(),
             new MailSyncOptions(200),
             NullLogger<MailSyncService>.Instance);
         await sync.SyncAsync(account.Id, ct);
