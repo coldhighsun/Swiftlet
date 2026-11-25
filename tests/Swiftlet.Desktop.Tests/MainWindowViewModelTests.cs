@@ -2,6 +2,7 @@ using AwesomeAssertions;
 using Mediator;
 using Microsoft.Extensions.Logging.Abstractions;
 using Swiftlet.Desktop.Localization;
+using Swiftlet.Application.Labels;
 using Swiftlet.Application.Messages;
 using Swiftlet.Application.Queries;
 using Swiftlet.Application.Sync;
@@ -9,6 +10,7 @@ using Swiftlet.Desktop.Services;
 using Swiftlet.Desktop.ViewModels;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Folders;
+using Swiftlet.Domain.Labels;
 using Swiftlet.Domain.Messages;
 
 namespace Swiftlet.Desktop.Tests;
@@ -35,12 +37,17 @@ public class MainWindowViewModelTests
             Sent = TestData.Folder(Account, "Sent", FolderRole.Sent);
             Messages = [TestData.Message(Account, Inbox, 1, "Hello 1"), TestData.Message(Account, Inbox, 2, "Hello 2")];
 
+            Work = Label.Create("Work", "#E53935");
+            Dispatcher.On<GetLabelsQuery>(_ => (IReadOnlyList<Label>)new List<Label> { Work });
+            Dispatcher.On<GetUnifiedInboxQuery>(_ => Messages.OrderByDescending(m => m.SentAt).ToList());
+            Dispatcher.On<GetMessagesByLabelQuery>(q => Messages.Where(m => m.Labels.Any(l => l.Id == q.LabelId)).ToList());
             Dispatcher.On<GetAccountsQuery>(_ => HasAccount ? new List<MailAccount> { Account } : []);
             Dispatcher.On<GetFoldersQuery>(q => q.AccountId == Account.Id ? new List<MailFolder> { Sent, Inbox } : []);
             Dispatcher.On<GetMessagesQuery>(q => q.FolderId == Inbox.Id ? Messages.OrderByDescending(m => m.SentAt).ToList() : []);
             Dispatcher.On<SearchMessagesQuery>(q => Messages.Where(m => m.Subject.Contains(q.Text, StringComparison.Ordinal)).ToList());
             Dispatcher.On<SetMessageReadCommand>(_ => Unit.Value);
             Dispatcher.On<SetMessageFlaggedCommand>(_ => Unit.Value);
+            Dispatcher.On<SetMessageLabelCommand>(_ => Unit.Value);
             Dispatcher.On<SyncAccountCommand>(_ => new SyncResult(2, 1, []));
             Localizer = TestLocalizer.Chinese();
             LanguageStore = new FakeLanguageStore();
@@ -90,6 +97,11 @@ public class MainWindowViewModelTests
         /// Gets the Sent folder.
         /// </summary>
         public MailFolder Sent { get; }
+
+        /// <summary>
+        /// Gets the label returned by the labels query.
+        /// </summary>
+        public Label Work { get; }
 
         /// <summary>
         /// Gets the Inbox messages.
@@ -472,5 +484,364 @@ public class MainWindowViewModelTests
 
         scenario.ViewModel.Accounts[0].Folders.Select(f => f.Name).Should().Equal("收件箱", "草稿", "已发送");
         scenario.ViewModel.SelectedNode.Should().BeOfType<FolderNodeViewModel>().Which.Folder.Id.Should().Be(scenario.Inbox.Id);
+    }
+
+    /// <summary>
+    /// Verifies the tree starts with the unified inbox, then accounts, then labels.
+    /// </summary>
+    [Fact]
+    public async Task Initialize_AddsUnifiedInboxNodeFirst()
+    {
+        var scenario = new Scenario();
+
+        await scenario.StartAsync();
+
+        var roots = scenario.ViewModel.TreeRoots;
+        roots.Should().HaveCount(3);
+        roots[0].Should().BeOfType<UnifiedInboxNodeViewModel>().Which.Name.Should().Be("统一收件箱");
+        roots[1].Should().BeOfType<AccountNodeViewModel>().Which.Account.Id.Should().Be(scenario.Account.Id);
+        roots[2].Should().BeOfType<LabelNodeViewModel>().Which.Name.Should().Be("Work");
+        scenario.ViewModel.Accounts.Should().ContainSingle();
+    }
+
+    /// <summary>
+    /// Verifies selecting the unified inbox loads the cross-account listing.
+    /// </summary>
+    [Fact]
+    public async Task SelectUnifiedInbox_LoadsUnifiedInboxQuery()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+
+        scenario.ViewModel.SelectedNode = scenario.ViewModel.TreeRoots[0];
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.Dispatcher.Sent<GetUnifiedInboxQuery>().Should().ContainSingle().Which.Skip.Should().Be(0);
+        scenario.ViewModel.Messages.Should().HaveCount(2);
+    }
+
+    /// <summary>
+    /// Verifies selecting a label loads the messages carrying it.
+    /// </summary>
+    [Fact]
+    public async Task SelectLabel_LoadsMessagesByLabelQuery()
+    {
+        var scenario = new Scenario();
+        scenario.Messages[0].AddLabel(scenario.Work);
+        await scenario.StartAsync();
+
+        scenario.ViewModel.SelectedNode = scenario.ViewModel.TreeRoots.OfType<LabelNodeViewModel>().Single();
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.Dispatcher.Sent<GetMessagesByLabelQuery>().Should().ContainSingle().Which.LabelId.Should().Be(scenario.Work.Id);
+        scenario.ViewModel.Messages.Should().ContainSingle();
+        scenario.ViewModel.Messages[0].Labels.Should().ContainSingle().Which.Name.Should().Be("Work");
+    }
+
+    /// <summary>
+    /// Verifies searching from the unified inbox is not restricted to one account.
+    /// </summary>
+    [Fact]
+    public async Task Search_FromUnifiedInbox_SearchesAllAccounts()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        scenario.ViewModel.SelectedNode = scenario.ViewModel.TreeRoots[0];
+        scenario.ViewModel.SearchText = "Hello";
+
+        await scenario.ViewModel.SearchCommand.ExecuteAsync(null);
+
+        scenario.Dispatcher.Sent<SearchMessagesQuery>().Should().ContainSingle().Which.AccountId.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Verifies a cancelled confirmation sends nothing and keeps the list.
+    /// </summary>
+    [Fact]
+    public async Task DeleteSelected_Cancelled_SendsNothing()
+    {
+        var scenario = new Scenario();
+        scenario.Dialogs.ConfirmResult = false;
+        await scenario.StartAsync();
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+
+        await scenario.ViewModel.DeleteSelectedCommand.ExecuteAsync(null);
+
+        scenario.Dialogs.Confirmations.Should().ContainSingle();
+        scenario.Dispatcher.Sent<DeleteMessageCommand>().Should().BeEmpty();
+        scenario.ViewModel.Messages.Should().HaveCount(2);
+    }
+
+    /// <summary>
+    /// Verifies deleting a message that sits in the Trash folder warns about permanent deletion and names the subject.
+    /// </summary>
+    [Fact]
+    public async Task DeleteSelected_MessageInTrashFolder_ConfirmsPermanentDeletionWithSubject()
+    {
+        var scenario = new Scenario();
+        var trash = TestData.Folder(scenario.Account, "Trash", FolderRole.Trash);
+        scenario.Dispatcher.On<GetFoldersQuery>(_ => new List<MailFolder> { scenario.Inbox, trash });
+        scenario.Messages.Add(TestData.Message(scenario.Account, trash, 3, "Old news"));
+        await scenario.StartAsync();
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages.Single(m => m.Subject == "Old news");
+
+        await scenario.ViewModel.DeleteSelectedCommand.ExecuteAsync(null);
+
+        var confirmation = scenario.Dialogs.Confirmations.Should().ContainSingle().Which;
+        confirmation.Message.Should().Contain("永久删除").And.Contain("Old news");
+        confirmation.OkText.Should().Be("删除");
+    }
+
+    /// <summary>
+    /// Verifies an account without a Trash folder gets the permanent-deletion warning.
+    /// </summary>
+    [Fact]
+    public async Task DeleteSelected_AccountWithoutTrash_ConfirmsPermanentDeletionWithSubject()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+        var subject = scenario.ViewModel.SelectedMessage.Subject;
+
+        await scenario.ViewModel.DeleteSelectedCommand.ExecuteAsync(null);
+
+        var message = scenario.Dialogs.Confirmations.Should().ContainSingle().Which.Message;
+        message.Should().Contain("永久删除").And.Contain(subject);
+    }
+
+    /// <summary>
+    /// Verifies a message outside Trash in an account that has a Trash folder is described as moved, not permanent.
+    /// </summary>
+    [Fact]
+    public async Task DeleteSelected_AccountWithTrash_ConfirmsMoveToTrashWithSubject()
+    {
+        var scenario = new Scenario();
+        var trash = TestData.Folder(scenario.Account, "Trash", FolderRole.Trash);
+        scenario.Dispatcher.On<GetFoldersQuery>(_ => new List<MailFolder> { scenario.Inbox, trash });
+        await scenario.StartAsync();
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+        var subject = scenario.ViewModel.SelectedMessage.Subject;
+
+        await scenario.ViewModel.DeleteSelectedCommand.ExecuteAsync(null);
+
+        var message = scenario.Dialogs.Confirmations.Should().ContainSingle().Which.Message;
+        message.Should().Contain("已删除文件夹").And.Contain(subject).And.NotContain("永久");
+    }
+
+    /// <summary>
+    /// Verifies a confirmed delete sends the command and removes the message from the list.
+    /// </summary>
+    [Fact]
+    public async Task DeleteSelected_Confirmed_SendsCommandAndRemovesFromList()
+    {
+        var scenario = new Scenario();
+        scenario.Dialogs.ConfirmResult = true;
+        scenario.Dispatcher.On<DeleteMessageCommand>(_ => DeleteOutcome.MovedToTrash);
+        await scenario.StartAsync();
+        var item = scenario.ViewModel.Messages[0];
+        scenario.ViewModel.SelectedMessage = item;
+
+        await scenario.ViewModel.DeleteSelectedCommand.ExecuteAsync(null);
+
+        scenario.Dispatcher.Sent<DeleteMessageCommand>().Should().ContainSingle().Which.MessageId.Should().Be(item.Id);
+        scenario.ViewModel.Messages.Should().NotContain(item).And.HaveCount(1);
+        scenario.ViewModel.SelectedMessage.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Verifies a server failure keeps the message listed and reports the error.
+    /// </summary>
+    [Fact]
+    public async Task DeleteSelected_ServerFails_KeepsMessageAndShowsError()
+    {
+        var scenario = new Scenario();
+        scenario.Dialogs.ConfirmResult = true;
+        scenario.Dispatcher.On<DeleteMessageCommand>(_ => throw new IOException("server down"));
+        await scenario.StartAsync();
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+
+        await scenario.ViewModel.DeleteSelectedCommand.ExecuteAsync(null);
+
+        scenario.ViewModel.Messages.Should().HaveCount(2);
+        scenario.ViewModel.StatusText.Should().Contain("server down").And.Contain("删除邮件失败");
+    }
+
+    /// <summary>
+    /// Verifies the status text differs between moved-to-trash and permanent deletion.
+    /// </summary>
+    /// <param name="outcome">The outcome reported by the server.</param>
+    /// <param name="expected">The expected status text.</param>
+    [Theory]
+    [InlineData(DeleteOutcome.MovedToTrash, "已移至服务器的已删除文件夹")]
+    [InlineData(DeleteOutcome.DeletedPermanently, "已从服务器永久删除")]
+    public async Task DeleteSelected_Outcome_ShowsMatchingStatusText(DeleteOutcome outcome, string expected)
+    {
+        var scenario = new Scenario();
+        scenario.Dialogs.ConfirmResult = true;
+        scenario.Dispatcher.On<DeleteMessageCommand>(_ => outcome);
+        await scenario.StartAsync();
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+
+        await scenario.ViewModel.DeleteSelectedCommand.ExecuteAsync(null);
+
+        scenario.ViewModel.StatusText.Should().Be(expected);
+    }
+
+    /// <summary>
+    /// Verifies delete is unavailable without a selected message.
+    /// </summary>
+    [Fact]
+    public async Task DeleteSelected_NoSelection_CannotExecute()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+
+        scenario.ViewModel.DeleteSelectedCommand.CanExecute(null).Should().BeFalse();
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+        scenario.ViewModel.DeleteSelectedCommand.CanExecute(null).Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies the manage-labels command opens the manager and reloads the label nodes afterwards.
+    /// </summary>
+    [Fact]
+    public async Task ManageLabels_ManagerChangesLabels_ReloadsLabelNodes()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        scenario.Dialogs.OnLabelManager = () => scenario.Dispatcher.On<GetLabelsQuery>(_ =>
+            (IReadOnlyList<Label>)new List<Label> { scenario.Work, Label.Create("Travel", "#1E88E5") });
+
+        await scenario.ViewModel.ManageLabelsCommand.ExecuteAsync(null);
+
+        scenario.Dialogs.LabelManagerCalls.Should().Be(1);
+        scenario.ViewModel.TreeRoots.OfType<LabelNodeViewModel>().Select(n => n.Name).Should().Equal("Work", "Travel");
+    }
+
+    /// <summary>
+    /// Verifies deleting the selected label in the manager leaves the label view and falls back to a folder.
+    /// </summary>
+    [Fact]
+    public async Task ManageLabels_SelectedLabelDeleted_FallsBackToFolder()
+    {
+        var scenario = new Scenario();
+        scenario.Messages[0].AddLabel(scenario.Work);
+        await scenario.StartAsync();
+        scenario.ViewModel.SelectedNode = scenario.ViewModel.TreeRoots.OfType<LabelNodeViewModel>().Single();
+        await scenario.ViewModel.WhenIdleAsync();
+        scenario.ViewModel.Messages.Should().ContainSingle();
+        scenario.Dialogs.OnLabelManager = () => scenario.Dispatcher.On<GetLabelsQuery>(_ => (IReadOnlyList<Label>)new List<Label>());
+
+        await scenario.ViewModel.ManageLabelsCommand.ExecuteAsync(null);
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.ViewModel.TreeRoots.OfType<LabelNodeViewModel>().Should().BeEmpty();
+        scenario.ViewModel.SelectedNode.Should().BeOfType<FolderNodeViewModel>();
+        scenario.ViewModel.Messages.Should().HaveCount(2);
+    }
+
+    /// <summary>
+    /// Verifies the label choices list every label and mark the ones the selected message carries.
+    /// </summary>
+    [Fact]
+    public async Task SelectedMessage_WithLabel_ShowsAssignedChoice()
+    {
+        var scenario = new Scenario();
+        scenario.Messages[0].AddLabel(scenario.Work);
+        await scenario.StartAsync();
+
+        scenario.ViewModel.MessageLabelChoices.Should().BeEmpty();
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages.Single(m => m.Id == scenario.Messages[0].Id);
+
+        var choice = scenario.ViewModel.MessageLabelChoices.Should().ContainSingle().Which;
+        choice.Name.Should().Be("Work");
+        choice.IsAssigned.Should().BeTrue();
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages.Single(m => m.Id == scenario.Messages[1].Id);
+        scenario.ViewModel.MessageLabelChoices.Single().IsAssigned.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies ticking a label choice sends the set-label command and refreshes the chips.
+    /// </summary>
+    [Fact]
+    public async Task ToggleMessageLabel_Assign_SendsSetMessageLabelCommandAndRefreshesChips()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        var item = scenario.ViewModel.Messages[0];
+        scenario.ViewModel.SelectedMessage = item;
+        var choice = scenario.ViewModel.MessageLabelChoices.Single();
+        choice.IsAssigned = true;
+
+        await scenario.ViewModel.ToggleMessageLabelCommand.ExecuteAsync(choice);
+
+        var sent = scenario.Dispatcher.Sent<SetMessageLabelCommand>().Should().ContainSingle().Which;
+        sent.MessageId.Should().Be(item.Id);
+        sent.LabelId.Should().Be(scenario.Work.Id);
+        sent.Assigned.Should().BeTrue();
+        item.Labels.Should().ContainSingle().Which.Name.Should().Be("Work");
+        item.HasLabels.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies unticking a label choice removes the chip.
+    /// </summary>
+    [Fact]
+    public async Task ToggleMessageLabel_Unassign_SendsCommandAndRemovesChip()
+    {
+        var scenario = new Scenario();
+        scenario.Messages[0].AddLabel(scenario.Work);
+        await scenario.StartAsync();
+        var item = scenario.ViewModel.Messages.Single(m => m.Id == scenario.Messages[0].Id);
+        scenario.ViewModel.SelectedMessage = item;
+        var choice = scenario.ViewModel.MessageLabelChoices.Single();
+        choice.IsAssigned = false;
+
+        await scenario.ViewModel.ToggleMessageLabelCommand.ExecuteAsync(choice);
+
+        scenario.Dispatcher.Sent<SetMessageLabelCommand>().Should().ContainSingle().Which.Assigned.Should().BeFalse();
+        item.Labels.Should().BeEmpty();
+        item.HasLabels.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies a failing toggle reverts the choice and reports the failure in the status line.
+    /// </summary>
+    [Fact]
+    public async Task ToggleMessageLabel_Fails_RevertsChoiceAndReportsStatus()
+    {
+        var scenario = new Scenario();
+        scenario.Dispatcher.On<SetMessageLabelCommand>(_ => throw new InvalidOperationException("boom"));
+        await scenario.StartAsync();
+        var item = scenario.ViewModel.Messages[0];
+        scenario.ViewModel.SelectedMessage = item;
+        var choice = scenario.ViewModel.MessageLabelChoices.Single();
+        choice.IsAssigned = true;
+
+        await scenario.ViewModel.ToggleMessageLabelCommand.ExecuteAsync(choice);
+
+        choice.IsAssigned.Should().BeFalse();
+        item.Labels.Should().BeEmpty();
+        scenario.ViewModel.StatusText.Should().Contain("boom").And.Contain(scenario.Localizer["Error_SetLabel"]);
+    }
+
+    /// <summary>
+    /// Verifies removing the label of the selected label node drops the message from the list.
+    /// </summary>
+    [Fact]
+    public async Task ToggleMessageLabel_UnassignInLabelView_RemovesMessageFromList()
+    {
+        var scenario = new Scenario();
+        scenario.Messages[0].AddLabel(scenario.Work);
+        await scenario.StartAsync();
+        scenario.ViewModel.SelectedNode = scenario.ViewModel.TreeRoots.OfType<LabelNodeViewModel>().Single();
+        await scenario.ViewModel.WhenIdleAsync();
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages.Single();
+        var choice = scenario.ViewModel.MessageLabelChoices.Single();
+        choice.IsAssigned = false;
+
+        await scenario.ViewModel.ToggleMessageLabelCommand.ExecuteAsync(choice);
+
+        scenario.ViewModel.Messages.Should().BeEmpty();
     }
 }

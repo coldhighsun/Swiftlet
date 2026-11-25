@@ -46,10 +46,25 @@ public sealed record ComposeRequest(
 public interface IDialogService
 {
     /// <summary>
+    /// Asks the user to confirm an action.
+    /// </summary>
+    /// <param name="title">The dialog title.</param>
+    /// <param name="message">The question shown to the user.</param>
+    /// <param name="okText">The text of the confirming button.</param>
+    /// <returns><see langword="true"/> if the user confirmed.</returns>
+    Task<bool> ConfirmAsync(string title, string message, string okText);
+
+    /// <summary>
     /// Shows the add-account dialog.
     /// </summary>
     /// <returns><see langword="true"/> if an account was added.</returns>
     Task<bool> ShowAddAccountAsync();
+
+    /// <summary>
+    /// Shows the label manager dialog.
+    /// </summary>
+    /// <returns>A task that completes when the dialog has been closed.</returns>
+    Task ShowLabelManagerAsync();
 
     /// <summary>
     /// Opens a compose window.

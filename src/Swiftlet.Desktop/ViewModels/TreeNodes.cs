@@ -1,8 +1,10 @@
 using System.Collections.ObjectModel;
+using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Folders;
+using Swiftlet.Domain.Labels;
 
 namespace Swiftlet.Desktop.ViewModels;
 
@@ -81,4 +83,64 @@ public sealed class FolderNodeViewModel(MailFolder folder, MailAccount account, 
     {
         OnPropertyChanged(nameof(Name));
     }
+}
+
+/// <summary>
+/// The tree node listing the inboxes of all accounts together.
+/// </summary>
+/// <param name="localizer">The localizer used for the node name.</param>
+public sealed class UnifiedInboxNodeViewModel(ILocalizer localizer) : ObservableObject
+{
+    /// <summary>
+    /// Gets the text shown in the tree.
+    /// </summary>
+    public string Name => localizer["Folder_UnifiedInbox"];
+
+    /// <summary>
+    /// Re-reads the name after the UI language changed.
+    /// </summary>
+    public void RefreshLanguage()
+    {
+        OnPropertyChanged(nameof(Name));
+    }
+}
+
+/// <summary>
+/// A label node in the tree; selecting it lists the messages carrying the label.
+/// </summary>
+/// <param name="label">The label.</param>
+public sealed class LabelNodeViewModel(Label label)
+{
+    /// <summary>
+    /// Gets the label.
+    /// </summary>
+    public Label Label { get; } = label;
+
+    /// <summary>
+    /// Gets the label name.
+    /// </summary>
+    public string Name => Label.Name;
+
+    /// <summary>
+    /// Gets the label color as <c>#RRGGBB</c>.
+    /// </summary>
+    public string Color => Label.Color;
+
+    /// <summary>
+    /// Gets the brush used to paint the label color; created on first use so view models stay creatable off the UI thread.
+    /// </summary>
+    public IBrush Brush => field ??= new SolidColorBrush(Avalonia.Media.Color.Parse(Label.Color));
+}
+
+/// <summary>
+/// A colored label chip shown on a message list item.
+/// </summary>
+/// <param name="Name">The label name.</param>
+/// <param name="Color">The label color as <c>#RRGGBB</c>.</param>
+public sealed record LabelChipViewModel(string Name, string Color)
+{
+    /// <summary>
+    /// Gets the brush used to paint the chip; created on first use so view models stay creatable off the UI thread.
+    /// </summary>
+    public IBrush Brush => field ??= new SolidColorBrush(Avalonia.Media.Color.Parse(Color));
 }

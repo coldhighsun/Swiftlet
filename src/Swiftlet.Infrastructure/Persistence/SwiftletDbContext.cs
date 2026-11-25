@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Folders;
+using Swiftlet.Domain.Labels;
 using Swiftlet.Domain.Messages;
 
 namespace Swiftlet.Infrastructure.Persistence;
@@ -30,6 +31,11 @@ public sealed class SwiftletDbContext(DbContextOptions<SwiftletDbContext> option
     /// Gets the attachments.
     /// </summary>
     public DbSet<MailAttachment> Attachments => Set<MailAttachment>();
+
+    /// <summary>
+    /// Gets the labels.
+    /// </summary>
+    public DbSet<Label> Labels => Set<Label>();
 
     /// <inheritdoc />
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)

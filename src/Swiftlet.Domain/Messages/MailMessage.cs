@@ -1,4 +1,5 @@
 using System.Text;
+using Swiftlet.Domain.Labels;
 
 namespace Swiftlet.Domain.Messages;
 
@@ -16,6 +17,11 @@ public sealed class MailMessage
     /// Backing field of <see cref="Attachments"/>.
     /// </summary>
     private readonly List<MailAttachment> _attachments = [];
+
+    /// <summary>
+    /// Backing field of <see cref="Labels"/>.
+    /// </summary>
+    private readonly List<Label> _labels = [];
 
     /// <summary>
     /// Gets the unique identifier of the message.
@@ -96,6 +102,11 @@ public sealed class MailMessage
     /// Gets the attachments.
     /// </summary>
     public IReadOnlyList<MailAttachment> Attachments => _attachments;
+
+    /// <summary>
+    /// Gets the labels attached to the message.
+    /// </summary>
+    public IReadOnlyList<Label> Labels => _labels;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MailMessage"/> class for persistence.
@@ -191,6 +202,30 @@ public sealed class MailMessage
     public void AddAttachment(string fileName, string contentType, long size)
     {
         _attachments.Add(MailAttachment.Create(Id, _attachments.Count, fileName, contentType, size));
+    }
+
+    /// <summary>
+    /// Attaches a label; does nothing if it is already attached.
+    /// </summary>
+    /// <param name="label">The label to attach.</param>
+    public void AddLabel(Label label)
+    {
+        ArgumentNullException.ThrowIfNull(label);
+        if (_labels.Exists(existing => existing.Id == label.Id))
+        {
+            return;
+        }
+
+        _labels.Add(label);
+    }
+
+    /// <summary>
+    /// Detaches a label; does nothing if it is not attached.
+    /// </summary>
+    /// <param name="labelId">The label identifier.</param>
+    public void RemoveLabel(Guid labelId)
+    {
+        _labels.RemoveAll(existing => existing.Id == labelId);
     }
 
     /// <summary>

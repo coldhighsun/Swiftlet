@@ -1,12 +1,15 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Swiftlet.Application.Labels;
 using Swiftlet.Application.Messages;
 using Swiftlet.Application.Queries;
 using Swiftlet.Application.Sync;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
 using Swiftlet.Domain.Accounts;
+using Swiftlet.Domain.Folders;
+using Swiftlet.Domain.Labels;
 using Swiftlet.Domain.Messages;
 
 namespace Swiftlet.Desktop.ViewModels;
@@ -42,6 +45,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private IReadOnlyList<MailAccount> _accounts = [];
 
     /// <summary>
+    /// The labels last loaded, offered in the per-message label menu.
+    /// </summary>
+    private IReadOnlyList<Label> _labels = [];
+
+    /// <summary>
     /// Incremented for every message list load so slower, outdated loads can be discarded.
     /// </summary>
     private int _loadVersion;
@@ -75,6 +83,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         LanguageSelector = languageSelector;
         SearchText = string.Empty;
         StatusText = string.Empty;
+        UnifiedInbox = new UnifiedInboxNodeViewModel(localizer);
+        TreeRoots.Add(UnifiedInbox);
         localizer.LanguageChanged += (_, _) => RefreshLanguage();
     }
 
@@ -82,6 +92,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// Gets the language picker.
     /// </summary>
     public LanguageSelectorViewModel LanguageSelector { get; }
+
+    /// <summary>
+    /// Gets the unified inbox node.
+    /// </summary>
+    public UnifiedInboxNodeViewModel UnifiedInbox { get; }
+
+    /// <summary>
+    /// Gets the top-level tree nodes: the unified inbox, then the account nodes, then the label nodes.
+    /// </summary>
+    public ObservableCollection<object> TreeRoots { get; } = [];
 
     /// <summary>
     /// Gets the account nodes of the folder tree.
@@ -94,7 +114,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public ObservableCollection<MessageItemViewModel> Messages { get; } = [];
 
     /// <summary>
-    /// Gets or sets the selected tree node: an <see cref="AccountNodeViewModel"/> or a <see cref="FolderNodeViewModel"/>.
+    /// Gets one checkable entry per existing label for the selected message; empty when no message is selected.
+    /// </summary>
+    public ObservableCollection<MessageLabelChoiceViewModel> MessageLabelChoices { get; } = [];
+
+    /// <summary>
+    /// Gets or sets the selected tree node: the unified inbox, an account, a folder or a label.
     /// </summary>
     [ObservableProperty]
     public partial object? SelectedNode { get; set; }
@@ -107,6 +132,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(ForwardCommand))]
     [NotifyCanExecuteChangedFor(nameof(ToggleFlagCommand))]
     [NotifyCanExecuteChangedFor(nameof(OpenHtmlCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DeleteSelectedCommand))]
     [NotifyPropertyChangedFor(nameof(IsNoMessageSelected))]
     public partial MessageItemViewModel? SelectedMessage { get; set; }
 
@@ -284,6 +310,114 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Deletes the selected message on the mail server after the user confirmed, then removes it from the list.
+    /// </summary>
+    /// <returns>A task that completes when the deletion has finished or been cancelled.</returns>
+    [RelayCommand(CanExecute = nameof(HasSelectedMessage))]
+    private async Task DeleteSelectedAsync()
+    {
+        var item = SelectedMessage!;
+        var text = WillDeletePermanently(item.Message)
+            ? _localizer.Format("Confirm_Delete_Permanent", item.Subject)
+            : _localizer.Format("Confirm_Delete_ToTrash", item.Subject);
+        if (!await _dialogs.ConfirmAsync(
+                _localizer["Confirm_Delete_Title"],
+                text,
+                _localizer["Toolbar_Delete"]))
+        {
+            return;
+        }
+
+        await GuardedAsync("Error_DeleteMessage", async () =>
+        {
+            var outcome = await _dispatcher.SendAsync(new DeleteMessageCommand(item.Id));
+            if (SelectedMessage == item)
+            {
+                SelectedMessage = null;
+            }
+
+            Messages.Remove(item);
+            StatusText = outcome == DeleteOutcome.MovedToTrash
+                ? _localizer["Status_MovedToTrash"]
+                : _localizer["Status_DeletedPermanently"];
+        });
+    }
+
+    /// <summary>
+    /// Determines whether deleting a message removes it for good: it already sits in a Trash folder, or its account has none.
+    /// </summary>
+    /// <param name="message">The message to delete.</param>
+    /// <returns><see langword="true"/> if the deletion cannot be undone on the server.</returns>
+    private bool WillDeletePermanently(MailMessage message)
+    {
+        var folders = Accounts.FirstOrDefault(a => a.Account.Id == message.AccountId)?.Folders;
+        if (folders is null)
+        {
+            // The account is not loaded, so the Trash folder cannot be ruled out; the stronger wording is the safe one.
+            return true;
+        }
+
+        var inTrash = folders.Any(f => f.Folder.Id == message.FolderId && f.Folder.Role == FolderRole.Trash);
+        return inTrash || !folders.Any(f => f.Folder.Role == FolderRole.Trash);
+    }
+
+    /// <summary>
+    /// Opens the label manager and reloads the labels, and the list they decorate, afterwards.
+    /// </summary>
+    /// <returns>A task that completes when the manager has been closed and the view is up to date.</returns>
+    [RelayCommand]
+    private async Task ManageLabelsAsync()
+    {
+        await _dialogs.ShowLabelManagerAsync();
+        await RefreshAsync();
+    }
+
+    /// <summary>
+    /// Attaches a label to the selected message or removes it, following the state of the choice.
+    /// </summary>
+    /// <param name="choice">The ticked or unticked label entry; its <see cref="MessageLabelChoiceViewModel.IsAssigned"/> holds the desired state.</param>
+    /// <returns>A task that completes when the state has been saved.</returns>
+    [RelayCommand]
+    private async Task ToggleMessageLabelAsync(MessageLabelChoiceViewModel? choice)
+    {
+        ArgumentNullException.ThrowIfNull(choice);
+        if (SelectedMessage is not { } item)
+        {
+            return;
+        }
+
+        var assigned = choice.IsAssigned;
+        try
+        {
+            await _dispatcher.SendAsync(new SetMessageLabelCommand(item.Id, choice.Label.Id, assigned));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Roll back the optimistic tick and tell the user; a failed label must not crash the UI.
+            choice.IsAssigned = !assigned;
+            StatusText = _localizer.Format("Error_Format", _localizer["Error_SetLabel"], ex.Message);
+            return;
+        }
+
+        if (assigned)
+        {
+            item.Message.AddLabel(choice.Label);
+        }
+        else
+        {
+            item.Message.RemoveLabel(choice.Label.Id);
+        }
+
+        item.RefreshLabels();
+        if (!assigned && SelectedNode is LabelNodeViewModel node && node.Label.Id == choice.Label.Id)
+        {
+            // The label view lists messages carrying the label, so the message no longer belongs there.
+            SelectedMessage = null;
+            Messages.Remove(item);
+        }
+    }
+
+    /// <summary>
     /// Opens the HTML body of the selected message in the system browser.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanOpenHtml))]
@@ -317,6 +451,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     private void RefreshLanguage()
     {
+        UnifiedInbox.RefreshLanguage();
         foreach (var folder in Accounts.SelectMany(a => a.Folders))
         {
             folder.RefreshLanguage();
@@ -334,9 +469,27 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <param name="value">The new selection.</param>
     partial void OnSelectedMessageChanged(MessageItemViewModel? value)
     {
+        RebuildLabelChoices();
         if (value is { IsRead: false })
         {
             _selectionTask = MarkReadAsync(value);
+        }
+    }
+
+    /// <summary>
+    /// Rebuilds the per-message label menu for the selected message.
+    /// </summary>
+    private void RebuildLabelChoices()
+    {
+        MessageLabelChoices.Clear();
+        if (SelectedMessage is not { } item)
+        {
+            return;
+        }
+
+        foreach (var label in _labels)
+        {
+            MessageLabelChoices.Add(new MessageLabelChoiceViewModel(label, item.Message.Labels.Any(l => l.Id == label.Id), ToggleMessageLabelCommand));
         }
     }
 
@@ -446,6 +599,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             if (node is null)
             {
                 node = new AccountNodeViewModel(account);
+                TreeRoots.Insert(1 + Accounts.Count, node);
                 Accounts.Add(node);
             }
 
@@ -474,12 +628,47 @@ public sealed partial class MainWindowViewModel : ObservableObject
             }
         }
 
+        await ReloadLabelsAsync();
+
         if (SelectedNode is null)
         {
             SelectedNode = Accounts
                 .SelectMany(a => a.Folders)
                 .OrderBy(f => f.SortRank)
                 .FirstOrDefault();
+        }
+    }
+
+    /// <summary>
+    /// Replaces the label nodes at the end of the tree when the labels changed, keeping a selected label selected.
+    /// </summary>
+    /// <returns>A task that completes when the label nodes are up to date.</returns>
+    private async Task ReloadLabelsAsync()
+    {
+        var labels = await _dispatcher.SendAsync(new GetLabelsQuery());
+        _labels = labels;
+        RebuildLabelChoices();
+        var current = TreeRoots.OfType<LabelNodeViewModel>().ToList();
+        if (current.Select(n => (n.Label.Id, n.Name, n.Color)).SequenceEqual(labels.Select(l => (l.Id, l.Name, l.Color))))
+        {
+            return;
+        }
+
+        var selectedLabelId = (SelectedNode as LabelNodeViewModel)?.Label.Id;
+        foreach (var node in current)
+        {
+            TreeRoots.Remove(node);
+        }
+
+        var added = labels.Select(l => new LabelNodeViewModel(l)).ToList();
+        foreach (var node in added)
+        {
+            TreeRoots.Add(node);
+        }
+
+        if (selectedLabelId is { } id)
+        {
+            SelectedNode = added.FirstOrDefault(n => n.Label.Id == id);
         }
     }
 
@@ -491,7 +680,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private async Task LoadMessagesAsync(object? node)
     {
         var version = ++_loadVersion;
-        if (node is not FolderNodeViewModel folder)
+        if (node is not (FolderNodeViewModel or UnifiedInboxNodeViewModel or LabelNodeViewModel))
         {
             ReplaceMessages([]);
             return;
@@ -499,7 +688,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         await GuardedAsync("Error_LoadMessages", async () =>
         {
-            var messages = await _dispatcher.SendAsync(new GetMessagesQuery(folder.Folder.Id, 0, PageSize));
+            var messages = node switch
+            {
+                UnifiedInboxNodeViewModel => await _dispatcher.SendAsync(new GetUnifiedInboxQuery(0, PageSize)),
+                LabelNodeViewModel label => await _dispatcher.SendAsync(new GetMessagesByLabelQuery(label.Label.Id, 0, PageSize)),
+                _ => await _dispatcher.SendAsync(new GetMessagesQuery(((FolderNodeViewModel)node).Folder.Id, 0, PageSize)),
+            };
             if (version == _loadVersion)
             {
                 ReplaceMessages(messages);
@@ -531,7 +725,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// Gets the account a tree selection belongs to.
     /// </summary>
     /// <param name="node">The selected node.</param>
-    /// <returns>The account identifier, or <see langword="null"/> when nothing is selected.</returns>
+    /// <returns>The account identifier, or <see langword="null"/> when nothing or a cross-account node (unified inbox, label) is selected.</returns>
     private static Guid? ScopeAccountId(object? node)
     {
         return node switch

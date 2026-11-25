@@ -23,6 +23,29 @@
           <Button Content="{loc:Loc Toolbar_Reply}" Command="{Binding ReplyCommand}" />
           <Button Content="{loc:Loc Toolbar_Forward}" Command="{Binding ForwardCommand}" />
           <Button Content="{loc:Loc Toolbar_Star}" Command="{Binding ToggleFlagCommand}" />
+          <Button Content="{loc:Loc Toolbar_Labels}">
+            <Button.Flyout>
+              <Flyout Placement="BottomEdgeAlignedLeft">
+                <StackPanel Spacing="4" MinWidth="180">
+                  <ItemsControl ItemsSource="{Binding MessageLabelChoices}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate DataType="vm:MessageLabelChoiceViewModel">
+                        <CheckBox IsChecked="{Binding IsAssigned}" Command="{Binding ToggleCommand}" CommandParameter="{Binding}">
+                          <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Border Width="10" Height="10" CornerRadius="5" Background="{Binding Brush}" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding Name}" />
+                          </StackPanel>
+                        </CheckBox>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <Separator />
+                  <Button Content="{loc:Loc Labels_Manage}" Command="{Binding ManageLabelsCommand}" HorizontalAlignment="Stretch" />
+                </StackPanel>
+              </Flyout>
+            </Button.Flyout>
+          </Button>
+          <Button Content="{loc:Loc Toolbar_Delete}" Command="{Binding DeleteSelectedCommand}" />
           <Button Content="{loc:Loc Toolbar_ViewInBrowser}" Command="{Binding OpenHtmlCommand}" />
           <Button Content="{loc:Loc Toolbar_Sync}" Command="{Binding SyncCommand}" />
           <Button Content="{loc:Loc Toolbar_AddAccount}" Command="{Binding AddAccountCommand}" />
@@ -55,11 +78,20 @@
     </Border>
 
     <Grid ColumnDefinitions="240,Auto,400,Auto,*">
-      <TreeView Grid.Column="0" ItemsSource="{Binding Accounts}" SelectedItem="{Binding SelectedNode}" Margin="4">
+      <TreeView Grid.Column="0" ItemsSource="{Binding TreeRoots}" SelectedItem="{Binding SelectedNode}" Margin="4">
         <TreeView.DataTemplates>
           <TreeDataTemplate DataType="vm:AccountNodeViewModel" ItemsSource="{Binding Folders}">
             <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
           </TreeDataTemplate>
+          <DataTemplate DataType="vm:UnifiedInboxNodeViewModel">
+            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+          </DataTemplate>
+          <DataTemplate DataType="vm:LabelNodeViewModel">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Border Width="10" Height="10" CornerRadius="5" Background="{Binding Brush}" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding Name}" />
+            </StackPanel>
+          </DataTemplate>
           <DataTemplate DataType="vm:FolderNodeViewModel">
             <TextBlock Text="{Binding Name}" />
           </DataTemplate>
@@ -70,9 +102,14 @@
 
       <ListBox Grid.Column="2" ItemsSource="{Binding Messages}" SelectedItem="{Binding SelectedMessage}"
                ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+        <ListBox.ContextMenu>
+          <ContextMenu>
+            <MenuItem Header="{loc:Loc Toolbar_Delete}" Command="{Binding DeleteSelectedCommand}" />
+          </ContextMenu>
+        </ListBox.ContextMenu>
         <ListBox.ItemTemplate>
           <DataTemplate DataType="vm:MessageItemViewModel">
-            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" Margin="2,4">
+            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto" Margin="2,4">
               <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding FromDisplay}"
                          Classes.unread="{Binding !IsRead}" TextTrimming="CharacterEllipsis" />
               <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SentAtText}" FontSize="12" Opacity="0.6" />
@@ -84,6 +121,21 @@
               </StackPanel>
               <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding Preview}" FontSize="12" Opacity="0.6"
                          TextTrimming="CharacterEllipsis" />
+              <ItemsControl Grid.Row="3" Grid.ColumnSpan="2" ItemsSource="{Binding Labels}" IsVisible="{Binding HasLabels}"
+                            Margin="0,2,0,0">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate DataType="vm:LabelChipViewModel">
+                    <Border Background="{Binding Brush}" CornerRadius="3" Padding="5,1" Margin="0,0,4,2">
+                      <TextBlock Text="{Binding Name}" FontSize="11" Foreground="White" />
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
             </Grid>
           </DataTemplate>
         </ListBox.ItemTemplate>

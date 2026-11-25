@@ -14,6 +14,7 @@
   <data name="Toolbar_ViewInBrowser" xml:space="preserve"><value>View in browser</value></data>
   <data name="Toolbar_Sync" xml:space="preserve"><value>Sync</value></data>
   <data name="Toolbar_AddAccount" xml:space="preserve"><value>Add account</value></data>
+  <data name="Toolbar_Delete" xml:space="preserve"><value>Delete</value></data>
   <data name="Toolbar_Language" xml:space="preserve"><value>Language</value></data>
 
   <data name="Language_System" xml:space="preserve"><value>Follow system</value></data>
@@ -32,6 +33,7 @@
   <data name="Folder_Trash" xml:space="preserve"><value>Trash</value></data>
   <data name="Folder_Junk" xml:space="preserve"><value>Junk</value></data>
   <data name="Folder_Archive" xml:space="preserve"><value>Archive</value></data>
+  <data name="Folder_UnifiedInbox" xml:space="preserve"><value>Unified Inbox</value></data>
   <data name="Message_NoSubject" xml:space="preserve"><value>(No subject)</value></data>
 
   <data name="Error_Format" xml:space="preserve"><value>{0}: {1}</value></data>
@@ -42,6 +44,7 @@
   <data name="Error_SaveAttachment" xml:space="preserve"><value>Failed to save attachment</value></data>
   <data name="Error_Flag" xml:space="preserve"><value>Failed to update star</value></data>
   <data name="Error_MarkRead" xml:space="preserve"><value>Failed to mark as read</value></data>
+  <data name="Error_DeleteMessage" xml:space="preserve"><value>Failed to delete message</value></data>
 
   <data name="Status_Downloading" xml:space="preserve"><value>Downloading {0}…</value></data>
   <data name="Status_Saved" xml:space="preserve"><value>Saved to {0}</value></data>
@@ -51,6 +54,11 @@
   <data name="Status_AccountFoldersFailed" xml:space="preserve"><value>{0}: {1} folder(s) failed to sync</value></data>
   <data name="Status_ProblemSeparator" xml:space="preserve"><value>; </value></data>
   <data name="Status_SearchResults" xml:space="preserve"><value>Found {0} message(s)</value></data>
+  <data name="Status_MovedToTrash" xml:space="preserve"><value>Moved to the Trash folder on the server</value></data>
+  <data name="Status_DeletedPermanently" xml:space="preserve"><value>Permanently deleted from the server</value></data>
+  <data name="Confirm_Delete_Title" xml:space="preserve"><value>Delete message</value></data>
+  <data name="Confirm_Delete_ToTrash" xml:space="preserve"><value>This message will be moved to the Trash folder on the mail server:&#10;"{0}"&#10;Continue?</value></data>
+  <data name="Confirm_Delete_Permanent" xml:space="preserve"><value>This message will be PERMANENTLY deleted from the mail server and cannot be recovered:&#10;"{0}"&#10;Continue?</value></data>
 
   <data name="AddAccount_Title" xml:space="preserve"><value>Add mail account</value></data>
   <data name="AddAccount_DisplayName" xml:space="preserve"><value>Display name (optional)</value></data>
@@ -89,4 +97,16 @@
   <data name="Template_Date" xml:space="preserve"><value>Date: {0}</value></data>
   <data name="Template_Subject" xml:space="preserve"><value>Subject: {0}</value></data>
   <data name="Template_To" xml:space="preserve"><value>To: {0}</value></data>
+  <data name="Common_Close" xml:space="preserve"><value>Close</value></data>
+  <data name="Toolbar_Labels" xml:space="preserve"><value>Labels</value></data>
+  <data name="Labels_Manage" xml:space="preserve"><value>Manage labels…</value></data>
+  <data name="Labels_Title" xml:space="preserve"><value>Manage labels</value></data>
+  <data name="Labels_Add" xml:space="preserve"><value>Add</value></data>
+  <data name="Labels_Delete" xml:space="preserve"><value>Delete</value></data>
+  <data name="Labels_Save" xml:space="preserve"><value>Save</value></data>
+  <data name="Labels_NamePlaceholder" xml:space="preserve"><value>New label name</value></data>
+  <data name="Labels_ErrorDuplicate" xml:space="preserve"><value>A label with this name already exists.</value></data>
+  <data name="Labels_ErrorInvalid" xml:space="preserve"><value>The label name must not be empty or longer than 50 characters.</value></data>
+  <data name="Labels_ErrorFailed" xml:space="preserve"><value>Label operation failed</value></data>
+  <data name="Error_SetLabel" xml:space="preserve"><value>Failed to update labels</value></data>
 </root>

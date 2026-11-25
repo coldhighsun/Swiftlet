@@ -1,6 +1,8 @@
 using AwesomeAssertions;
+using Microsoft.EntityFrameworkCore;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Folders;
+using Swiftlet.Domain.Labels;
 using Swiftlet.Domain.Messages;
 using Swiftlet.Infrastructure.Persistence.Repositories;
 
@@ -194,5 +196,183 @@ public class MessageRepositoryTests
         var repository = new MessageRepository(db.Context);
 
         (await repository.SearchAsync("   ", null, 10, ct)).Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies the unified inbox merges the inboxes of all accounts, newest first.
+    /// </summary>
+    [Fact]
+    public async Task GetUnifiedInboxAsync_TwoAccounts_ReturnsBothInboxesNewestFirst()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account1, inbox1) = await db.SeedAccountAsync(ct);
+        var (account2, inbox2) = await db.SeedAccountAsync(ct);
+        var repository = new MessageRepository(db.Context);
+        var now = DateTimeOffset.UtcNow;
+        await repository.AddAsync(Build(account1, inbox1, 1, "a-old", "b", now.AddHours(-3)), ct);
+        await repository.AddAsync(Build(account2, inbox2, 1, "b-mid", "b", now.AddHours(-2)), ct);
+        await repository.AddAsync(Build(account1, inbox1, 2, "a-new", "b", now.AddHours(-1)), ct);
+
+        await using var verifyContext = db.CreateContext();
+        var result = await new MessageRepository(verifyContext).GetUnifiedInboxAsync(0, 10, ct);
+
+        result.Select(m => m.Subject).Should().Equal("a-new", "b-mid", "a-old");
+    }
+
+    /// <summary>
+    /// Verifies folders other than the inbox are excluded from the unified inbox.
+    /// </summary>
+    [Fact]
+    public async Task GetUnifiedInboxAsync_IgnoresNonInboxFolders()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, inbox) = await db.SeedAccountAsync(ct);
+        var sent = MailFolder.Create(account.Id, "Sent", "Sent", FolderRole.Sent);
+        db.Context.Folders.Add(sent);
+        await db.Context.SaveChangesAsync(ct);
+        var repository = new MessageRepository(db.Context);
+        await repository.AddAsync(Build(account, inbox, 1, "in-inbox", "b", DateTimeOffset.UtcNow), ct);
+        await repository.AddAsync(Build(account, sent, 1, "in-sent", "b", DateTimeOffset.UtcNow), ct);
+
+        var result = await repository.GetUnifiedInboxAsync(0, 10, ct);
+
+        result.Select(m => m.Subject).Should().Equal("in-inbox");
+    }
+
+    /// <summary>
+    /// Verifies skip and take page through the unified inbox.
+    /// </summary>
+    [Fact]
+    public async Task GetUnifiedInboxAsync_Paging_SkipAndTake()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, inbox) = await db.SeedAccountAsync(ct);
+        var repository = new MessageRepository(db.Context);
+        var now = DateTimeOffset.UtcNow;
+        for (var i = 1u; i <= 5; i++)
+        {
+            await repository.AddAsync(Build(account, inbox, i, $"m{i}", "b", now.AddMinutes(i)), ct);
+        }
+
+        var result = await repository.GetUnifiedInboxAsync(1, 2, ct);
+
+        result.Select(m => m.Subject).Should().Equal("m4", "m3");
+    }
+
+    /// <summary>
+    /// Verifies the label query spans accounts and ignores unlabelled messages.
+    /// </summary>
+    [Fact]
+    public async Task GetByLabelAsync_ReturnsOnlyLabelledMessagesAcrossAccounts()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account1, inbox1) = await db.SeedAccountAsync(ct);
+        var (account2, inbox2) = await db.SeedAccountAsync(ct);
+        var label = Label.Create("Work", "#112233");
+        db.Context.Labels.Add(label);
+        var now = DateTimeOffset.UtcNow;
+        var first = Build(account1, inbox1, 1, "first", "b", now.AddHours(-1));
+        var second = Build(account2, inbox2, 1, "second", "b", now);
+        var unlabelled = Build(account1, inbox1, 2, "plain", "b", now);
+        first.AddLabel(label);
+        second.AddLabel(label);
+        var repository = new MessageRepository(db.Context);
+        await repository.AddRangeAsync([first, second, unlabelled], ct);
+
+        await using var verifyContext = db.CreateContext();
+        var result = await new MessageRepository(verifyContext).GetByLabelAsync(label.Id, 0, 10, ct);
+
+        result.Select(m => m.Subject).Should().Equal("second", "first");
+        result[0].Labels.Should().ContainSingle().Which.Name.Should().Be("Work");
+    }
+
+    /// <summary>
+    /// Verifies deleting a message removes its attachments and label links but keeps the label.
+    /// </summary>
+    [Fact]
+    public async Task DeleteAsync_RemovesMessageAttachmentsAndLabelLinks()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var label = Label.Create("Work", "#112233");
+        db.Context.Labels.Add(label);
+        var message = Build(account, folder, 1, "s", "b", DateTimeOffset.UtcNow);
+        message.AddAttachment("a.pdf", "application/pdf", 10);
+        message.AddLabel(label);
+        var repository = new MessageRepository(db.Context);
+        await repository.AddAsync(message, ct);
+
+        await repository.DeleteAsync(message.Id, ct);
+
+        await using var verifyContext = db.CreateContext();
+        verifyContext.Messages.Should().BeEmpty();
+        verifyContext.Attachments.Should().BeEmpty();
+        verifyContext.Labels.Should().ContainSingle();
+        var links = await verifyContext.Database
+            .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM MessageLabels")
+            .SingleAsync(ct);
+        links.Should().Be(0);
+    }
+
+    /// <summary>
+    /// Verifies deleting an unknown message does nothing.
+    /// </summary>
+    [Fact]
+    public async Task DeleteAsync_Unknown_IsNoOp()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var repository = new MessageRepository(db.Context);
+        await repository.AddAsync(Build(account, folder, 1, "keep", "b", DateTimeOffset.UtcNow), ct);
+
+        await repository.DeleteAsync(Guid.NewGuid(), ct);
+
+        (await repository.GetByFolderAsync(folder.Id, 0, 10, ct)).Should().ContainSingle();
+    }
+
+    /// <summary>
+    /// Verifies deleting a message also removes it from the full-text index.
+    /// </summary>
+    [Fact]
+    public async Task SearchAsync_AfterDelete_NoLongerMatches()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var repository = new MessageRepository(db.Context);
+        var message = Build(account, folder, 1, "vanishing", "text", DateTimeOffset.UtcNow);
+        await repository.AddAsync(message, ct);
+        (await repository.SearchAsync("vanishing", null, 10, ct)).Should().HaveCount(1);
+
+        await repository.DeleteAsync(message.Id, ct);
+
+        (await repository.SearchAsync("vanishing", null, 10, ct)).Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies search results carry their labels.
+    /// </summary>
+    [Fact]
+    public async Task SearchAsync_LoadsLabels()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var label = Label.Create("Work", "#112233");
+        db.Context.Labels.Add(label);
+        var message = Build(account, folder, 1, "labelled subject", "text", DateTimeOffset.UtcNow);
+        message.AddLabel(label);
+        await new MessageRepository(db.Context).AddAsync(message, ct);
+
+        await using var verifyContext = db.CreateContext();
+        var result = await new MessageRepository(verifyContext).SearchAsync("labelled", null, 10, ct);
+
+        result.Should().ContainSingle().Which.Labels.Should().ContainSingle();
     }
 }

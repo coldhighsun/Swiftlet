@@ -121,6 +121,34 @@ internal sealed class FakeImapSession : IImapSession
         return Task.FromResult(AttachmentContents.GetValueOrDefault((folderFullName, uid, ordinal)));
     }
 
+    /// <summary>
+    /// Gets the recorded delete calls.
+    /// </summary>
+    public List<(string Folder, uint Uid, string? TrashFolder)> DeleteCalls { get; } = [];
+
+    /// <summary>
+    /// Gets or sets an exception to throw from <see cref="DeleteMessageAsync"/>.
+    /// </summary>
+    public Exception? DeleteFailure { get; set; }
+
+    /// <inheritdoc />
+    public Task DeleteMessageAsync(
+        string folderFullName,
+        uint uid,
+        string? trashFolderFullName,
+        CancellationToken cancellationToken = default)
+    {
+        DeleteCalls.Add((folderFullName, uid, trashFolderFullName));
+        if (DeleteFailure is not null)
+        {
+            return Task.FromException(DeleteFailure);
+        }
+
+        // Mimic the server: the message leaves the source folder (a move would also add it to Trash, which no test needs).
+        Messages.GetValueOrDefault(folderFullName)?.RemoveAll(m => m.Uid == uid);
+        return Task.CompletedTask;
+    }
+
     /// <inheritdoc />
     public Task<bool> AppendToSentAsync(ReadOnlyMemory<byte> rfc822, CancellationToken cancellationToken = default)
     {

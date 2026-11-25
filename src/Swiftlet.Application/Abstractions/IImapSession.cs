@@ -52,6 +52,21 @@ public interface IImapSession : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Deletes a message on the server.
+    /// A message that is already gone counts as deleted; every other failure is thrown.
+    /// </summary>
+    /// <param name="folderFullName">The full server-side path of the folder holding the message.</param>
+    /// <param name="uid">The IMAP UID of the message.</param>
+    /// <param name="trashFolderFullName">The Trash folder to move the message to, or <see langword="null"/> to delete it permanently.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the server no longer holds the message in the source folder.</returns>
+    Task DeleteMessageAsync(
+        string folderFullName,
+        uint uid,
+        string? trashFolderFullName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Appends an RFC 5322 message to the Sent folder, marked as read.
     /// </summary>
     /// <param name="rfc822">The raw message.</param>

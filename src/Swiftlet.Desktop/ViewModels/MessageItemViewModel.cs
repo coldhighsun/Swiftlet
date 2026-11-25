@@ -64,6 +64,7 @@ public sealed partial class MessageItemViewModel : ObservableObject
         IsRead = message.IsRead;
         IsFlagged = message.IsFlagged;
         Attachments = [.. message.Attachments.OrderBy(a => a.Ordinal).Select(a => new AttachmentItemViewModel(a, saveAttachment))];
+        Labels = BuildChips(message);
     }
 
     /// <summary>
@@ -75,6 +76,36 @@ public sealed partial class MessageItemViewModel : ObservableObject
     /// Gets the attachments ordered as on the server.
     /// </summary>
     public IReadOnlyList<AttachmentItemViewModel> Attachments { get; }
+
+    /// <summary>
+    /// Gets the labels attached to the message.
+    /// </summary>
+    public IReadOnlyList<LabelChipViewModel> Labels { get; private set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the message has labels.
+    /// </summary>
+    public bool HasLabels => Labels.Count > 0;
+
+    /// <summary>
+    /// Rebuilds the label chips after the labels of the message changed.
+    /// </summary>
+    public void RefreshLabels()
+    {
+        Labels = BuildChips(Message);
+        OnPropertyChanged(nameof(Labels));
+        OnPropertyChanged(nameof(HasLabels));
+    }
+
+    /// <summary>
+    /// Builds the chips of the labels of a message.
+    /// </summary>
+    /// <param name="message">The message.</param>
+    /// <returns>The chips.</returns>
+    private static LabelChipViewModel[] BuildChips(MailMessage message)
+    {
+        return [.. message.Labels.Select(l => new LabelChipViewModel(l.Name, l.Color))];
+    }
 
     /// <summary>
     /// Gets or sets a value indicating whether the message is read.

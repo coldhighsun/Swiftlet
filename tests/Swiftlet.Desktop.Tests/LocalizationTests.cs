@@ -337,14 +337,14 @@ public partial class LocalizationTests
     /// Matches resource keys used from C# code.
     /// </summary>
     /// <returns>The compiled regex.</returns>
-    [GeneratedRegex(@"(?:_?localizer(?:\[|\.Format\()|GuardedAsync\()\s*""([A-Za-z]+_[A-Za-z]+)""")]
+    [GeneratedRegex(@"(?:_?localizer(?:\[|\.Format\()|GuardedAsync\()\s*""([A-Za-z]+(?:_[A-Za-z]+)+)""")]
     private static partial Regex CodeKeys();
 
     /// <summary>
     /// Matches resource keys used from XAML.
     /// </summary>
     /// <returns>The compiled regex.</returns>
-    [GeneratedRegex(@"\{loc:Loc ([A-Za-z]+_[A-Za-z]+)\}")]
+    [GeneratedRegex(@"\{loc:Loc ([A-Za-z]+(?:_[A-Za-z]+)+)\}")]
     private static partial Regex XamlKeys();
 
     /// <summary>

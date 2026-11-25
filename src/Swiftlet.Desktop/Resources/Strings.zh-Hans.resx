@@ -14,6 +14,7 @@
   <data name="Toolbar_ViewInBrowser" xml:space="preserve"><value>浏览器查看</value></data>
   <data name="Toolbar_Sync" xml:space="preserve"><value>同步</value></data>
   <data name="Toolbar_AddAccount" xml:space="preserve"><value>添加账号</value></data>
+  <data name="Toolbar_Delete" xml:space="preserve"><value>删除</value></data>
   <data name="Toolbar_Language" xml:space="preserve"><value>语言</value></data>
 
   <data name="Language_System" xml:space="preserve"><value>跟随系统</value></data>
@@ -32,6 +33,7 @@
   <data name="Folder_Trash" xml:space="preserve"><value>已删除</value></data>
   <data name="Folder_Junk" xml:space="preserve"><value>垃圾邮件</value></data>
   <data name="Folder_Archive" xml:space="preserve"><value>归档</value></data>
+  <data name="Folder_UnifiedInbox" xml:space="preserve"><value>统一收件箱</value></data>
   <data name="Message_NoSubject" xml:space="preserve"><value>(无主题)</value></data>
 
   <data name="Error_Format" xml:space="preserve"><value>{0}: {1}</value></data>
@@ -42,6 +44,7 @@
   <data name="Error_SaveAttachment" xml:space="preserve"><value>保存附件失败</value></data>
   <data name="Error_Flag" xml:space="preserve"><value>标记失败</value></data>
   <data name="Error_MarkRead" xml:space="preserve"><value>标记已读失败</value></data>
+  <data name="Error_DeleteMessage" xml:space="preserve"><value>删除邮件失败</value></data>
 
   <data name="Status_Downloading" xml:space="preserve"><value>正在下载 {0}…</value></data>
   <data name="Status_Saved" xml:space="preserve"><value>已保存到 {0}</value></data>
@@ -51,6 +54,11 @@
   <data name="Status_AccountFoldersFailed" xml:space="preserve"><value>{0}: {1} 个文件夹同步失败</value></data>
   <data name="Status_ProblemSeparator" xml:space="preserve"><value>；</value></data>
   <data name="Status_SearchResults" xml:space="preserve"><value>找到 {0} 封邮件</value></data>
+  <data name="Status_MovedToTrash" xml:space="preserve"><value>已移至服务器的已删除文件夹</value></data>
+  <data name="Status_DeletedPermanently" xml:space="preserve"><value>已从服务器永久删除</value></data>
+  <data name="Confirm_Delete_Title" xml:space="preserve"><value>删除邮件</value></data>
+  <data name="Confirm_Delete_ToTrash" xml:space="preserve"><value>这封邮件将被移入邮箱服务器的已删除文件夹：&#10;“{0}”&#10;要继续吗？</value></data>
+  <data name="Confirm_Delete_Permanent" xml:space="preserve"><value>这封邮件将从邮箱服务器上永久删除，且无法恢复：&#10;“{0}”&#10;要继续吗？</value></data>
 
   <data name="AddAccount_Title" xml:space="preserve"><value>添加邮箱账号</value></data>
   <data name="AddAccount_DisplayName" xml:space="preserve"><value>显示名称（可选）</value></data>
@@ -89,4 +97,16 @@
   <data name="Template_Date" xml:space="preserve"><value>日期: {0}</value></data>
   <data name="Template_Subject" xml:space="preserve"><value>主题: {0}</value></data>
   <data name="Template_To" xml:space="preserve"><value>收件人: {0}</value></data>
+  <data name="Common_Close" xml:space="preserve"><value>关闭</value></data>
+  <data name="Toolbar_Labels" xml:space="preserve"><value>标签</value></data>
+  <data name="Labels_Manage" xml:space="preserve"><value>管理标签…</value></data>
+  <data name="Labels_Title" xml:space="preserve"><value>管理标签</value></data>
+  <data name="Labels_Add" xml:space="preserve"><value>添加</value></data>
+  <data name="Labels_Delete" xml:space="preserve"><value>删除</value></data>
+  <data name="Labels_Save" xml:space="preserve"><value>保存</value></data>
+  <data name="Labels_NamePlaceholder" xml:space="preserve"><value>新标签名称</value></data>
+  <data name="Labels_ErrorDuplicate" xml:space="preserve"><value>已存在同名标签。</value></data>
+  <data name="Labels_ErrorInvalid" xml:space="preserve"><value>标签名称不能为空，且不能超过 50 个字符。</value></data>
+  <data name="Labels_ErrorFailed" xml:space="preserve"><value>标签操作失败</value></data>
+  <data name="Error_SetLabel" xml:space="preserve"><value>更新标签失败</value></data>
 </root>

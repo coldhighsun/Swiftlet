@@ -69,6 +69,51 @@ public sealed class GetMessagesQueryHandler(IMessageRepository messages)
 }
 
 /// <summary>
+/// Gets a page of the unified inbox (the Inbox folders of all accounts), newest first.
+/// </summary>
+/// <param name="Skip">The number of messages to skip.</param>
+/// <param name="Take">The maximum number of messages to return.</param>
+public sealed record GetUnifiedInboxQuery(int Skip, int Take) : IQuery<IReadOnlyList<MailMessage>>;
+
+/// <summary>
+/// Handles <see cref="GetUnifiedInboxQuery"/>.
+/// </summary>
+/// <param name="messages">The message repository.</param>
+public sealed class GetUnifiedInboxQueryHandler(IMessageRepository messages)
+    : IQueryHandler<GetUnifiedInboxQuery, IReadOnlyList<MailMessage>>
+{
+    /// <inheritdoc />
+    public async ValueTask<IReadOnlyList<MailMessage>> Handle(GetUnifiedInboxQuery query, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        return await messages.GetUnifiedInboxAsync(query.Skip, query.Take, cancellationToken);
+    }
+}
+
+/// <summary>
+/// Gets a page of the messages carrying a label, newest first.
+/// </summary>
+/// <param name="LabelId">The label identifier.</param>
+/// <param name="Skip">The number of messages to skip.</param>
+/// <param name="Take">The maximum number of messages to return.</param>
+public sealed record GetMessagesByLabelQuery(Guid LabelId, int Skip, int Take) : IQuery<IReadOnlyList<MailMessage>>;
+
+/// <summary>
+/// Handles <see cref="GetMessagesByLabelQuery"/>.
+/// </summary>
+/// <param name="messages">The message repository.</param>
+public sealed class GetMessagesByLabelQueryHandler(IMessageRepository messages)
+    : IQueryHandler<GetMessagesByLabelQuery, IReadOnlyList<MailMessage>>
+{
+    /// <inheritdoc />
+    public async ValueTask<IReadOnlyList<MailMessage>> Handle(GetMessagesByLabelQuery query, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        return await messages.GetByLabelAsync(query.LabelId, query.Skip, query.Take, cancellationToken);
+    }
+}
+
+/// <summary>
 /// Searches cached messages.
 /// </summary>
 /// <param name="Text">The search text.</param>

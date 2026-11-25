@@ -52,6 +52,11 @@ internal sealed class MailKitImapSession(ImapClient client) : IImapSession
         var query = afterUid == 0
             ? SearchQuery.All
             : SearchQuery.Uids(new UniqueIdRange(new UniqueId(afterUid + 1), UniqueId.MaxValue));
+
+        // Skip messages still flagged \Deleted: on servers with neither MOVE nor UIDPLUS, MailKit's COPY fallback
+        // leaves the source flagged rather than expunged, and those must not be downloaded again.
+        // Not unit-testable without a real IMAP server.
+        query = query.And(SearchQuery.NotDeleted);
         var found = await folder.SearchAsync(query, cancellationToken);
 
         // "UID n:*" always matches the last message even when it is older than n, so filter explicitly.
@@ -113,6 +118,83 @@ internal sealed class MailKitImapSession(ImapClient client) : IImapSession
         using var buffer = new MemoryStream();
         await part.Content.DecodeToAsync(buffer, cancellationToken);
         return buffer.ToArray();
+    }
+
+    /// <inheritdoc />
+    public async Task DeleteMessageAsync(
+        string folderFullName,
+        uint uid,
+        string? trashFolderFullName,
+        CancellationToken cancellationToken = default)
+    {
+        if (trashFolderFullName is null && !client.Capabilities.Contains(ImapCapability.UidPlus))
+        {
+            // Checked before any mutation: without UIDPLUS only a plain EXPUNGE exists, which would purge unrelated
+            // flagged mail, and a \Deleted flag left behind would let any other client's EXPUNGE delete this message.
+            throw new NotSupportedException(
+                "The server does not support UIDPLUS, so a single message cannot be permanently deleted safely.");
+        }
+
+        var folder = await client.GetFolderAsync(folderFullName, cancellationToken);
+        await folder.OpenAsync(FolderAccess.ReadWrite, cancellationToken);
+        var uniqueId = new UniqueId(uid);
+
+        try
+        {
+            if (trashFolderFullName is null)
+            {
+                // Permanent delete: flag and expunge only this UID (UID EXPUNGE, guarded by UIDPLUS above).
+                // The server-side behaviour (expunge failing after the flag, flag undo) cannot be unit-tested
+                // without a real IMAP server.
+                await folder.AddFlagsAsync(uniqueId, MessageFlags.Deleted, true, cancellationToken);
+                try
+                {
+                    await folder.ExpungeAsync([uniqueId], cancellationToken);
+                }
+                catch (Exception)
+                {
+                    // Undo the flag so another client's later EXPUNGE cannot silently purge the message, then
+                    // rethrow the original error (the outer handler still treats an already-gone UID as success).
+                    await TryUndoDeletedFlagAsync(folder, uniqueId);
+                    throw;
+                }
+            }
+            else
+            {
+                // MoveToAsync uses MOVE when available and falls back to COPY + delete otherwise.
+                var trash = await client.GetFolderAsync(trashFolderFullName, cancellationToken);
+                await folder.MoveToAsync(uniqueId, trash, cancellationToken);
+            }
+        }
+        catch (ImapCommandException)
+        {
+            // A server may answer NO/BAD when the UID was already removed (for example by another client).
+            // Deleting a message that is gone is the desired end state, but only if the UID is truly absent;
+            // any other command failure is rethrown.
+            var remaining = await folder.SearchAsync(SearchQuery.Uids([uniqueId]), cancellationToken);
+            if (remaining.Count > 0)
+            {
+                throw;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Best-effort removal of the <c>\Deleted</c> flag after a failed expunge so another client cannot purge the message later.
+    /// </summary>
+    /// <param name="folder">The open folder.</param>
+    /// <param name="uniqueId">The UID of the message.</param>
+    /// <returns>A task that completes when the attempt has finished.</returns>
+    private static async Task TryUndoDeletedFlagAsync(IMailFolder folder, UniqueId uniqueId)
+    {
+        try
+        {
+            await folder.RemoveFlagsAsync(uniqueId, MessageFlags.Deleted, true);
+        }
+        catch (Exception ex) when (ex is IOException or ServiceNotConnectedException or ProtocolException or ImapCommandException)
+        {
+            // Best effort: the connection or the message may be gone; the original expunge error is what matters.
+        }
     }
 
     /// <inheritdoc />

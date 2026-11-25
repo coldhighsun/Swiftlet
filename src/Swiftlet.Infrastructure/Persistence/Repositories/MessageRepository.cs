@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Swiftlet.Domain.Folders;
 using Swiftlet.Domain.Messages;
 
 namespace Swiftlet.Infrastructure.Persistence.Repositories;
@@ -26,6 +27,7 @@ internal sealed class MessageRepository(SwiftletDbContext context) : IMessageRep
     {
         return await context.Messages
             .Include(m => m.Attachments)
+            .Include(m => m.Labels)
             .FirstOrDefaultAsync(m => m.Id == id, cancellationToken);
     }
 
@@ -73,11 +75,52 @@ internal sealed class MessageRepository(SwiftletDbContext context) : IMessageRep
     {
         return await context.Messages
             .Include(m => m.Attachments)
+            .Include(m => m.Labels)
             .Where(m => m.FolderId == folderId)
             .OrderByDescending(m => m.SentAt)
             .Skip(skip)
             .Take(take)
             .ToListAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<MailMessage>> GetUnifiedInboxAsync(
+        int skip,
+        int take,
+        CancellationToken cancellationToken = default)
+    {
+        return await context.Messages
+            .Include(m => m.Attachments)
+            .Include(m => m.Labels)
+            .Where(m => context.Folders.Any(f => f.Id == m.FolderId && f.Role == FolderRole.Inbox))
+            .OrderByDescending(m => m.SentAt)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<MailMessage>> GetByLabelAsync(
+        Guid labelId,
+        int skip,
+        int take,
+        CancellationToken cancellationToken = default)
+    {
+        return await context.Messages
+            .Include(m => m.Attachments)
+            .Include(m => m.Labels)
+            .Where(m => m.Labels.Any(l => l.Id == labelId))
+            .OrderByDescending(m => m.SentAt)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task DeleteAsync(Guid messageId, CancellationToken cancellationToken = default)
+    {
+        // Bulk delete relies on the database cascades (attachments, label links) and the FTS delete trigger.
+        await context.Messages.Where(m => m.Id == messageId).ExecuteDeleteAsync(cancellationToken);
     }
 
     /// <inheritdoc />
@@ -126,6 +169,7 @@ internal sealed class MessageRepository(SwiftletDbContext context) : IMessageRep
 
         return await source
             .Include(m => m.Attachments)
+            .Include(m => m.Labels)
             .OrderByDescending(m => m.SentAt)
             .Take(take)
             .ToListAsync(cancellationToken);

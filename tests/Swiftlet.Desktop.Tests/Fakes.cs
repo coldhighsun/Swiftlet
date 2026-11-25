@@ -124,12 +124,47 @@ internal sealed class FakeDialogService : IDialogService
     /// </summary>
     public List<string> BrowserHtml { get; } = [];
 
+    /// <summary>
+    /// Gets or sets the answer returned by the confirmation dialog.
+    /// </summary>
+    public bool ConfirmResult { get; set; }
+
+    /// <summary>
+    /// Gets the confirmation prompts shown, as title, message and confirm button text.
+    /// </summary>
+    public List<(string Title, string Message, string OkText)> Confirmations { get; } = [];
+
+    /// <summary>
+    /// Gets or sets an action run when the label manager is shown (for example to change the stored labels).
+    /// </summary>
+    public Action? OnLabelManager { get; set; }
+
+    /// <summary>
+    /// Gets the number of times the label manager was shown.
+    /// </summary>
+    public int LabelManagerCalls { get; private set; }
+
+    /// <inheritdoc />
+    public Task<bool> ConfirmAsync(string title, string message, string okText)
+    {
+        Confirmations.Add((title, message, okText));
+        return Task.FromResult(ConfirmResult);
+    }
+
     /// <inheritdoc />
     public Task<bool> ShowAddAccountAsync()
     {
         AddAccountCalls++;
         OnAddAccount?.Invoke();
         return Task.FromResult(AddAccountResult);
+    }
+
+    /// <inheritdoc />
+    public Task ShowLabelManagerAsync()
+    {
+        LabelManagerCalls++;
+        OnLabelManager?.Invoke();
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc />

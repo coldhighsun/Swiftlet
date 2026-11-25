@@ -27,6 +27,46 @@ public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogSe
     private static Window? ActiveWindow => Lifetime?.Windows.FirstOrDefault(w => w.IsActive) ?? Lifetime?.MainWindow;
 
     /// <inheritdoc />
+    public async Task<bool> ConfirmAsync(string title, string message, string okText)
+    {
+        var owner = ActiveWindow;
+        if (owner is null)
+        {
+            return false;
+        }
+
+        var localizer = services.GetRequiredService<ILocalizer>();
+        // Cancel, not the confirming button, answers Enter: the confirmed action may be destructive.
+        var ok = new Button { Content = okText, MinWidth = 80 };
+        var cancel = new Button { Content = localizer["Common_Cancel"], IsCancel = true, IsDefault = true, MinWidth = 80 };
+        var buttons = new StackPanel
+        {
+            Orientation = Avalonia.Layout.Orientation.Horizontal,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+            Spacing = 8,
+            Children = { ok, cancel },
+        };
+        var panel = new StackPanel
+        {
+            Margin = new Avalonia.Thickness(16),
+            Spacing = 16,
+            Children = { new TextBlock { Text = message, TextWrapping = Avalonia.Media.TextWrapping.Wrap }, buttons },
+        };
+        var window = new Window
+        {
+            Title = title,
+            Width = 420,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = panel,
+        };
+        ok.Click += (_, _) => window.Close(true);
+        cancel.Click += (_, _) => window.Close(false);
+        return await window.ShowDialog<bool>(owner);
+    }
+
+    /// <inheritdoc />
     public async Task<bool> ShowAddAccountAsync()
     {
         var owner = ActiveWindow;
@@ -39,6 +79,22 @@ public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogSe
         var window = new AddAccountWindow { DataContext = viewModel };
         viewModel.CloseRequested += (_, added) => window.Close(added);
         return await window.ShowDialog<bool>(owner);
+    }
+
+    /// <inheritdoc />
+    public async Task ShowLabelManagerAsync()
+    {
+        var owner = ActiveWindow;
+        if (owner is null)
+        {
+            return;
+        }
+
+        var viewModel = services.GetRequiredService<LabelManagerViewModel>();
+        var window = new LabelManagerWindow { DataContext = viewModel };
+        viewModel.CloseRequested += (_, _) => window.Close();
+        await viewModel.InitializeAsync();
+        await window.ShowDialog(owner);
     }
 
     /// <inheritdoc />

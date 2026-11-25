@@ -232,4 +232,113 @@ public class UiSmokeTests
             },
             TestContext.Current.CancellationToken);
     }
+
+    /// <summary>
+    /// Verifies the tree shows the unified inbox, accounts and labels, and the toolbar has a delete button, in both languages.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    /// <param name="unifiedInbox">The expected unified inbox caption.</param>
+    /// <param name="delete">The expected delete button caption.</param>
+    [Theory]
+    [InlineData("zh-Hans", "统一收件箱", "删除")]
+    [InlineData("en", "Unified Inbox", "Delete")]
+    public async Task MainWindow_WithUnifiedInboxAndLabels_Renders(string language, string unifiedInbox, string delete)
+    {
+        await Session.Dispatch(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference(language);
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Localizer.SetPreference(language);
+                scenario.Messages[0].AddLabel(scenario.Work);
+                await scenario.StartAsync();
+                scenario.ViewModel.SelectedNode = scenario.ViewModel.TreeRoots[0];
+                await scenario.ViewModel.WhenIdleAsync();
+
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, $"main-window-labels-{language}", language);
+
+                window.GetVisualDescendants().OfType<TreeView>().Single().ItemCount.Should().Be(3);
+                var texts = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
+                texts.Should().Contain(unifiedInbox).And.Contain("Work");
+                window.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).Should().Contain(delete);
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the label manager lists labels with their editing controls, in both languages.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    /// <param name="title">The expected window title.</param>
+    /// <param name="add">The expected add button caption.</param>
+    /// <param name="save">The expected save button caption.</param>
+    [Theory]
+    [InlineData("zh-Hans", "管理标签", "添加", "保存")]
+    [InlineData("en", "Manage labels", "Add", "Save")]
+    public async Task LabelManagerWindow_Renders(string language, string title, string add, string save)
+    {
+        await Session.Dispatch(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference(language);
+                var dispatcher = new FakeDispatcher();
+                dispatcher.On<Swiftlet.Application.Labels.GetLabelsQuery>(_ => (IReadOnlyList<Swiftlet.Domain.Labels.Label>)new List<Swiftlet.Domain.Labels.Label>
+                {
+                    Swiftlet.Domain.Labels.Label.Create("Travel", "#1E88E5"),
+                    Swiftlet.Domain.Labels.Label.Create("Work", "#E53935"),
+                });
+                var viewModel = new LabelManagerViewModel(dispatcher, LocalizationManager.Instance) { NewName = "Receipts" };
+                await viewModel.InitializeAsync();
+                viewModel.ErrorText = LocalizationManager.Instance["Labels_ErrorInvalid"];
+                var window = new LabelManagerWindow { DataContext = viewModel };
+                Render(window, $"label-manager-{language}", language);
+
+                window.Title.Should().Be(title);
+                var buttons = window.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).ToList();
+                buttons.Should().Contain(add).And.Contain(save);
+                window.GetVisualDescendants().OfType<TextBox>().Select(t => t.Text).Should().Contain(["Receipts", "Travel", "Work"]);
+                window.GetVisualDescendants().OfType<ComboBox>().Should().HaveCount(3);
+                window.GetVisualDescendants().OfType<Button>().Count(b => b.Command == viewModel.DeleteCommand).Should().Be(2);
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the toolbar label flyout lists the labels and ticking one sends the set-label command.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_LabelsFlyout_TickingLabelSendsCommand()
+    {
+        await Session.Dispatch(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference("en");
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Localizer.SetPreference("en");
+                await scenario.StartAsync();
+                scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-labels-flyout", "en");
+
+                var button = window.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Labels");
+                button.IsEnabled.Should().BeTrue();
+                button.Flyout!.ShowAt(button);
+                Dispatcher.UIThread.RunJobs();
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                var popupRoot = button.Flyout.IsOpen ? ((Flyout)button.Flyout).Content as Control : null;
+                popupRoot.Should().NotBeNull();
+                var check = popupRoot!.GetVisualDescendants().OfType<CheckBox>().Single();
+                check.IsChecked = true;
+                check.Command!.Execute(check.CommandParameter);
+                await scenario.ViewModel.WhenIdleAsync();
+
+                scenario.Dispatcher.Sent<Swiftlet.Application.Labels.SetMessageLabelCommand>().Should().ContainSingle().Which.Assigned.Should().BeTrue();
+                button.Flyout.Hide();
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
 }

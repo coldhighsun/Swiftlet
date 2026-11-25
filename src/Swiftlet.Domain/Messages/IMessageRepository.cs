@@ -14,7 +14,7 @@ public interface IMessageRepository
     Task AddAsync(MailMessage message, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Gets a message with its attachments.
+    /// Gets a message with its attachments and labels.
     /// </summary>
     /// <param name="id">The message identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
@@ -88,4 +88,38 @@ public interface IMessageRepository
         Guid? accountId,
         int take,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets a page of messages from the inbox folders of all accounts, newest first.
+    /// </summary>
+    /// <param name="skip">The number of messages to skip.</param>
+    /// <param name="take">The maximum number of messages to return.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The messages.</returns>
+    Task<IReadOnlyList<MailMessage>> GetUnifiedInboxAsync(
+        int skip,
+        int take,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets a page of messages carrying a label, across all accounts, newest first.
+    /// </summary>
+    /// <param name="labelId">The label.</param>
+    /// <param name="skip">The number of messages to skip.</param>
+    /// <param name="take">The maximum number of messages to return.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The messages.</returns>
+    Task<IReadOnlyList<MailMessage>> GetByLabelAsync(
+        Guid labelId,
+        int skip,
+        int take,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes one cached message with its attachments and label links; does nothing if it does not exist.
+    /// </summary>
+    /// <param name="messageId">The message identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the message is deleted.</returns>
+    Task DeleteAsync(Guid messageId, CancellationToken cancellationToken = default);
 }
