@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Swiftlet.Application.Abstractions;
 using Swiftlet.Application.Labels;
 using Swiftlet.Application.Messages;
 using Swiftlet.Application.Queries;
@@ -11,6 +12,7 @@ using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Folders;
 using Swiftlet.Domain.Labels;
 using Swiftlet.Domain.Messages;
+using AccountCommands = Swiftlet.Application.Accounts;
 
 namespace Swiftlet.Desktop.ViewModels;
 
@@ -344,6 +346,76 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Removes an account and its local data after the user confirmed; the mailbox on the server is not touched.
+    /// </summary>
+    /// <param name="node">The account node the menu was opened on.</param>
+    /// <returns>A task that completes when the account has been removed or the action was cancelled.</returns>
+    [RelayCommand]
+    private async Task DeleteAccountAsync(AccountNodeViewModel? node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        var address = node.Account.EmailAddress;
+        if (!await _dialogs.ConfirmAsync(
+                _localizer["Confirm_DeleteAccount_Title"],
+                _localizer.Format("Confirm_DeleteAccount_Text", address),
+                _localizer["Menu_Account_Delete"]))
+        {
+            return;
+        }
+
+        var deleted = false;
+        await GuardedAsync("Error_DeleteAccount", async () =>
+        {
+            await _dispatcher.SendAsync(new AccountCommands.DeleteAccountCommand(node.Account.Id));
+            deleted = true;
+        });
+        var deleteError = deleted ? null : StatusText;
+
+        // Reload even after a failure: the rows may already be gone (for example when only the secret removal failed),
+        // and the tree must not keep a node for an account that no longer exists.
+        await GuardedAsync("Error_LoadAccounts", ReloadAccountsAsync);
+        if (deleted || !Accounts.Contains(node))
+        {
+            // Cross-account views (unified inbox, labels, search results) may still list the removed account's messages.
+            await SearchAsync();
+        }
+
+        StatusText = deleted ? _localizer.Format("Status_AccountDeleted", address) : deleteError ?? StatusText;
+    }
+
+    /// <summary>
+    /// Signs an OAuth account in again in the browser, then synchronizes it.
+    /// </summary>
+    /// <param name="node">The account node the menu was opened on.</param>
+    /// <returns>A task that completes when the sign-in and the follow-up sync are done.</returns>
+    [RelayCommand]
+    private async Task ReauthenticateAccountAsync(AccountNodeViewModel? node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        var account = node.Account;
+        var signedIn = false;
+        IsBusy = true;
+        try
+        {
+            StatusText = _localizer.Format("Status_Reauthenticating", account.EmailAddress);
+            await GuardedAsync("Error_Reauthenticate", async () =>
+            {
+                await _dispatcher.SendAsync(new AccountCommands.ReauthenticateOAuthAccountCommand(account.Id));
+                signedIn = true;
+            });
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+
+        if (signedIn)
+        {
+            await SyncAccountsAsync([account]);
+        }
+    }
+
+    /// <summary>
     /// Determines whether deleting a message removes it for good: it already sits in a Trash folder, or its account has none.
     /// </summary>
     /// <param name="message">The message to delete.</param>
@@ -575,6 +647,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
                         problems.Add(_localizer.Format("Status_AccountFoldersFailed", account.EmailAddress, result.FailedFolders.Count));
                     }
                 }
+                catch (OAuthReauthenticationRequiredException)
+                {
+                    // Not a transient failure: the stored sign-in is gone or revoked, so point the user at the fix.
+                    problems.Add(_localizer.Format("Status_ReauthenticationRequired", account.EmailAddress));
+                }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     // One unreachable account must not prevent the others from synchronizing.
@@ -603,11 +680,29 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         _accounts = await _dispatcher.SendAsync(new GetAccountsQuery());
 
+        var present = _accounts.Select(a => a.Id).ToHashSet();
+        foreach (var gone in Accounts.Where(n => !present.Contains(n.Account.Id)).ToList())
+        {
+            // Drop the node first so a selection inside it can be repaired below.
+            Accounts.Remove(gone);
+            TreeRoots.Remove(gone);
+            if (ScopeAccountId(SelectedNode) == gone.Account.Id)
+            {
+                SelectedNode = null;
+            }
+        }
+
         foreach (var account in _accounts)
         {
             var node = Accounts.FirstOrDefault(n => n.Account.Id == account.Id);
             if (node is null)
             {
+                if (_accounts.All(a => a.Id != account.Id))
+                {
+                    // A newer reload removed this account while this one was awaiting folders; do not bring its node back.
+                    continue;
+                }
+
                 node = new AccountNodeViewModel(account);
                 TreeRoots.Insert(1 + Accounts.Count, node);
                 Accounts.Add(node);

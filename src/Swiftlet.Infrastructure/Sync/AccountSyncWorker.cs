@@ -43,20 +43,21 @@ public sealed class AccountSyncWorker(
     /// <returns>A task that completes when all due accounts have been attempted.</returns>
     internal async Task RunOnceAsync(CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var accounts = await scope.ServiceProvider.GetRequiredService<IAccountRepository>().GetAllAsync(cancellationToken);
-        var due = schedule.GetDue(accounts, timeProvider.GetUtcNow());
-        if (due.Count == 0)
+        IReadOnlyList<MailAccount> due;
+        await using (var listScope = scopeFactory.CreateAsyncScope())
         {
-            return;
+            var accounts = await listScope.ServiceProvider.GetRequiredService<IAccountRepository>().GetAllAsync(cancellationToken);
+            due = schedule.GetDue(accounts, timeProvider.GetUtcNow());
         }
 
-        var sender = scope.ServiceProvider.GetRequiredService<ISender>();
         foreach (var account in due)
         {
             schedule.MarkAttempted(account.Id, timeProvider.GetUtcNow());
             try
             {
+                // One scope (and DbContext) per account: a failed SaveChanges leaves tracked entities behind that must not leak into the next account.
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var sender = scope.ServiceProvider.GetRequiredService<ISender>();
                 await sender.Send(new SyncAccountCommand(account.Id), cancellationToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

@@ -170,4 +170,71 @@ public class SecretStoreAndWorkerTests
 
         factory.ConnectCount.Should().Be(1);
     }
+
+    /// <summary>
+    /// Verifies an account deleted mid-sync (stale insert) does not poison the sync of the next due account.
+    /// </summary>
+    [Fact]
+    public async Task RunOnceAsync_FirstAccountDeletedMidSync_SecondAccountStillSyncs()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var connection = new SqliteConnection("DataSource=:memory:");
+        await connection.OpenAsync(ct);
+        var factory = new FakeImapSessionFactory();
+        factory.Session.Folders.Add(TestData.Folder("INBOX", FolderRole.Inbox));
+        factory.Session.Messages["INBOX"] = [TestData.Remote(1)];
+        var clock = new ManualTimeProvider();
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddApplication();
+        services.AddSingleton<TimeProvider>(clock);
+        services.AddSingleton<IImapSessionFactory>(factory);
+        services.AddDbContext<SwiftletDbContext>(o => o.UseSqlite(connection));
+        services.AddScoped<IAccountRepository, AccountRepository>();
+        services.AddScoped<IFolderRepository, FolderRepository>();
+        services.AddScoped<IMessageRepository, MessageRepository>();
+        await using var provider = services.BuildServiceProvider(validateScopes: true);
+
+        Guid firstId;
+        Guid secondId;
+        await using (var setup = provider.CreateAsyncScope())
+        {
+            await SqliteSchemaInitializer.InitializeAsync(setup.ServiceProvider.GetRequiredService<SwiftletDbContext>(), ct);
+            var repository = setup.ServiceProvider.GetRequiredService<IAccountRepository>();
+            await repository.AddAsync(TestData.Account("first@example.com"), ct);
+            await repository.AddAsync(TestData.Account("second@example.com"), ct);
+            var all = await repository.GetAllAsync(ct);
+            firstId = all[0].Id;
+            secondId = all[1].Id;
+        }
+
+        var deleted = false;
+        factory.Session.OnListFolders = () =>
+        {
+            if (deleted)
+            {
+                return;
+            }
+
+            deleted = true;
+            // The hook cannot be async, so block on the delete through a separate scope (its own DbContext).
+            using var other = provider.CreateScope();
+            other.ServiceProvider.GetRequiredService<IAccountRepository>().DeleteAsync(firstId).GetAwaiter().GetResult();
+        };
+        var worker = new AccountSyncWorker(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            provider.GetRequiredService<SyncSchedule>(),
+            clock,
+            NullLogger<AccountSyncWorker>.Instance);
+
+        await worker.RunOnceAsync(ct);
+
+        deleted.Should().BeTrue();
+        await using var verify = provider.CreateAsyncScope();
+        var folders = await verify.ServiceProvider.GetRequiredService<IFolderRepository>().GetByAccountAsync(secondId, ct);
+        folders.Should().ContainSingle();
+        var cached = await verify.ServiceProvider.GetRequiredService<IMessageRepository>().GetByFolderAsync(folders[0].Id, 0, 10, ct);
+        cached.Should().ContainSingle();
+    }
 }

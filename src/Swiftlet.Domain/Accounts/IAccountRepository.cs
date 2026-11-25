@@ -27,4 +27,12 @@ public interface IAccountRepository
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The accounts.</returns>
     Task<IReadOnlyList<MailAccount>> GetAllAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes an account together with its folders, messages, attachments and label links.
+    /// </summary>
+    /// <param name="id">The account identifier; an unknown id is ignored.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the account is deleted.</returns>
+    Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 }

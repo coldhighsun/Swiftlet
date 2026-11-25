@@ -94,10 +94,16 @@ internal sealed class FakeOAuthAuthorizer : IOAuthAuthorizer
     /// </summary>
     public List<OAuthProvider> Requested { get; } = [];
 
+    /// <summary>
+    /// Gets or sets an action run while the "browser" is open, before the result is returned.
+    /// </summary>
+    public Action? OnAuthorize { get; set; }
+
     /// <inheritdoc />
     public Task<OAuthAuthorization> AuthorizeAsync(OAuthProvider provider, CancellationToken cancellationToken = default)
     {
         Requested.Add(provider);
+        OnAuthorize?.Invoke();
         return Failure is null ? Task.FromResult(Result!) : Task.FromException<OAuthAuthorization>(Failure);
     }
 }

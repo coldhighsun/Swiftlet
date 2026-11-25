@@ -75,9 +75,20 @@ internal sealed class FakeImapSession : IImapSession
     /// </summary>
     public List<byte[]> AppendedToSent { get; } = [];
 
+    /// <summary>
+    /// Gets or sets a callback run inside <see cref="ListFoldersAsync"/>, to simulate concurrent changes before any folder is written.
+    /// </summary>
+    public Action? OnListFolders { get; set; }
+
+    /// <summary>
+    /// Gets or sets a callback run inside <see cref="FetchNewMessagesAsync"/> with the folder name, before the messages are returned.
+    /// </summary>
+    public Action<string>? OnFetchNew { get; set; }
+
     /// <inheritdoc />
     public Task<IReadOnlyList<RemoteFolder>> ListFoldersAsync(CancellationToken cancellationToken = default)
     {
+        OnListFolders?.Invoke();
         return Task.FromResult<IReadOnlyList<RemoteFolder>>(Folders);
     }
 
@@ -95,6 +106,7 @@ internal sealed class FakeImapSession : IImapSession
         CancellationToken cancellationToken = default)
     {
         FetchCalls.Add((folderFullName, afterUid, maxCount));
+        OnFetchNew?.Invoke(folderFullName);
         if (FailingFolders.Contains(folderFullName))
         {
             throw new IOException($"Simulated failure in {folderFullName}.");

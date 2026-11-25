@@ -374,4 +374,58 @@ public class UiSmokeTests
             },
             TestContext.Current.CancellationToken);
     }
+
+    /// <summary>
+    /// Verifies account nodes carry a context menu whose commands reach the window view model, offering re-sign-in for OAuth accounts only.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_AccountNodeContextMenu_OffersDeleteAndOAuthOnlyReauthenticate()
+    {
+        await Session.Dispatch(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference("en");
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Localizer.SetPreference("en");
+                var oauth = TestData.OAuthAccount();
+                scenario.Dispatcher.On<Swiftlet.Application.Queries.GetAccountsQuery>(_ => new List<Swiftlet.Domain.Accounts.MailAccount> { scenario.Account, oauth });
+                scenario.Dispatcher.On<Swiftlet.Application.Accounts.ReauthenticateOAuthAccountCommand>(_ => Mediator.Unit.Value);
+                await scenario.StartAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-account-menu", "en");
+
+                var passwordMenu = OpenAccountMenu(window, scenario.Account.EmailAddress);
+                passwordMenu.Items.OfType<MenuItem>().Where(i => i.IsVisible).Select(i => i.Header).Should().Equal("Remove account");
+                passwordMenu.Close();
+                var oauthMenu = OpenAccountMenu(window, oauth.EmailAddress);
+                var items = oauthMenu.Items.OfType<MenuItem>().Where(i => i.IsVisible).ToList();
+                items.Select(i => i.Header).Should().Equal("Remove account", "Re-sign in");
+                items.Should().OnlyContain(i => i.Command != null && i.CommandParameter != null);
+                items[1].Command!.Execute(items[1].CommandParameter);
+                await scenario.ViewModel.WhenIdleAsync();
+
+                scenario.Dispatcher.Sent<Swiftlet.Application.Accounts.ReauthenticateOAuthAccountCommand>()
+                    .Should().ContainSingle().Which.AccountId.Should().Be(oauth.Id);
+                oauthMenu.Close();
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Opens the context menu of the tree node showing an account address.
+    /// </summary>
+    /// <param name="window">The main window.</param>
+    /// <param name="address">The account address.</param>
+    /// <returns>The opened menu.</returns>
+    private static ContextMenu OpenAccountMenu(MainWindow window, string address)
+    {
+        var text = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == address);
+        var menu = text.ContextMenu;
+        menu.Should().NotBeNull();
+        menu!.Open(text);
+        Dispatcher.UIThread.RunJobs();
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        return menu;
+    }
 }

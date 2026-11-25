@@ -82,7 +82,18 @@
       <TreeView Grid.Column="0" ItemsSource="{Binding TreeRoots}" SelectedItem="{Binding SelectedNode}" Margin="4">
         <TreeView.DataTemplates>
           <TreeDataTemplate DataType="vm:AccountNodeViewModel" ItemsSource="{Binding Folders}">
-            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold">
+              <TextBlock.ContextMenu>
+                <ContextMenu>
+                  <MenuItem Header="{loc:Loc Menu_Account_Delete}"
+                            Command="{Binding $parent[TreeView].((vm:MainWindowViewModel)DataContext).DeleteAccountCommand}"
+                            CommandParameter="{Binding}" />
+                  <MenuItem Header="{loc:Loc Menu_Account_Reauthenticate}" IsVisible="{Binding CanReauthenticate}"
+                            Command="{Binding $parent[TreeView].((vm:MainWindowViewModel)DataContext).ReauthenticateAccountCommand}"
+                            CommandParameter="{Binding}" />
+                </ContextMenu>
+              </TextBlock.ContextMenu>
+            </TextBlock>
           </TreeDataTemplate>
           <DataTemplate DataType="vm:UnifiedInboxNodeViewModel">
             <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />

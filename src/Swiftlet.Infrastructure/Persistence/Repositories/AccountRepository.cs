@@ -27,4 +27,11 @@ internal sealed class AccountRepository(SwiftletDbContext context) : IAccountRep
     {
         return await context.Accounts.OrderBy(a => a.CreatedAt).ToListAsync(cancellationToken);
     }
+
+    /// <inheritdoc />
+    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        // Bulk delete without tracking; folders, messages, attachments and label links go through database cascades.
+        await context.Accounts.Where(a => a.Id == id).ExecuteDeleteAsync(cancellationToken);
+    }
 }

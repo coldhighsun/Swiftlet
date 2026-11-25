@@ -45,6 +45,15 @@
   <data name="Error_Flag" xml:space="preserve"><value>Failed to update star</value></data>
   <data name="Error_MarkRead" xml:space="preserve"><value>Failed to mark as read</value></data>
   <data name="Error_DeleteMessage" xml:space="preserve"><value>Failed to delete message</value></data>
+  <data name="Error_DeleteAccount" xml:space="preserve"><value>Failed to remove account</value></data>
+  <data name="Error_Reauthenticate" xml:space="preserve"><value>Re-sign-in failed</value></data>
+  <data name="Menu_Account_Delete" xml:space="preserve"><value>Remove account</value></data>
+  <data name="Menu_Account_Reauthenticate" xml:space="preserve"><value>Re-sign in</value></data>
+  <data name="Confirm_DeleteAccount_Title" xml:space="preserve"><value>Remove account</value></data>
+  <data name="Confirm_DeleteAccount_Text" xml:space="preserve"><value>The account {0} and its locally cached mail, folders and saved sign-in will be removed from Swiftlet.&#10;The mailbox on the server is not touched: your mail stays on the server.&#10;Continue?</value></data>
+  <data name="Status_AccountDeleted" xml:space="preserve"><value>Removed account {0}</value></data>
+  <data name="Status_Reauthenticating" xml:space="preserve"><value>Waiting for sign-in of {0} in the browser…</value></data>
+  <data name="Status_ReauthenticationRequired" xml:space="preserve"><value>{0} needs to sign in again: right-click the account in the folder list and choose Re-sign in</value></data>
 
   <data name="Status_Downloading" xml:space="preserve"><value>Downloading {0}…</value></data>
   <data name="Status_Saved" xml:space="preserve"><value>Saved to {0}</value></data>

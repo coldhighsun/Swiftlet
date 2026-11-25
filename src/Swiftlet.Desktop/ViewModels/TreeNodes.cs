@@ -25,6 +25,11 @@ public sealed class AccountNodeViewModel(MailAccount account)
     public string DisplayName => Account.EmailAddress;
 
     /// <summary>
+    /// Gets a value indicating whether the account signs in with OAuth 2.0 and can therefore be signed in again.
+    /// </summary>
+    public bool CanReauthenticate => Account.AuthMethod == AuthMethod.OAuth2;
+
+    /// <summary>
     /// Gets the folders of the account.
     /// </summary>
     public ObservableCollection<FolderNodeViewModel> Folders { get; } = [];

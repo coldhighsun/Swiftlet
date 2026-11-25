@@ -2,6 +2,8 @@ using AwesomeAssertions;
 using Mediator;
 using Microsoft.Extensions.Logging.Abstractions;
 using Swiftlet.Desktop.Localization;
+using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Accounts;
 using Swiftlet.Application.Labels;
 using Swiftlet.Application.Messages;
 using Swiftlet.Application.Queries;
@@ -857,5 +859,304 @@ public class MainWindowViewModelTests
         await scenario.ViewModel.ToggleMessageLabelCommand.ExecuteAsync(choice);
 
         scenario.ViewModel.Messages.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies a confirmed deletion sends the command, removes the account node and resets the list.
+    /// </summary>
+    [Fact]
+    public async Task DeleteAccount_Confirmed_SendsCommandAndRemovesNodeAndResetsList()
+    {
+        var scenario = new Scenario();
+        scenario.Dialogs.ConfirmResult = true;
+        scenario.Dispatcher.On<DeleteAccountCommand>(_ =>
+        {
+            scenario.HasAccount = false;
+            return Unit.Value;
+        });
+        await scenario.StartAsync();
+        var node = scenario.ViewModel.Accounts.Single();
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+
+        await scenario.ViewModel.DeleteAccountCommand.ExecuteAsync(node);
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.Dispatcher.Sent<DeleteAccountCommand>().Should().ContainSingle().Which.AccountId.Should().Be(scenario.Account.Id);
+        scenario.ViewModel.Accounts.Should().BeEmpty();
+        scenario.ViewModel.TreeRoots.OfType<AccountNodeViewModel>().Should().BeEmpty();
+        scenario.ViewModel.Messages.Should().BeEmpty();
+        scenario.ViewModel.SelectedMessage.Should().BeNull();
+        scenario.ViewModel.SelectedNode.Should().BeNull();
+        scenario.ViewModel.StatusText.Should().Contain(scenario.Account.EmailAddress);
+    }
+
+    /// <summary>
+    /// Verifies cancelling the confirmation sends nothing.
+    /// </summary>
+    [Fact]
+    public async Task DeleteAccount_Cancelled_SendsNothing()
+    {
+        var scenario = new Scenario();
+        scenario.Dialogs.ConfirmResult = false;
+        await scenario.StartAsync();
+
+        await scenario.ViewModel.DeleteAccountCommand.ExecuteAsync(scenario.ViewModel.Accounts.Single());
+
+        scenario.Dialogs.Confirmations.Should().ContainSingle();
+        scenario.Dispatcher.Sent<DeleteAccountCommand>().Should().BeEmpty();
+        scenario.ViewModel.Accounts.Should().ContainSingle();
+    }
+
+    /// <summary>
+    /// Verifies the confirmation names the address and says the server mailbox is not touched.
+    /// </summary>
+    [Fact]
+    public async Task DeleteAccount_ConfirmText_NamesAddressAndSaysServerUntouched()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+
+        await scenario.ViewModel.DeleteAccountCommand.ExecuteAsync(scenario.ViewModel.Accounts.Single());
+
+        var confirmation = scenario.Dialogs.Confirmations.Should().ContainSingle().Which;
+        confirmation.Message.Should().Contain("me@example.com").And.Contain("服务器上的邮箱不受影响");
+        confirmation.OkText.Should().Be("移除账号");
+    }
+
+    /// <summary>
+    /// Verifies a failing deletion keeps the node and reports the error.
+    /// </summary>
+    [Fact]
+    public async Task DeleteAccount_CommandFails_KeepsNodeAndShowsError()
+    {
+        var scenario = new Scenario();
+        scenario.Dialogs.ConfirmResult = true;
+        scenario.Dispatcher.On<DeleteAccountCommand>(_ => throw new IOException("locked"));
+        await scenario.StartAsync();
+
+        await scenario.ViewModel.DeleteAccountCommand.ExecuteAsync(scenario.ViewModel.Accounts.Single());
+
+        scenario.ViewModel.Accounts.Should().ContainSingle();
+        scenario.ViewModel.Messages.Should().NotBeEmpty();
+        scenario.ViewModel.StatusText.Should().Contain("locked").And.Contain(scenario.Localizer["Error_DeleteAccount"]);
+    }
+
+    /// <summary>
+    /// Verifies a deletion that fails after the rows are already gone still removes the node and shows the error.
+    /// </summary>
+    [Fact]
+    public async Task DeleteAccount_CommandFailsAfterRowsGone_RemovesNodeAndShowsError()
+    {
+        var scenario = new Scenario();
+        scenario.Dialogs.ConfirmResult = true;
+        scenario.Dispatcher.On<DeleteAccountCommand>(_ =>
+        {
+            scenario.HasAccount = false;
+            throw new IOException("keychain locked");
+        });
+        await scenario.StartAsync();
+
+        await scenario.ViewModel.DeleteAccountCommand.ExecuteAsync(scenario.ViewModel.Accounts.Single());
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.ViewModel.Accounts.Should().BeEmpty();
+        scenario.ViewModel.TreeRoots.OfType<AccountNodeViewModel>().Should().BeEmpty();
+        scenario.ViewModel.Messages.Should().BeEmpty();
+        scenario.ViewModel.StatusText.Should().Contain("keychain locked").And.Contain(scenario.Localizer["Error_DeleteAccount"]);
+    }
+
+    /// <summary>
+    /// Verifies deleting another account while a search is active re-runs the search instead of showing the folder list.
+    /// </summary>
+    [Fact]
+    public async Task DeleteAccount_SearchActive_RerunsSearchAndKeepsSearchText()
+    {
+        var scenario = new Scenario();
+        var other = TestData.Account("other@example.com");
+        var otherInbox = TestData.Folder(other, "INBOX", FolderRole.Inbox);
+        var removed = false;
+        scenario.Dialogs.ConfirmResult = true;
+        scenario.Dispatcher.On<GetAccountsQuery>(_ => removed ? new List<MailAccount> { scenario.Account } : new List<MailAccount> { scenario.Account, other });
+        scenario.Dispatcher.On<GetFoldersQuery>(q => q.AccountId == other.Id
+            ? new List<MailFolder> { otherInbox }
+            : q.AccountId == scenario.Account.Id ? new List<MailFolder> { scenario.Inbox } : []);
+        scenario.Dispatcher.On<DeleteAccountCommand>(_ =>
+        {
+            removed = true;
+            return Unit.Value;
+        });
+        await scenario.StartAsync();
+        scenario.ViewModel.SearchText = "Hello 2";
+        await scenario.ViewModel.SearchCommand.ExecuteAsync(null);
+
+        await scenario.ViewModel.DeleteAccountCommand.ExecuteAsync(scenario.ViewModel.Accounts.Single(a => a.Account.Id == other.Id));
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.ViewModel.SearchText.Should().Be("Hello 2");
+        scenario.Dispatcher.Sent<SearchMessagesQuery>().Should().HaveCount(2);
+        scenario.ViewModel.Messages.Select(m => m.Subject).Should().Equal("Hello 2");
+    }
+
+    /// <summary>
+    /// Verifies a reload that was already running cannot re-insert the node of an account a newer reload removed.
+    /// </summary>
+    [Fact]
+    public async Task Refresh_StaleReloadSeesRemovedAccount_DoesNotReinsertNode()
+    {
+        var scenario = new Scenario();
+        var other = TestData.Account("other@example.com");
+        var otherInbox = TestData.Folder(other, "INBOX", FolderRole.Inbox);
+        await scenario.StartAsync();
+        var accounts = new List<MailAccount> { scenario.Account, other };
+        var gate = new TaskCompletionSource();
+        var gated = false;
+        scenario.Dispatcher.On<GetAccountsQuery>(_ => accounts.ToList());
+        scenario.Dispatcher.OnAsync<GetFoldersQuery>(async (q, _) =>
+        {
+            if (q.AccountId == scenario.Account.Id && !gated)
+            {
+                // Only the first (stale) reload parks here, after it has read the account list but before it reaches the other account.
+                gated = true;
+                await gate.Task;
+            }
+
+            return q.AccountId == other.Id
+                ? new List<MailFolder> { otherInbox }
+                : q.AccountId == scenario.Account.Id ? new List<MailFolder> { scenario.Inbox, scenario.Sent } : [];
+        });
+        var stale = scenario.ViewModel.RefreshAsync();
+        accounts.Remove(other);
+
+        await scenario.ViewModel.RefreshAsync();
+        gate.SetResult();
+        await stale;
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.ViewModel.Accounts.Select(a => a.Account.Id).Should().Equal(scenario.Account.Id);
+        scenario.ViewModel.TreeRoots.OfType<AccountNodeViewModel>().Should().ContainSingle();
+    }
+
+    /// <summary>
+    /// Verifies deleting one account leaves a selection in another account alone.
+    /// </summary>
+    [Fact]
+    public async Task DeleteAccount_OtherAccountSelected_KeepsSelection()
+    {
+        var scenario = new Scenario();
+        var other = TestData.Account("other@example.com");
+        var otherInbox = TestData.Folder(other, "INBOX", FolderRole.Inbox);
+        var removed = false;
+        scenario.Dialogs.ConfirmResult = true;
+        scenario.Dispatcher.On<GetAccountsQuery>(_ => removed ? new List<MailAccount> { other } : new List<MailAccount> { scenario.Account, other });
+        scenario.Dispatcher.On<GetFoldersQuery>(q => q.AccountId == other.Id
+            ? new List<MailFolder> { otherInbox }
+            : q.AccountId == scenario.Account.Id ? new List<MailFolder> { scenario.Inbox } : []);
+        scenario.Dispatcher.On<GetMessagesQuery>(_ => new List<MailMessage>());
+        scenario.Dispatcher.On<DeleteAccountCommand>(_ =>
+        {
+            removed = true;
+            return Unit.Value;
+        });
+        await scenario.StartAsync();
+        var otherFolder = scenario.ViewModel.Accounts.Single(a => a.Account.Id == other.Id).Folders.Single();
+        scenario.ViewModel.SelectedNode = otherFolder;
+        await scenario.ViewModel.WhenIdleAsync();
+
+        await scenario.ViewModel.DeleteAccountCommand.ExecuteAsync(scenario.ViewModel.Accounts.Single(a => a.Account.Id == scenario.Account.Id));
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.ViewModel.Accounts.Should().ContainSingle().Which.Account.Id.Should().Be(other.Id);
+        scenario.ViewModel.SelectedNode.Should().BeSameAs(otherFolder);
+    }
+
+    /// <summary>
+    /// Verifies deleting the selected account moves the selection to a remaining account's folder.
+    /// </summary>
+    [Fact]
+    public async Task DeleteAccount_SelectedAccountRemoved_SelectsRemainingFolder()
+    {
+        var scenario = new Scenario();
+        var other = TestData.Account("other@example.com");
+        var otherInbox = TestData.Folder(other, "INBOX", FolderRole.Inbox);
+        var removed = false;
+        scenario.Dialogs.ConfirmResult = true;
+        scenario.Dispatcher.On<GetAccountsQuery>(_ => removed ? new List<MailAccount> { other } : new List<MailAccount> { scenario.Account, other });
+        scenario.Dispatcher.On<GetFoldersQuery>(q => q.AccountId == other.Id
+            ? new List<MailFolder> { otherInbox }
+            : q.AccountId == scenario.Account.Id ? new List<MailFolder> { scenario.Inbox } : []);
+        scenario.Dispatcher.On<DeleteAccountCommand>(_ =>
+        {
+            removed = true;
+            return Unit.Value;
+        });
+        await scenario.StartAsync();
+
+        await scenario.ViewModel.DeleteAccountCommand.ExecuteAsync(scenario.ViewModel.Accounts.First(a => a.Account.Id == scenario.Account.Id));
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.ViewModel.SelectedNode.Should().BeOfType<FolderNodeViewModel>().Which.Account.Id.Should().Be(other.Id);
+    }
+
+    /// <summary>
+    /// Verifies re-sign-in sends the command, then synchronizes the account and reports success.
+    /// </summary>
+    [Fact]
+    public async Task ReauthenticateAccount_Succeeds_SendsCommandThenSyncsAccount()
+    {
+        var scenario = new Scenario();
+        scenario.Dispatcher.On<ReauthenticateOAuthAccountCommand>(_ => Unit.Value);
+        await scenario.StartAsync();
+        var node = scenario.ViewModel.Accounts.Single();
+
+        await scenario.ViewModel.ReauthenticateAccountCommand.ExecuteAsync(node);
+
+        var relevant = scenario.Dispatcher.Requests.Where(r => r is ReauthenticateOAuthAccountCommand or SyncAccountCommand).ToList();
+        relevant.Should().Equal(new ReauthenticateOAuthAccountCommand(scenario.Account.Id), new SyncAccountCommand(scenario.Account.Id));
+        scenario.ViewModel.IsBusy.Should().BeFalse();
+        scenario.ViewModel.StatusText.Should().NotBeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies a failed re-sign-in, such as an email mismatch, is reported with its message and nothing is synchronized.
+    /// </summary>
+    [Fact]
+    public async Task ReauthenticateAccount_Fails_ShowsError()
+    {
+        var scenario = new Scenario();
+        scenario.Dispatcher.On<ReauthenticateOAuthAccountCommand>(_ =>
+            throw new InvalidOperationException("Signed in as x@y.com but the account is me@example.com."));
+        await scenario.StartAsync();
+
+        await scenario.ViewModel.ReauthenticateAccountCommand.ExecuteAsync(scenario.ViewModel.Accounts.Single());
+
+        scenario.ViewModel.StatusText.Should().Contain("Signed in as x@y.com but the account is me@example.com.")
+            .And.Contain(scenario.Localizer["Error_Reauthenticate"]);
+        scenario.Dispatcher.Sent<SyncAccountCommand>().Should().BeEmpty();
+        scenario.ViewModel.IsBusy.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies a sync failing with the re-authentication exception shows a dedicated hint naming the account.
+    /// </summary>
+    [Fact]
+    public async Task Sync_ReauthenticationRequired_ShowsDedicatedStatusNamingAccount()
+    {
+        var scenario = new Scenario();
+        scenario.Dispatcher.On<SyncAccountCommand>(_ => throw new OAuthReauthenticationRequiredException(scenario.Account.EmailAddress));
+        await scenario.StartAsync();
+
+        await scenario.ViewModel.SyncCommand.ExecuteAsync(null);
+
+        scenario.ViewModel.StatusText.Should().Contain(scenario.Account.EmailAddress).And.Contain("重新登录");
+    }
+
+    /// <summary>
+    /// Verifies only OAuth accounts offer re-sign-in.
+    /// </summary>
+    [Fact]
+    public void AccountNode_CanReauthenticate_OnlyForOAuthAccounts()
+    {
+        new AccountNodeViewModel(TestData.Account()).CanReauthenticate.Should().BeFalse();
+        new AccountNodeViewModel(TestData.OAuthAccount()).CanReauthenticate.Should().BeTrue();
     }
 }

@@ -316,6 +316,23 @@ internal static class TestData
     }
 
     /// <summary>
+    /// Creates an OAuth 2.0 account.
+    /// </summary>
+    /// <param name="email">The email address.</param>
+    /// <returns>The account.</returns>
+    public static MailAccount OAuthAccount(string email = "oauth@example.com")
+    {
+        return MailAccount.Create(
+            "OAuth",
+            email,
+            AuthMethod.OAuth2,
+            new ServerEndpoint("imap.example.com", 993, true),
+            new ServerEndpoint("smtp.example.com", 465, true),
+            DateTimeOffset.UtcNow,
+            OAuthProvider.Google);
+    }
+
+    /// <summary>
     /// Creates a folder.
     /// </summary>
     /// <param name="account">The owning account.</param>

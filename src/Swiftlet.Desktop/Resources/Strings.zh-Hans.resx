@@ -45,6 +45,15 @@
   <data name="Error_Flag" xml:space="preserve"><value>标记失败</value></data>
   <data name="Error_MarkRead" xml:space="preserve"><value>标记已读失败</value></data>
   <data name="Error_DeleteMessage" xml:space="preserve"><value>删除邮件失败</value></data>
+  <data name="Error_DeleteAccount" xml:space="preserve"><value>移除账号失败</value></data>
+  <data name="Error_Reauthenticate" xml:space="preserve"><value>重新登录失败</value></data>
+  <data name="Menu_Account_Delete" xml:space="preserve"><value>移除账号</value></data>
+  <data name="Menu_Account_Reauthenticate" xml:space="preserve"><value>重新登录</value></data>
+  <data name="Confirm_DeleteAccount_Title" xml:space="preserve"><value>移除账号</value></data>
+  <data name="Confirm_DeleteAccount_Text" xml:space="preserve"><value>将从 Swiftlet 中移除账号 {0}，以及本地缓存的邮件、文件夹和已保存的登录信息。&#10;服务器上的邮箱不受影响，邮件仍保留在服务器上。&#10;是否继续？</value></data>
+  <data name="Status_AccountDeleted" xml:space="preserve"><value>已移除账号 {0}</value></data>
+  <data name="Status_Reauthenticating" xml:space="preserve"><value>正在浏览器中等待 {0} 登录…</value></data>
+  <data name="Status_ReauthenticationRequired" xml:space="preserve"><value>{0} 需要重新登录：请在文件夹列表中右键点击该账号，选择“重新登录”</value></data>
 
   <data name="Status_Downloading" xml:space="preserve"><value>正在下载 {0}…</value></data>
   <data name="Status_Saved" xml:space="preserve"><value>已保存到 {0}</value></data>
