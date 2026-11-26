@@ -20,6 +20,8 @@ internal sealed class MailMessageConfiguration : IEntityTypeConfiguration<MailMe
         builder.Property(m => m.FromAddress).IsRequired().HasMaxLength(320);
         builder.Property(m => m.Recipients).IsRequired();
         builder.Property(m => m.BodyText).IsRequired();
+        // Only the HTML is compressed: the full-text index and the LIKE fallback read BodyText as plain text.
+        builder.Property(m => m.BodyHtml).HasConversion<CompressedHtmlConverter>();
         builder.Property(m => m.Preview).IsRequired().HasMaxLength(256);
         builder.HasIndex(m => new { m.FolderId, m.Uid }).IsUnique();
         builder.HasIndex(m => new { m.AccountId, m.SentAt });
