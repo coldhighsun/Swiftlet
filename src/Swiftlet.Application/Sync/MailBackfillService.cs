@@ -124,7 +124,7 @@ public sealed class MailBackfillService(
     {
         ArgumentNullException.ThrowIfNull(session);
         await using var connections = new BackfillConnections(session);
-        return await BackfillBatchAsync(connections, accountId, folderId, onStored, cancellationToken);
+        return await BackfillBatchAsync(connections, accountId, folderId, onStored, null, cancellationToken);
     }
 
     /// <summary>
@@ -136,6 +136,10 @@ public sealed class MailBackfillService(
     /// <param name="accountId">The account identifier.</param>
     /// <param name="folderId">The folder identifier.</param>
     /// <param name="onStored">Called after messages were committed, with the number stored so far in this batch and how many older messages the folder still holds; optional.</param>
+    /// <param name="shouldYield">
+    /// Asks whether the batch should end early because someone is waiting for the account; the downloads already running are still stored
+    /// and the rest is left for the next batch. Optional.
+    /// </param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The batch result.</returns>
     public async Task<BackfillBatchResult> BackfillBatchAsync(
@@ -143,6 +147,7 @@ public sealed class MailBackfillService(
         Guid accountId,
         Guid folderId,
         Action<int, int>? onStored,
+        Func<bool>? shouldYield = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(connections);
@@ -205,10 +210,20 @@ public sealed class MailBackfillService(
 
             // Further connections are only worth opening when there is more than one message to download.
             var helpers = missing.Count > 1 ? await connections.GetHelpersAsync(cancellationToken) : [];
-            await using var downloader = new ParallelDownloader(connections, helpers, folder.FullName, missing, logger, cancellationToken);
+            await using var downloader = new ParallelDownloader(connections, helpers, folder.FullName, missing, logger, cancellationToken, shouldYield);
+            var yielded = false;
 
             foreach (var header in ordered)
             {
+                var isKnown = header.MessageId is not null && known.ContainsKey(header.MessageId);
+
+                // Everything above this message is stored or about to be, so ending here leaves no gap.
+                if (!isKnown && downloader.IsStopped)
+                {
+                    yielded = true;
+                    break;
+                }
+
                 handled++;
 
                 // A message the account already holds in another folder is copied from the local cache; nothing is downloaded.
@@ -231,6 +246,14 @@ public sealed class MailBackfillService(
             }
 
             await FlushCopiesAsync();
+
+            if (yielded)
+            {
+                // The messages of this page that were not handled are still older messages on the server.
+                var left = page.Remaining + page.Headers.Count - handled;
+                logger.LogDebug("Backfill of {Folder} stored {Count} messages and made way for other work.", folder.FullName, storedCount);
+                return new BackfillBatchResult(BackfillOutcome.Progressed, storedCount, left, copied);
+            }
 
             if (storedCount > 0)
             {

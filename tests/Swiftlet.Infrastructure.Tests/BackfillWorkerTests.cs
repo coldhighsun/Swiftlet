@@ -106,6 +106,37 @@ public class BackfillWorkerTests
     }
 
     /// <summary>
+    /// Verifies a sync that starts waiting in the middle of a batch gets its turn long before the batch of 100 would have ended.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task BackfillAccountAsync_SyncWaitsDuringBatch_BatchMakesWay()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var h = await Harness.CreateAsync(250, ct);
+        var waiting = (Task<int>?)null;
+        var cachedWhenSyncRan = 0;
+        var downloads = 0;
+        h.Factory.Session.OnFetchMessages = _ =>
+        {
+            if (++downloads == 10)
+            {
+                // Queues behind the batch that is running right now.
+                waiting = h.Coordinator.RunExclusiveAsync(h.Account.Id, () => h.CachedCountAsync("INBOX", ct), ct);
+            }
+        };
+
+        // Act
+        await h.Worker.BackfillAccountAsync(h.Account, _ => { }, ct);
+        cachedWhenSyncRan = await waiting!;
+
+        // Assert
+        cachedWhenSyncRan.Should().BeInRange(30, 33, "only the downloads already running are finished, one per connection");
+        (await h.CachedCountAsync("INBOX", ct)).Should().Be(250);
+    }
+
+    /// <summary>
     /// Verifies every folder is completed in priority order, All Mail by copying what the INBOX already holds, and Trash and Junk last.
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>

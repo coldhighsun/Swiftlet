@@ -21,13 +21,23 @@ public sealed class SyncAccountCommandHandler(MailSyncService syncService, SyncC
     public async ValueTask<SyncResult> Handle(SyncAccountCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+        // The INBOX is synchronized first and announced at once, so new, read and deleted mail shows without waiting for the other folders.
+        var announced = 0;
         var result = await coordinator.RunExclusiveAsync(
             command.AccountId,
-            () => syncService.SyncAsync(command.AccountId, cancellationToken),
+            () => syncService.SyncAsync(
+                command.AccountId,
+                newMessages =>
+                {
+                    announced = newMessages;
+                    events.RaiseAccountSynced(command.AccountId, newMessages);
+                },
+                cancellationToken),
             cancellationToken);
         if (result.FoldersSynced > 0)
         {
-            events.RaiseAccountSynced(command.AccountId, result.NewMessages);
+            // Only the messages not announced yet, so listeners can add the counts up.
+            events.RaiseAccountSynced(command.AccountId, result.NewMessages - announced);
         }
 
         return result;

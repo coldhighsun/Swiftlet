@@ -33,7 +33,7 @@ public class ParallelBackfillTests
         await using var connections = Connections(primary, helpers);
 
         // Act
-        var batch = s.Backfill.BackfillBatchAsync(connections, s.AccountId, s.FolderId, (count, _) => stored.Add(count), ct);
+        var batch = s.Backfill.BackfillBatchAsync(connections, s.AccountId, s.FolderId, (count, _) => stored.Add(count), null, ct);
         await WatcherHarness.WaitUntilAsync(() => gate.Arrived.Count == 3, ct);
         var firstWindow = gate.Arrived;
         gate.Release(3, 4);
@@ -71,7 +71,7 @@ public class ParallelBackfillTests
         await using var connections = Connections(primary, broken);
 
         // Act
-        var result = await s.Backfill.BackfillBatchAsync(connections, s.AccountId, s.FolderId, null, ct);
+        var result = await s.Backfill.BackfillBatchAsync(connections, s.AccountId, s.FolderId, null, null, ct);
 
         // Assert
         result.Added.Should().Be(5);
@@ -100,7 +100,7 @@ public class ParallelBackfillTests
         await using var connections = Connections(primary, new FakeImapConnection(s.Server), new FakeImapConnection(s.Server));
 
         // Act
-        var act = () => s.Backfill.BackfillBatchAsync(connections, s.AccountId, s.FolderId, null, ct);
+        var act = () => s.Backfill.BackfillBatchAsync(connections, s.AccountId, s.FolderId, null, null, ct);
         await act.Should().ThrowAsync<IOException>();
         var cursor = await s.MinUidAsync(ct);
         var cached = await s.CachedCountAsync(ct);
@@ -134,7 +134,7 @@ public class ParallelBackfillTests
             });
 
         // Act
-        var result = await s.Backfill.BackfillBatchAsync(connections, s.AccountId, s.FolderId, null, ct);
+        var result = await s.Backfill.BackfillBatchAsync(connections, s.AccountId, s.FolderId, null, null, ct);
 
         // Assert
         attempts.Should().Be(2);
@@ -163,11 +163,68 @@ public class ParallelBackfillTests
             });
 
         // Act
-        var result = await s.Backfill.BackfillBatchAsync(connections, s.AccountId, s.FolderId, null, ct);
+        var result = await s.Backfill.BackfillBatchAsync(connections, s.AccountId, s.FolderId, null, null, ct);
 
         // Assert
         result.Added.Should().Be(1);
         attempts.Should().Be(0);
+    }
+
+    /// <summary>
+    /// Verifies a batch asked to make way ends after the downloads already running, and the next batch continues without a gap.
+    /// </summary>
+    /// <param name="helperCount">The number of additional connections.</param>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    public async Task BackfillBatchAsync_AskedToYield_StoresRunningDownloadsAndStops(int helperCount)
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var s = await Scenario.CreateAsync(db, ct);
+        var helpers = Enumerable.Range(0, helperCount).Select(IImapSession (_) => new FakeImapConnection(s.Server)).ToArray();
+        await using var connections = Connections(s.Server, helpers);
+        var running = helperCount + 1;
+        s.Server.FetchMessagesCalls.Clear();
+
+        // Act
+        var first = await s.Backfill.BackfillBatchAsync(connections, s.AccountId, s.FolderId, null, () => s.Server.FetchMessagesCalls.Count >= running, ct);
+        var cursor = await s.MinUidAsync(ct);
+        var second = await s.Backfill.BackfillBatchAsync(connections, s.AccountId, s.FolderId, null, null, ct);
+
+        // Assert
+        first.Outcome.Should().Be(BackfillOutcome.Progressed);
+        first.Added.Should().Be(running);
+        first.Remaining.Should().Be(5 - running);
+        cursor.Should().Be((uint)(6 - running));
+        second.Added.Should().Be(5 - running);
+        (await s.CachedCountAsync(ct)).Should().Be(25);
+    }
+
+    /// <summary>
+    /// Verifies a batch that made way after its only download vanished does not step over the messages it never tried.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task BackfillBatchAsync_YieldsAfterVanishedMessage_SkipsNothing()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var s = await Scenario.CreateAsync(db, ct);
+        s.Server.VanishingUids.Add(5);
+
+        // Act
+        var first = await s.Backfill.BackfillBatchAsync(new BackfillConnections(s.Server), s.AccountId, s.FolderId, null, () => true, ct);
+        s.Server.RemoveFromServer("INBOX", 5);
+        var second = await s.Backfill.BackfillBatchAsync(s.Server, s.AccountId, s.FolderId, ct);
+
+        // Assert
+        first.Outcome.Should().Be(BackfillOutcome.Progressed);
+        first.Added.Should().Be(0);
+        second.Added.Should().Be(4);
     }
 
     /// <summary>

@@ -45,9 +45,19 @@ internal sealed class ParallelDownloader : IAsyncDisposable
     private readonly ILogger _logger;
 
     /// <summary>
+    /// Asks whether no further downloads should be started; optional.
+    /// </summary>
+    private readonly Func<bool>? _shouldStop;
+
+    /// <summary>
     /// The position of the next message to start.
     /// </summary>
     private int _next;
+
+    /// <summary>
+    /// Whether stopping was requested; it is not taken back, so the downloads handed out never have a gap.
+    /// </summary>
+    private bool _stopped;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ParallelDownloader"/> class.
@@ -58,14 +68,17 @@ internal sealed class ParallelDownloader : IAsyncDisposable
     /// <param name="headers">The messages to download, in the order they are handed out.</param>
     /// <param name="logger">The logger.</param>
     /// <param name="cancellationToken">The cancellation token of the batch.</param>
+    /// <param name="shouldStop">Asks whether no further downloads should be started; the first message is started regardless. Optional.</param>
     public ParallelDownloader(
         BackfillConnections connections,
         IReadOnlyList<IImapSession> helpers,
         string folderFullName,
         IReadOnlyList<RemoteHeader> headers,
         ILogger logger,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<bool>? shouldStop = null)
     {
+        _shouldStop = shouldStop;
         _connections = connections;
         _folderFullName = folderFullName;
         _headers = headers;
@@ -75,6 +88,11 @@ internal sealed class ParallelDownloader : IAsyncDisposable
         _idle = new Stack<IImapSession>([.. helpers.Reverse(), connections.Primary]);
         _abort = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
     }
+
+    /// <summary>
+    /// Gets a value indicating whether stopping was requested and every started download has been taken, so there is no next message.
+    /// </summary>
+    public bool IsStopped => _next > 0 && _running.Count == 0 && _next < _headers.Count && CheckStop();
 
     /// <summary>
     /// Gets the next message of the list, starting further downloads on the free connections.
@@ -135,11 +153,22 @@ internal sealed class ParallelDownloader : IAsyncDisposable
     /// </summary>
     private void StartDownloads()
     {
-        while (_next < _headers.Count && _idle.TryPop(out var session))
+        // The first message is downloaded in any case, so a batch makes progress however busy the account is.
+        while (_next < _headers.Count && (_next == 0 || !CheckStop()) && _idle.TryPop(out var session))
         {
             var header = _headers[_next++];
             _running.Enqueue((header, session, DownloadAsync(session, header)));
         }
+    }
+
+    /// <summary>
+    /// Asks, and remembers, whether no further downloads should be started.
+    /// </summary>
+    /// <returns><see langword="true"/> once stopping was requested.</returns>
+    private bool CheckStop()
+    {
+        _stopped |= _shouldStop?.Invoke() == true;
+        return _stopped;
     }
 
     /// <summary>

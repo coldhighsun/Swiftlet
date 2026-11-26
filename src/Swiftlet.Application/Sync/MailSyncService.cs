@@ -53,7 +53,22 @@ public sealed class MailSyncService(
     /// <param name="accountId">The account identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The synchronization result.</returns>
-    public async Task<SyncResult> SyncAsync(Guid accountId, CancellationToken cancellationToken = default)
+    public Task<SyncResult> SyncAsync(Guid accountId, CancellationToken cancellationToken = default)
+    {
+        return SyncAsync(accountId, null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Synchronizes an account, reporting the INBOX as soon as it is done so new mail can be shown while the other folders are still synchronizing.
+    /// </summary>
+    /// <param name="accountId">The account identifier.</param>
+    /// <param name="onInboxChanged">
+    /// Called with the number of new INBOX messages when the INBOX is done, its cache changed and the account has further folders; optional.
+    /// It may be called on any thread and must not throw.
+    /// </param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The synchronization result.</returns>
+    public async Task<SyncResult> SyncAsync(Guid accountId, Action<int>? onInboxChanged, CancellationToken cancellationToken = default)
     {
         var account = await accounts.GetAsync(accountId, cancellationToken)
             ?? throw new InvalidOperationException($"Account {accountId} was not found.");
@@ -65,7 +80,8 @@ public sealed class MailSyncService(
 
         using var run = new SyncRun(
             account,
-            localFolders.OrderBy(f => FolderSyncOrder.Priority(f.Role)).ThenBy(f => f.FullName, StringComparer.Ordinal));
+            localFolders.OrderBy(f => FolderSyncOrder.Priority(f.Role)).ThenBy(f => f.FullName, StringComparer.Ordinal),
+            localFolders.Count > 1 ? onInboxChanged : null);
         await SyncFoldersAsync(session, run, cancellationToken);
 
         logger.LogInformation(
@@ -181,8 +197,13 @@ public sealed class MailSyncService(
     {
         try
         {
-            await SyncFolderAsync(session, run, folder, cancellationToken);
+            var (newMessages, changed) = await SyncFolderAsync(session, run, folder, cancellationToken);
             run.AddSynced();
+            if (changed && folder.Role == FolderRole.Inbox)
+            {
+                run.OnInboxChanged?.Invoke(newMessages);
+            }
+
             return true;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -236,8 +257,8 @@ public sealed class MailSyncService(
     /// <param name="run">The state shared by the workers.</param>
     /// <param name="folder">The folder.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A task that completes when the folder is synchronized.</returns>
-    private async Task SyncFolderAsync(IImapSession session, SyncRun run, MailFolder folder, CancellationToken cancellationToken)
+    /// <returns>The number of new messages, and whether anything in the cache changed.</returns>
+    private async Task<(int NewMessages, bool Changed)> SyncFolderAsync(IImapSession session, SyncRun run, MailFolder folder, CancellationToken cancellationToken)
     {
         var uidValidity = await session.GetUidValidityAsync(folder.FullName, cancellationToken);
 
@@ -284,10 +305,8 @@ public sealed class MailSyncService(
             run.AddNewMessages(created.Count);
         }
 
-        if (!invalidated)
-        {
-            await PullFlagsAsync(session, run.Database, folder, cancellationToken);
-        }
+        var pulled = !invalidated && await PullFlagsAsync(session, run.Database, folder, cancellationToken);
+        return (created.Count, invalidated || created.Count > 0 || pulled);
     }
 
     /// <summary>
@@ -343,20 +362,21 @@ public sealed class MailSyncService(
     /// <param name="database">Serializes the database work.</param>
     /// <param name="folder">The folder.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A task that completes when the pull is applied.</returns>
-    private async Task PullFlagsAsync(IImapSession session, DatabaseGate database, MailFolder folder, CancellationToken cancellationToken)
+    /// <returns><see langword="true"/> if a cached message was changed or removed.</returns>
+    private async Task<bool> PullFlagsAsync(IImapSession session, DatabaseGate database, MailFolder folder, CancellationToken cancellationToken)
     {
         var cached = await database.RunAsync(
             () => messages.GetFlagStatesAsync(folder.AccountId, folder.Id, cancellationToken),
             cancellationToken);
         if (cached.Count == 0)
         {
-            return;
+            return false;
         }
 
         var remote = await session.FetchFlagsAsync(folder.FullName, cached[0].Uid, cancellationToken);
         var remoteByUid = remote.ToDictionary(r => r.Uid);
         var gone = new List<Guid>();
+        var changed = false;
         foreach (var message in cached)
         {
             if (remoteByUid.TryGetValue(message.Uid, out var state) && !state.IsDeleted)
@@ -368,6 +388,7 @@ public sealed class MailSyncService(
                     await database.RunAsync(
                         () => messages.ApplyServerFlagsAsync(folder.AccountId, message.Id, state.IsRead, state.IsFlagged, cancellationToken),
                         cancellationToken);
+                    changed = true;
                 }
             }
             else
@@ -378,7 +399,7 @@ public sealed class MailSyncService(
 
         if (gone.Count == 0 || !settings.RemoveServerDeletedMessages)
         {
-            return;
+            return changed;
         }
 
         if (remote.Count == 0)
@@ -388,11 +409,12 @@ public sealed class MailSyncService(
                 "Server returned no flags for {Folder} although {Count} messages are cached; removing nothing.",
                 folder.FullName,
                 cached.Count);
-            return;
+            return changed;
         }
 
         await database.RunAsync(() => messages.DeleteRangeAsync(folder.AccountId, gone, cancellationToken), cancellationToken);
         logger.LogInformation("Removed {Count} messages deleted on the server from {Folder}.", gone.Count, folder.FullName);
+        return true;
     }
 
     /// <summary>
@@ -429,7 +451,8 @@ public sealed class MailSyncService(
     /// </summary>
     /// <param name="account">The account being synchronized.</param>
     /// <param name="work">The folders to synchronize, most important first.</param>
-    private sealed class SyncRun(MailAccount account, IEnumerable<MailFolder> work) : IDisposable
+    /// <param name="onInboxChanged">Receives the early INBOX report; optional.</param>
+    private sealed class SyncRun(MailAccount account, IEnumerable<MailFolder> work, Action<int>? onInboxChanged) : IDisposable
     {
         /// <summary>
         /// Guards the result counters.
@@ -445,6 +468,11 @@ public sealed class MailSyncService(
         /// Gets the account being synchronized.
         /// </summary>
         public MailAccount Account { get; } = account;
+
+        /// <summary>
+        /// Gets the receiver of the early INBOX report, if any.
+        /// </summary>
+        public Action<int>? OnInboxChanged { get; } = onInboxChanged;
 
         /// <summary>
         /// Gets the folders no worker has taken yet.

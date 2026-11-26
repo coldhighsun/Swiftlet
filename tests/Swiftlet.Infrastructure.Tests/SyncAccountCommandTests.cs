@@ -64,6 +64,129 @@ public class SyncAccountCommandTests
     }
 
     /// <summary>
+    /// A changed INBOX is announced while the other folders are still synchronizing, and the announced counts add up.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Handle_SeveralFolders_AnnouncesInboxBeforeTheOthersFinish()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, _) = await db.SeedAccountAsync(ct);
+        var factory = new FakeImapSessionFactory();
+        factory.Session.Folders.Add(TestData.Folder("INBOX", FolderRole.Inbox));
+        factory.Session.Folders.Add(TestData.Folder("Other", FolderRole.Other));
+        factory.Session.Messages["INBOX"] = [TestData.Remote(1), TestData.Remote(2)];
+        factory.Session.Messages["Other"] = [TestData.Remote(1)];
+        var gate = new CommandGate<string>();
+        factory.CreateSession = _ => new FakeImapConnection(factory.Session)
+        {
+            BeforeFetchNewAsync = (folder, token) => folder == "Other" ? gate.WaitAsync(folder, token) : Task.CompletedTask,
+        };
+        var events = new SyncEvents();
+        var raised = new List<int>();
+        events.AccountSynced += (_, e) => raised.Add(e.NewMessages);
+        var handler = CreateHandler(db, factory, new SyncCoordinator(), events);
+
+        // Act
+        var sync = handler.Handle(new SyncAccountCommand(account.Id), ct).AsTask();
+        await WatcherHarness.WaitUntilAsync(() => gate.Arrived.Count == 1 && raised.Count == 1, ct);
+        var whileOtherRuns = raised.ToList();
+        gate.Release("Other");
+        await sync;
+
+        // Assert
+        whileOtherRuns.Should().Equal(2);
+        raised.Should().Equal(2, 1);
+    }
+
+    /// <summary>
+    /// An INBOX in which nothing changed causes no early announcement.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Handle_UnchangedInbox_RaisesOnlyTheFinalEvent()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, _) = await db.SeedAccountAsync(ct);
+        var factory = new FakeImapSessionFactory();
+        factory.Session.Folders.Add(TestData.Folder("INBOX", FolderRole.Inbox));
+        factory.Session.Folders.Add(TestData.Folder("Other", FolderRole.Other));
+        factory.Session.Messages["INBOX"] = [TestData.Remote(1)];
+        var events = new SyncEvents();
+        var handler = CreateHandler(db, factory, new SyncCoordinator(), events);
+        await handler.Handle(new SyncAccountCommand(account.Id), ct);
+        var raised = 0;
+        events.AccountSynced += (_, _) => raised++;
+
+        // Act
+        await handler.Handle(new SyncAccountCommand(account.Id), ct);
+
+        // Assert
+        raised.Should().Be(1);
+    }
+
+    /// <summary>
+    /// A flag changed on the server counts as an INBOX change and is announced early.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Handle_InboxReadOnServer_AnnouncesEarly()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, _) = await db.SeedAccountAsync(ct);
+        var factory = new FakeImapSessionFactory();
+        factory.Session.Folders.Add(TestData.Folder("INBOX", FolderRole.Inbox));
+        factory.Session.Folders.Add(TestData.Folder("Other", FolderRole.Other));
+        factory.Session.Messages["INBOX"] = [TestData.Remote(1)];
+        var events = new SyncEvents();
+        var handler = CreateHandler(db, factory, new SyncCoordinator(), events);
+        await handler.Handle(new SyncAccountCommand(account.Id), ct);
+        factory.Session.SetServerFlags("INBOX", 1, true, false);
+        var raised = 0;
+        events.AccountSynced += (_, _) => raised++;
+
+        // Act
+        await handler.Handle(new SyncAccountCommand(account.Id), ct);
+
+        // Assert
+        raised.Should().Be(2);
+    }
+
+    /// <summary>
+    /// The coordinator reports a waiting caller only while it waits.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task HasWaiters_SecondCallerQueued_IsTrueOnlyWhileWaiting()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        var coordinator = new SyncCoordinator();
+        var id = Guid.NewGuid();
+        var release = new TaskCompletionSource<int>();
+        var holder = coordinator.RunExclusiveAsync(id, () => release.Task, ct);
+        var aloneHasWaiters = coordinator.HasWaiters(id);
+
+        // Act
+        var waiter = coordinator.RunExclusiveAsync(id, () => Task.FromResult(coordinator.HasWaiters(id)), ct);
+        var queuedHasWaiters = coordinator.HasWaiters(id);
+        release.SetResult(0);
+        await holder;
+        var waiterSawWaiters = await waiter;
+
+        // Assert
+        aloneHasWaiters.Should().BeFalse();
+        queuedHasWaiters.Should().BeTrue();
+        waiterSawWaiters.Should().BeFalse();
+    }
+
+    /// <summary>
     /// A failing sync raises no event.
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>

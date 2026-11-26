@@ -10,8 +10,8 @@ namespace Swiftlet.Infrastructure.Sync;
 
 /// <summary>
 /// Background service that downloads the older history of every account in small batches after the first sync has fetched the newest messages.
-/// Each batch runs under the account's <see cref="SyncCoordinator"/> lock and releases it afterwards, so regular syncs, IDLE-triggered syncs and the
-/// Sync button are never blocked for longer than one batch.
+/// Each batch runs under the account's <see cref="SyncCoordinator"/> lock and releases it afterwards. A batch also ends early when a regular sync,
+/// an IDLE-triggered sync or the Sync button waits for the lock, so those are only held up by the downloads already running.
 /// </summary>
 /// <param name="scopeFactory">The service scope factory.</param>
 /// <param name="imapFactory">Opens the dedicated backfill connection of an account.</param>
@@ -237,6 +237,7 @@ public sealed class BackfillWorker(
                                     onProgress(downloaded);
                                     events.RaiseBackfillProgressed(account.Id, downloaded, false, folder.FullName, remaining);
                                 },
+                                () => coordinator.HasWaiters(account.Id),
                                 cancellationToken);
                     },
                     cancellationToken);
