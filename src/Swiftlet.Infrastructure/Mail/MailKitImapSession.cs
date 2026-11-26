@@ -17,6 +17,11 @@ namespace Swiftlet.Infrastructure.Mail;
 internal sealed class MailKitImapSession(ImapClient client, ILogger<MailKitImapSession> logger) : IImapSession
 {
     /// <summary>
+    /// How long disposal waits for the server to answer LOGOUT before the connection is simply dropped.
+    /// </summary>
+    private static readonly TimeSpan LogoutTimeout = TimeSpan.FromSeconds(2);
+
+    /// <summary>
     /// The last observed state of each waited-on folder.
     /// </summary>
     private readonly FolderChangeTracker _changes = new();
@@ -604,13 +609,14 @@ internal sealed class MailKitImapSession(ImapClient client, ILogger<MailKitImapS
         if (client.IsConnected)
         {
             // Best effort: the connection may already be gone, and disposal must not mask the original error.
+            using var timeout = new CancellationTokenSource(LogoutTimeout);
             try
             {
-                await client.DisconnectAsync(true);
+                await client.DisconnectAsync(true, timeout.Token);
             }
-            catch (Exception ex) when (ex is IOException or ServiceNotConnectedException or ProtocolException)
+            catch (Exception ex) when (ex is IOException or ServiceNotConnectedException or ProtocolException or OperationCanceledException)
             {
-                // Ignored: the connection is being discarded anyway.
+                // Ignored: the connection is being discarded anyway, also when the server did not answer LOGOUT in time.
             }
         }
 

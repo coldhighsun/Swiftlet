@@ -51,6 +51,7 @@ internal static class Program
         builder.Services.AddTransient<AddAccountViewModel>();
         builder.Services.AddTransient<LabelManagerViewModel>();
         builder.Services.AddTransient<SettingsViewModel>();
+        builder.Services.ConfigureHostShutdown();
 
         using var host = builder.Build();
         InitializeDatabaseAsync(host.Services).GetAwaiter().GetResult();
@@ -61,7 +62,7 @@ internal static class Program
         }
         finally
         {
-            host.StopAsync().GetAwaiter().GetResult();
+            HostShutdown.Stop(host, logger);
             logger.Information("Swiftlet stopped");
         }
     }
