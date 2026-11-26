@@ -67,6 +67,8 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<BackfillWorker>();
         services.AddHostedService<DeletionWorker>();
         services.AddHostedService<FlagPushWorker>();
+        services.AddSingleton<AccountDatabaseMaintenance>();
+        services.AddHostedService<DatabaseMaintenanceWorker>();
         return services;
     }
 }

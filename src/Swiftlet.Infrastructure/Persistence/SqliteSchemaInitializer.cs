@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 
 namespace Swiftlet.Infrastructure.Persistence;
@@ -7,6 +8,20 @@ namespace Swiftlet.Infrastructure.Persistence;
 /// </summary>
 public static class SqliteSchemaInitializer
 {
+    /// <summary>
+    /// The trigger re-indexing a message when an indexed column changes. Other updates (read and starred state, moves,
+    /// pending marks) leave the index alone.
+    /// </summary>
+    private const string UpdateTrigger =
+        """
+        CREATE TRIGGER IF NOT EXISTS Messages_au AFTER UPDATE OF Subject, FromName, FromAddress, BodyText ON Messages BEGIN
+            INSERT INTO MessageSearch(MessageSearch, rowid, Subject, FromName, FromAddress, BodyText)
+            VALUES ('delete', old.rowid, old.Subject, old.FromName, old.FromAddress, old.BodyText);
+            INSERT INTO MessageSearch(rowid, Subject, FromName, FromAddress, BodyText)
+            VALUES (new.rowid, new.Subject, new.FromName, new.FromAddress, new.BodyText);
+        END;
+        """;
+
     /// <summary>
     /// SQL statements creating the external-content FTS5 table (trigram tokenizer, CJK friendly) and its triggers.
     /// </summary>
@@ -29,14 +44,7 @@ public static class SqliteSchemaInitializer
             VALUES ('delete', old.rowid, old.Subject, old.FromName, old.FromAddress, old.BodyText);
         END;
         """,
-        """
-        CREATE TRIGGER IF NOT EXISTS Messages_au AFTER UPDATE ON Messages BEGIN
-            INSERT INTO MessageSearch(MessageSearch, rowid, Subject, FromName, FromAddress, BodyText)
-            VALUES ('delete', old.rowid, old.Subject, old.FromName, old.FromAddress, old.BodyText);
-            INSERT INTO MessageSearch(rowid, Subject, FromName, FromAddress, BodyText)
-            VALUES (new.rowid, new.Subject, new.FromName, new.FromAddress, new.BodyText);
-        END;
-        """,
+        UpdateTrigger,
     ];
 
     /// <summary>
@@ -82,10 +90,40 @@ public static class SqliteSchemaInitializer
         await context.Database.ExecuteSqlRawAsync(
             "CREATE INDEX IF NOT EXISTS IX_Messages_MessageIdHeader ON Messages (MessageIdHeader);",
             cancellationToken);
+        await UpgradeUpdateTriggerAsync(context, cancellationToken);
         foreach (var statement in FullTextStatements)
         {
             await context.Database.ExecuteSqlRawAsync(statement, cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Replaces the update trigger of an earlier version, which fired on every update. Such a database also stores its
+    /// HTML bodies as plain text and carries an oversized index, so both maintenance tasks are recorded as pending.
+    /// </summary>
+    /// <param name="context">The database context.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when no outdated trigger is left.</returns>
+    private static async Task UpgradeUpdateTriggerAsync(AccountDbContext context, CancellationToken cancellationToken)
+    {
+        var outdated = await context.Database
+            .SqlQueryRaw<int>(
+                "SELECT COUNT(*) AS Value FROM sqlite_master WHERE type = 'trigger' AND name = 'Messages_au' AND sql NOT LIKE '%AFTER UPDATE OF %'")
+            .SingleAsync(cancellationToken);
+        if (outdated == 0)
+        {
+            return;
+        }
+
+        // One transaction: the pending tasks are recorded exactly when the old trigger, their only evidence, disappears.
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        await context.Database.ExecuteSqlRawAsync("DROP TRIGGER Messages_au;", cancellationToken);
+        await context.Database.ExecuteSqlRawAsync(UpdateTrigger, cancellationToken);
+        var pending = (int)(AccountDatabaseTasks.CompressHtml | AccountDatabaseTasks.Compact);
+        await context.Database.ExecuteSqlRawAsync(
+            string.Create(CultureInfo.InvariantCulture, $"PRAGMA user_version = {pending};"),
+            cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     /// <summary>
