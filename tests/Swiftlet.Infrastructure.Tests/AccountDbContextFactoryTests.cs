@@ -96,8 +96,13 @@ public sealed class AccountDbContextFactoryTests : IDisposable
             await context.SaveChangesAsync(ct);
         }
 
+        // A rollback journal can be left behind by an interrupted conversion; it holds mail data too.
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        await File.WriteAllTextAsync($"{path}-journal", "left behind", ct);
+
         await factory.DeleteAsync(accountId, ct);
 
+        File.Exists($"{path}-journal").Should().BeFalse();
         File.Exists(path).Should().BeFalse();
         File.Exists($"{path}-wal").Should().BeFalse();
         File.Exists($"{path}-shm").Should().BeFalse();

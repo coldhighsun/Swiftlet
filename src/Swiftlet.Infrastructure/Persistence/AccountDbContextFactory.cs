@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Swiftlet.Infrastructure.Persistence.Encryption;
 
 namespace Swiftlet.Infrastructure.Persistence;
 
@@ -10,7 +11,11 @@ namespace Swiftlet.Infrastructure.Persistence;
 /// </summary>
 /// <param name="directory">The directory holding the account databases.</param>
 /// <param name="logger">The logger; optional.</param>
-public sealed class AccountDbContextFactory(string directory, ILogger<AccountDbContextFactory>? logger = null) : IAccountDbContextFactory, IDisposable
+/// <param name="connections">Gives the connection string of each database; plain connection strings when omitted.</param>
+public sealed class AccountDbContextFactory(
+    string directory,
+    ILogger<AccountDbContextFactory>? logger = null,
+    IDatabaseConnectionStrings? connections = null) : IAccountDbContextFactory, IDisposable
 {
     /// <summary>
     /// The accounts whose database schema has already been ensured in this process.
@@ -75,7 +80,7 @@ public sealed class AccountDbContextFactory(string directory, ILogger<AccountDbC
 
             var path = GetDatabasePath(accountId);
             logger?.LogInformation("Deleting the database files of account {AccountId}", accountId);
-            foreach (var file in new[] { path, $"{path}-wal", $"{path}-shm" })
+            foreach (var file in new[] { path, $"{path}-wal", $"{path}-shm", $"{path}-journal" })
             {
                 File.Delete(file);
             }
@@ -103,8 +108,9 @@ public sealed class AccountDbContextFactory(string directory, ILogger<AccountDbC
     /// <returns>The options.</returns>
     private DbContextOptions<AccountDbContext> BuildOptions(Guid accountId)
     {
+        var path = GetDatabasePath(accountId);
         return new DbContextOptionsBuilder<AccountDbContext>()
-            .UseSqlite($"Data Source={GetDatabasePath(accountId)};Default Timeout=30")
+            .UseSqlite(connections?.GetConnectionString(path) ?? SqliteConnectionStrings.Build(path, null))
             .Options;
     }
 
