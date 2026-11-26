@@ -1,0 +1,19 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Swiftlet.Desktop.ViewModels"
+        xmlns:loc="using:Swiftlet.Desktop.Localization"
+        x:Class="Swiftlet.Desktop.StartupWindow"
+        x:DataType="vm:StartupViewModel"
+        Title="{loc:Loc Startup_Title}" Width="480" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterScreen">
+  <StackPanel Margin="20" Spacing="16">
+    <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
+    <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
+    <WrapPanel HorizontalAlignment="Right" ItemSpacing="8" LineSpacing="8">
+      <Button Content="{loc:Loc Startup_Retry}" Command="{Binding RunCommand}" IsVisible="{Binding CanRetry}" />
+      <Button Content="{loc:Loc Startup_ContinueUnencrypted}" Command="{Binding ContinueCommand}" IsVisible="{Binding CanContinueUnencrypted}" />
+      <Button Content="{loc:Loc Startup_Reset}" Command="{Binding ResetCommand}" IsVisible="{Binding CanReset}" />
+      <Button Content="{loc:Loc Startup_Quit}" Command="{Binding QuitCommand}" />
+    </WrapPanel>
+  </StackPanel>
+</Window>

@@ -158,4 +158,20 @@
   <data name="Settings_RemoteImagesAdd" xml:space="preserve"><value>Add</value></data>
   <data name="Settings_RemoteImagesRemove" xml:space="preserve"><value>Remove selected</value></data>
   <data name="Settings_RemoteImagesInvalid" xml:space="preserve"><value>Enter a valid sender address or domain, for example news@shop.com or shop.com.</value></data>
+  <data name="Startup_Title" xml:space="preserve"><value>Preparing mail data</value></data>
+  <data name="Startup_Converting" xml:space="preserve"><value>Encrypting local mail data ({0} of {1})</value></data>
+  <data name="Startup_NotEnoughSpace" xml:space="preserve"><value>There is not enough free disk space to encrypt the mail data.</value></data>
+  <data name="Startup_InUse" xml:space="preserve"><value>The mail data is in use by another program.</value></data>
+  <data name="Startup_ConversionFailed" xml:space="preserve"><value>The mail data could not be encrypted: {0}</value></data>
+  <data name="Startup_KeyStoreUnavailable" xml:space="preserve"><value>The system keychain is not available. Unlock it, then try again.</value></data>
+  <data name="Startup_KeyLost" xml:space="preserve"><value>The key of the local mail data is missing or does not fit. Resetting removes the accounts and labels from this app; mail on the server is not affected.</value></data>
+  <data name="Startup_AccountUnreadable" xml:space="preserve"><value>The local mail data of {0} cannot be read. Resetting downloads the mail again; its labels are lost.</value></data>
+  <data name="Startup_Busy" xml:space="preserve"><value>Another Swiftlet window is preparing the mail data.</value></data>
+  <data name="Startup_DatabaseError" xml:space="preserve"><value>The mail data could not be opened: {0}</value></data>
+  <data name="Startup_Retry" xml:space="preserve"><value>Try again</value></data>
+  <data name="Startup_ContinueUnencrypted" xml:space="preserve"><value>Continue without encryption this time</value></data>
+  <data name="Startup_Reset" xml:space="preserve"><value>Reset local data…</value></data>
+  <data name="Startup_Quit" xml:space="preserve"><value>Quit</value></data>
+  <data name="Startup_ResetConfirmTitle" xml:space="preserve"><value>Reset local data</value></data>
+  <data name="Startup_ResetConfirm" xml:space="preserve"><value>The unreadable files are renamed and kept. This cannot be undone from within the app. Continue?</value></data>
 </root>

@@ -158,4 +158,20 @@
   <data name="Settings_RemoteImagesAdd" xml:space="preserve"><value>添加</value></data>
   <data name="Settings_RemoteImagesRemove" xml:space="preserve"><value>删除所选</value></data>
   <data name="Settings_RemoteImagesInvalid" xml:space="preserve"><value>请输入有效的发件人地址或域名，例如 news@shop.com 或 shop.com。</value></data>
+  <data name="Startup_Title" xml:space="preserve"><value>正在准备邮件数据</value></data>
+  <data name="Startup_Converting" xml:space="preserve"><value>正在加密本地邮件数据（第 {0} / 共 {1} 个）</value></data>
+  <data name="Startup_NotEnoughSpace" xml:space="preserve"><value>磁盘剩余空间不足，无法加密邮件数据。</value></data>
+  <data name="Startup_InUse" xml:space="preserve"><value>邮件数据正被其他程序占用。</value></data>
+  <data name="Startup_ConversionFailed" xml:space="preserve"><value>邮件数据加密失败：{0}</value></data>
+  <data name="Startup_KeyStoreUnavailable" xml:space="preserve"><value>无法使用系统钥匙串。请解锁后重试。</value></data>
+  <data name="Startup_KeyLost" xml:space="preserve"><value>本地邮件数据的密钥丢失或不匹配。重置后需要重新添加账号和标签；服务器上的邮件不受影响。</value></data>
+  <data name="Startup_AccountUnreadable" xml:space="preserve"><value>无法读取 {0} 的本地邮件数据。重置后邮件会重新下载，本地标签丢失。</value></data>
+  <data name="Startup_Busy" xml:space="preserve"><value>另一个 Swiftlet 正在处理邮件数据。</value></data>
+  <data name="Startup_DatabaseError" xml:space="preserve"><value>无法打开邮件数据：{0}</value></data>
+  <data name="Startup_Retry" xml:space="preserve"><value>重试</value></data>
+  <data name="Startup_ContinueUnencrypted" xml:space="preserve"><value>本次以明文继续</value></data>
+  <data name="Startup_Reset" xml:space="preserve"><value>重置本地数据…</value></data>
+  <data name="Startup_Quit" xml:space="preserve"><value>退出</value></data>
+  <data name="Startup_ResetConfirmTitle" xml:space="preserve"><value>重置本地数据</value></data>
+  <data name="Startup_ResetConfirm" xml:space="preserve"><value>读不出的文件会改名保留。应用内无法撤销。是否继续？</value></data>
 </root>

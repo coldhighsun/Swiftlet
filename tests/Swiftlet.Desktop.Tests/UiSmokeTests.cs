@@ -198,6 +198,39 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies the startup window explains a lost key and offers the reset, in both languages.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    /// <param name="reset">The expected reset button text.</param>
+    [Theory]
+    [InlineData("en", "Reset local data…")]
+    [InlineData("zh-Hans", "重置本地数据…")]
+    public async Task StartupWindow_KeyLost_ShowsResetButton(string language, string reset)
+    {
+        await Session.Dispatch(
+            async () =>
+            {
+                var protection = new FakeDatabaseProtection();
+                protection.Results.Enqueue(new Swiftlet.Infrastructure.Persistence.Encryption.DatabaseProtectionResult(
+                    Swiftlet.Infrastructure.Persistence.Encryption.DatabaseProtectionProblem.KeyLost));
+                var localizer = language == "en" ? TestLocalizer.English() : TestLocalizer.Chinese();
+                var viewModel = new StartupViewModel(
+                    protection, localizer, new FakeDialogService(), new FakeUiThread(), _ => Task.FromResult<string?>(null));
+                var window = new StartupWindow { DataContext = viewModel };
+                LocalizationManager.Instance.SetPreference(language);
+                await viewModel.RunCommand.ExecuteAsync(null);
+
+                Render(window, $"startup-key-lost-{language}", language);
+
+                var visible = window.GetVisualDescendants().OfType<Button>().Where(b => b.IsEffectivelyVisible).Select(b => b.Content as string).ToList();
+                visible.Should().HaveCount(3).And.Contain(reset);
+                window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).Should().Contain(viewModel.Message);
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Verifies the reading pane shows its placeholder when nothing is selected.
     /// </summary>
     [Fact]

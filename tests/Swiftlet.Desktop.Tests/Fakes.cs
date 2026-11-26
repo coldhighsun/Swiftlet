@@ -5,6 +5,7 @@ using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
 using Swiftlet.Desktop.Settings;
 using Swiftlet.Domain.Accounts;
+using Swiftlet.Infrastructure.Persistence.Encryption;
 using Swiftlet.Domain.Folders;
 using Swiftlet.Domain.Messages;
 
@@ -606,5 +607,80 @@ internal sealed class FakeUiThread : IUiThread
         }
 
         return task;
+    }
+}
+
+/// <summary>
+/// A scriptable <see cref="IDatabaseProtection"/>.
+/// </summary>
+internal sealed class FakeDatabaseProtection : IDatabaseProtection
+{
+    /// <summary>
+    /// Gets the results returned by preparation, in order; success once they are used up.
+    /// </summary>
+    public Queue<DatabaseProtectionResult> Results { get; } = new();
+
+    /// <summary>
+    /// Gets or sets an action run during preparation, for example to report progress or to fail.
+    /// </summary>
+    public Action<IProgress<DatabaseConversionProgress>?>? OnPrepare { get; set; }
+
+    /// <summary>
+    /// Gets the number of preparations.
+    /// </summary>
+    public int PrepareCalls { get; private set; }
+
+    /// <summary>
+    /// Gets the number of times continuing without encryption was chosen.
+    /// </summary>
+    public int ContinueCalls { get; private set; }
+
+    /// <summary>
+    /// Gets the number of full resets.
+    /// </summary>
+    public int ResetAllCalls { get; private set; }
+
+    /// <summary>
+    /// Gets the accounts that were reset.
+    /// </summary>
+    public List<Guid> ResetAccounts { get; } = [];
+
+    /// <inheritdoc />
+    public DatabaseProtectionStatus Status { get; set; }
+
+    /// <inheritdoc />
+    public Task<DatabaseProtectionAssessment> AssessAsync(CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(new DatabaseProtectionAssessment(new DatabaseProtectionResult(DatabaseProtectionProblem.None), 0));
+    }
+
+    /// <inheritdoc />
+    public Task<DatabaseProtectionResult> PrepareAsync(
+        IProgress<DatabaseConversionProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        PrepareCalls++;
+        OnPrepare?.Invoke(progress);
+        return Task.FromResult(Results.Count > 0 ? Results.Dequeue() : new DatabaseProtectionResult(DatabaseProtectionProblem.None));
+    }
+
+    /// <inheritdoc />
+    public void ContinueUnencrypted()
+    {
+        ContinueCalls++;
+    }
+
+    /// <inheritdoc />
+    public Task ResetAllAsync(CancellationToken cancellationToken = default)
+    {
+        ResetAllCalls++;
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task ResetAccountAsync(Guid accountId, CancellationToken cancellationToken = default)
+    {
+        ResetAccounts.Add(accountId);
+        return Task.CompletedTask;
     }
 }
