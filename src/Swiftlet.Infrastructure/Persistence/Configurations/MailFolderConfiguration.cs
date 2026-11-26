@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Folders;
 
 namespace Swiftlet.Infrastructure.Persistence.Configurations;
@@ -19,6 +18,5 @@ internal sealed class MailFolderConfiguration : IEntityTypeConfiguration<MailFol
         builder.Property(f => f.FullName).IsRequired().HasMaxLength(1024);
         builder.Property(f => f.Role).HasConversion<int>();
         builder.HasIndex(f => new { f.AccountId, f.FullName }).IsUnique();
-        builder.HasOne<MailAccount>().WithMany().HasForeignKey(f => f.AccountId).OnDelete(DeleteBehavior.Cascade);
     }
 }

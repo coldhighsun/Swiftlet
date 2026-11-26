@@ -122,7 +122,7 @@ public sealed class MailSyncService(
         if (invalidated)
         {
             logger.LogInformation("UIDVALIDITY of {Folder} changed; discarding cached messages.", folder.FullName);
-            await messages.DeleteByFolderAsync(folder.Id, cancellationToken);
+            await messages.DeleteByFolderAsync(folder.AccountId, folder.Id, cancellationToken);
         }
         else
         {
@@ -130,7 +130,7 @@ public sealed class MailSyncService(
             await PushPendingFlagsAsync(session, folder, cancellationToken);
         }
 
-        var afterUid = await messages.GetMaxUidAsync(folder.Id, cancellationToken);
+        var afterUid = await messages.GetMaxUidAsync(folder.AccountId, folder.Id, cancellationToken);
         var remote = await session.FetchNewMessagesAsync(
             folder.FullName,
             afterUid,
@@ -159,7 +159,7 @@ public sealed class MailSyncService(
     /// <returns>A task that completes when the pending changes are pushed.</returns>
     private async Task PushPendingFlagsAsync(IImapSession session, MailFolder folder, CancellationToken cancellationToken)
     {
-        var pending = await messages.GetPendingFlagStatesAsync(folder.Id, cancellationToken);
+        var pending = await messages.GetPendingFlagStatesAsync(folder.AccountId, folder.Id, cancellationToken);
         if (pending.Count == 0)
         {
             return;
@@ -187,7 +187,7 @@ public sealed class MailSyncService(
         // The sync runs on its own scope, so the user may change a message while the push was in flight. The marker is
         // therefore cleared in the database only where the stored values still equal what was pushed; a message the user
         // changed meanwhile stays pending and its newer value goes up at the next sync.
-        var cleared = await messages.ClearFlagSyncPendingAsync(pending, cancellationToken);
+        var cleared = await messages.ClearFlagSyncPendingAsync(folder.AccountId, pending, cancellationToken);
         logger.LogInformation("Pushed flags of {Count} messages in {Folder}.", cleared, folder.FullName);
     }
 
@@ -200,7 +200,7 @@ public sealed class MailSyncService(
     /// <returns>A task that completes when the pull is applied.</returns>
     private async Task PullFlagsAsync(IImapSession session, MailFolder folder, CancellationToken cancellationToken)
     {
-        var cached = await messages.GetFlagStatesAsync(folder.Id, cancellationToken);
+        var cached = await messages.GetFlagStatesAsync(folder.AccountId, folder.Id, cancellationToken);
         if (cached.Count == 0)
         {
             return;
@@ -217,7 +217,7 @@ public sealed class MailSyncService(
                 // snapshot was taken is not overwritten either.
                 if (!message.IsFlagSyncPending && (message.IsRead != state.IsRead || message.IsFlagged != state.IsFlagged))
                 {
-                    await messages.ApplyServerFlagsAsync(message.Id, state.IsRead, state.IsFlagged, cancellationToken);
+                    await messages.ApplyServerFlagsAsync(folder.AccountId, message.Id, state.IsRead, state.IsFlagged, cancellationToken);
                 }
             }
             else
@@ -241,7 +241,7 @@ public sealed class MailSyncService(
             return;
         }
 
-        await messages.DeleteRangeAsync(gone, cancellationToken);
+        await messages.DeleteRangeAsync(folder.AccountId, gone, cancellationToken);
         logger.LogInformation("Removed {Count} messages deleted on the server from {Folder}.", gone.Count, folder.FullName);
     }
 

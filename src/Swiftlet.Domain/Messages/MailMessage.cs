@@ -268,6 +268,17 @@ public sealed class MailMessage
     }
 
     /// <summary>
+    /// Replaces the attached labels, used by persistence after it loaded the label links from the global store.
+    /// </summary>
+    /// <param name="labels">The labels now attached to the message.</param>
+    public void SetLabels(IEnumerable<Label> labels)
+    {
+        ArgumentNullException.ThrowIfNull(labels);
+        _labels.Clear();
+        _labels.AddRange(labels);
+    }
+
+    /// <summary>
     /// Detaches a label; does nothing if it is not attached.
     /// </summary>
     /// <param name="labelId">The label identifier.</param>

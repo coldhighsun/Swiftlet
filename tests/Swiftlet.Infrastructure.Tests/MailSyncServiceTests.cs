@@ -20,20 +20,19 @@ public class MailSyncServiceTests
     /// <param name="factory">The IMAP factory.</param>
     /// <param name="maxPerFolder">The per-folder download limit.</param>
     /// <param name="settings">The sync settings, or <see langword="null"/> for defaults.</param>
-    /// <param name="context">The context the repositories use, or <see langword="null"/> for the test's own.</param>
+    /// <param name="context">The verifier whose contexts the repositories use, or <see langword="null"/> for the test's own.</param>
     /// <returns>The service.</returns>
     private static MailSyncService CreateService(
         TestDatabase db,
         FakeImapSessionFactory factory,
         int maxPerFolder = 200,
         FakeSyncSettings? settings = null,
-        Swiftlet.Infrastructure.Persistence.SwiftletDbContext? context = null)
+        DatabaseVerifier? context = null)
     {
-        context ??= db.Context;
         return new MailSyncService(
-            new AccountRepository(context),
-            new FolderRepository(context),
-            new MessageRepository(context),
+            context?.Accounts() ?? db.CreateAccountRepository(),
+            context?.Folders() ?? db.CreateFolderRepository(),
+            context?.Messages() ?? db.CreateMessageRepository(),
             factory,
             settings ?? new FakeSyncSettings(),
             new MailSyncOptions(maxPerFolder),
@@ -60,7 +59,7 @@ public class MailSyncServiceTests
         factory.Session.Messages["INBOX"] = [.. uids.Select(u => TestData.Remote(u))];
         var service = CreateService(db, factory, settings: settings);
         await service.SyncAsync(account.Id, ct);
-        var inbox = (await new FolderRepository(db.Context).GetByAccountAsync(account.Id, ct)).Single();
+        var inbox = (await db.CreateFolderRepository().GetByAccountAsync(account.Id, ct)).Single();
         return (service, factory.Session, account.Id, inbox.Id);
     }
 
@@ -68,6 +67,7 @@ public class MailSyncServiceTests
     /// Applies a change to the cached message with the given UID through a fresh context, like the UI does.
     /// </summary>
     /// <param name="db">The test database.</param>
+    /// <param name="accountId">The owning account.</param>
     /// <param name="folderId">The folder identifier.</param>
     /// <param name="uid">The UID.</param>
     /// <param name="change">The change to apply.</param>
@@ -75,12 +75,14 @@ public class MailSyncServiceTests
     /// <returns>A task that completes when the change is saved.</returns>
     private static async Task ChangeAsync(
         TestDatabase db,
+        Guid accountId,
         Guid folderId,
         uint uid,
         Action<Swiftlet.Domain.Messages.MailMessage> change,
         CancellationToken ct)
     {
-        await using var context = db.CreateContext();
+        await using var verifier = db.CreateVerifier();
+        var context = await verifier.AccountAsync(accountId, ct);
         var message = await context.Messages.SingleAsync(m => m.FolderId == folderId && m.Uid == uid, ct);
         change(message);
         await context.SaveChangesAsync(ct);
@@ -90,33 +92,37 @@ public class MailSyncServiceTests
     /// Reads the flag states of a folder through a fresh context.
     /// </summary>
     /// <param name="db">The test database.</param>
+    /// <param name="accountId">The owning account.</param>
     /// <param name="folderId">The folder identifier.</param>
     /// <param name="ct">The cancellation token.</param>
     /// <returns>The flag states ordered by UID.</returns>
     private static async Task<IReadOnlyList<Swiftlet.Domain.Messages.MessageFlagState>> StatesAsync(
         TestDatabase db,
+        Guid accountId,
         Guid folderId,
         CancellationToken ct)
     {
-        await using var context = db.CreateContext();
-        return await new MessageRepository(context).GetFlagStatesAsync(folderId, ct);
+        await using var context = db.CreateVerifier();
+        return await context.Messages().GetFlagStatesAsync(accountId, folderId, ct);
     }
 
     /// <summary>
     /// Reads the flag state of one message through a fresh context.
     /// </summary>
     /// <param name="db">The test database.</param>
+    /// <param name="accountId">The owning account.</param>
     /// <param name="folderId">The folder identifier.</param>
     /// <param name="uid">The UID.</param>
     /// <param name="ct">The cancellation token.</param>
     /// <returns>The flag state.</returns>
     private static async Task<Swiftlet.Domain.Messages.MessageFlagState> StateAsync(
         TestDatabase db,
+        Guid accountId,
         Guid folderId,
         uint uid,
         CancellationToken ct)
     {
-        return (await StatesAsync(db, folderId, ct)).Single(m => m.Uid == uid);
+        return (await StatesAsync(db, accountId, folderId, ct)).Single(m => m.Uid == uid);
     }
 
     /// <summary>
@@ -128,7 +134,7 @@ public class MailSyncServiceTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(db, new FakeSyncSettings(), [1, 2], ct);
-        await ChangeAsync(db, folderId, 1, m => m.SetRead(true), ct);
+        await ChangeAsync(db, accountId, folderId, 1, m => m.SetRead(true), ct);
 
         await service.SyncAsync(accountId, ct);
 
@@ -136,8 +142,8 @@ public class MailSyncServiceTests
         call.Folder.Should().Be("INBOX");
         call.Updates.Should().Equal(new FlagUpdate(1, true, false));
         session.GetServerFlags("INBOX", 1).IsRead.Should().BeTrue();
-        await using var verify = db.CreateContext();
-        (await new MessageRepository(verify).GetPendingFlagStatesAsync(folderId, ct)).Should().BeEmpty();
+        await using var verify = db.CreateVerifier();
+        (await verify.Messages().GetPendingFlagStatesAsync(accountId, folderId, ct)).Should().BeEmpty();
     }
 
     /// <summary>
@@ -154,15 +160,15 @@ public class MailSyncServiceTests
         factory.Session.Messages["INBOX"] = [TestData.Remote(1) with { IsRead = true }];
         var service = CreateService(db, factory);
         await service.SyncAsync(account.Id, ct);
-        var inbox = (await new FolderRepository(db.Context).GetByAccountAsync(account.Id, ct)).Single();
-        (await StateAsync(db, inbox.Id, 1, ct)).IsRead.Should().BeTrue();
-        await ChangeAsync(db, inbox.Id, 1, m => m.SetRead(false), ct);
+        var inbox = (await db.CreateFolderRepository().GetByAccountAsync(account.Id, ct)).Single();
+        (await StateAsync(db, account.Id, inbox.Id, 1, ct)).IsRead.Should().BeTrue();
+        await ChangeAsync(db, account.Id, inbox.Id, 1, m => m.SetRead(false), ct);
 
         await service.SyncAsync(account.Id, ct);
 
         factory.Session.SetFlagsCalls.Single().Updates.Should().Equal(new FlagUpdate(1, false, false));
         factory.Session.GetServerFlags("INBOX", 1).IsRead.Should().BeFalse();
-        (await StateAsync(db, inbox.Id, 1, ct)).IsFlagSyncPending.Should().BeFalse();
+        (await StateAsync(db, account.Id, inbox.Id, 1, ct)).IsFlagSyncPending.Should().BeFalse();
     }
 
     /// <summary>
@@ -180,10 +186,10 @@ public class MailSyncServiceTests
         factory.Session.SetServerFlags("INBOX", 2, false, true);
         var service = CreateService(db, factory);
         await service.SyncAsync(account.Id, ct);
-        var inbox = (await new FolderRepository(db.Context).GetByAccountAsync(account.Id, ct)).Single();
-        (await StateAsync(db, inbox.Id, 2, ct)).IsFlagged.Should().BeTrue();
-        await ChangeAsync(db, inbox.Id, 1, m => m.SetFlagged(true), ct);
-        await ChangeAsync(db, inbox.Id, 2, m => m.SetFlagged(false), ct);
+        var inbox = (await db.CreateFolderRepository().GetByAccountAsync(account.Id, ct)).Single();
+        (await StateAsync(db, account.Id, inbox.Id, 2, ct)).IsFlagged.Should().BeTrue();
+        await ChangeAsync(db, account.Id, inbox.Id, 1, m => m.SetFlagged(true), ct);
+        await ChangeAsync(db, account.Id, inbox.Id, 2, m => m.SetFlagged(false), ct);
 
         await service.SyncAsync(account.Id, ct);
 
@@ -202,7 +208,7 @@ public class MailSyncServiceTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(db, new FakeSyncSettings(), [1], ct);
-        await ChangeAsync(db, folderId, 1, m => m.SetRead(true), ct);
+        await ChangeAsync(db, accountId, folderId, 1, m => m.SetRead(true), ct);
         session.SetFlagsFailure = new IOException("offline");
         session.Messages["INBOX"].Add(TestData.Remote(2));
 
@@ -211,11 +217,11 @@ public class MailSyncServiceTests
         result.FailedFolders.Should().BeEmpty();
         result.FoldersSynced.Should().Be(1);
         result.NewMessages.Should().Be(1);
-        var kept = await StateAsync(db, folderId, 1, ct);
+        var kept = await StateAsync(db, accountId, folderId, 1, ct);
         kept.IsFlagSyncPending.Should().BeTrue();
         kept.IsRead.Should().BeTrue();
-        await using var verify = db.CreateContext();
-        (await new MessageRepository(verify).GetFlagStatesAsync(folderId, ct)).Select(m => m.Uid).Should().Equal(1u, 2u);
+        await using var verify = db.CreateVerifier();
+        (await verify.Messages().GetFlagStatesAsync(accountId, folderId, ct)).Select(m => m.Uid).Should().Equal(1u, 2u);
     }
 
     /// <summary>
@@ -227,15 +233,15 @@ public class MailSyncServiceTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(db, new FakeSyncSettings(), [1], ct);
-        await ChangeAsync(db, folderId, 1, m => m.SetRead(true), ct);
+        await ChangeAsync(db, accountId, folderId, 1, m => m.SetRead(true), ct);
         session.SetFlagsFailure = new IOException("offline");
         await service.SyncAsync(accountId, ct);
-        (await StateAsync(db, folderId, 1, ct)).IsFlagSyncPending.Should().BeTrue();
+        (await StateAsync(db, accountId, folderId, 1, ct)).IsFlagSyncPending.Should().BeTrue();
         session.SetFlagsFailure = null;
 
         await service.SyncAsync(accountId, ct);
 
-        var synced = await StateAsync(db, folderId, 1, ct);
+        var synced = await StateAsync(db, accountId, folderId, 1, ct);
         synced.IsFlagSyncPending.Should().BeFalse();
         synced.IsRead.Should().BeTrue();
         session.GetServerFlags("INBOX", 1).IsRead.Should().BeTrue();
@@ -250,19 +256,21 @@ public class MailSyncServiceTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(db, new FakeSyncSettings(), [1], ct);
-        await ChangeAsync(db, folderId, 1, m => m.SetRead(true), ct);
+        await ChangeAsync(db, accountId, folderId, 1, m => m.SetRead(true), ct);
         session.OnSetFlags = (_, _) =>
         {
             session.OnSetFlags = null;
-            using var other = db.CreateContext();
-            var message = other.Messages.Single(m => m.Uid == 1);
+            var other = db.CreateVerifier();
+            var otherContext = other.AccountAsync(accountId, ct).GetAwaiter().GetResult();
+            var message = otherContext.Messages.Single(m => m.Uid == 1);
             message.SetFlagged(true);
-            other.SaveChanges();
+            otherContext.SaveChanges();
+            other.DisposeAsync().AsTask().GetAwaiter().GetResult();
         };
 
         await service.SyncAsync(accountId, ct);
 
-        var afterFirst = await StateAsync(db, folderId, 1, ct);
+        var afterFirst = await StateAsync(db, accountId, folderId, 1, ct);
         afterFirst.IsFlagSyncPending.Should().BeTrue();
         afterFirst.IsRead.Should().BeTrue();
         afterFirst.IsFlagged.Should().BeTrue();
@@ -270,7 +278,7 @@ public class MailSyncServiceTests
 
         await service.SyncAsync(accountId, ct);
 
-        var afterSecond = await StateAsync(db, folderId, 1, ct);
+        var afterSecond = await StateAsync(db, accountId, folderId, 1, ct);
         afterSecond.IsFlagSyncPending.Should().BeFalse();
         afterSecond.IsFlagged.Should().BeTrue();
         session.SetFlagsCalls.Last().Updates.Should().Equal(new FlagUpdate(1, true, true));
@@ -290,15 +298,17 @@ public class MailSyncServiceTests
         session.OnFetchFlags = (_, _) =>
         {
             session.OnFetchFlags = null;
-            using var other = db.CreateContext();
-            var message = other.Messages.Single(m => m.Uid == 1);
+            var other = db.CreateVerifier();
+            var otherContext = other.AccountAsync(accountId, ct).GetAwaiter().GetResult();
+            var message = otherContext.Messages.Single(m => m.Uid == 1);
             message.SetFlagged(true);
-            other.SaveChanges();
+            otherContext.SaveChanges();
+            other.DisposeAsync().AsTask().GetAwaiter().GetResult();
         };
 
         await service.SyncAsync(accountId, ct);
 
-        var state = await StateAsync(db, folderId, 1, ct);
+        var state = await StateAsync(db, accountId, folderId, 1, ct);
         state.IsFlagged.Should().BeTrue();
         state.IsRead.Should().BeFalse();
         state.IsFlagSyncPending.Should().BeTrue();
@@ -318,11 +328,11 @@ public class MailSyncServiceTests
         factory.Session.Folders.AddRange(session.Folders);
         factory.Session.Messages["INBOX"] = session.Messages["INBOX"];
         factory.Session.SetServerFlags("INBOX", 2, true, false);
-        await using var syncContext = db.CreateContext();
+        await using var syncContext = db.CreateVerifier();
 
         await CreateService(db, factory, context: syncContext).SyncAsync(accountId, ct);
 
-        syncContext.ChangeTracker.Entries<Swiftlet.Domain.Messages.MailMessage>().Should().BeEmpty();
+        (await syncContext.AccountAsync(accountId, ct)).ChangeTracker.Entries<Swiftlet.Domain.Messages.MailMessage>().Should().BeEmpty();
         factory.Session.FetchFlagsCalls.Should().NotBeEmpty();
     }
 
@@ -339,8 +349,8 @@ public class MailSyncServiceTests
 
         await service.SyncAsync(accountId, ct);
 
-        await using var verify = db.CreateContext();
-        var cached = await new MessageRepository(verify).GetFlagStatesAsync(folderId, ct);
+        await using var verify = db.CreateVerifier();
+        var cached = await verify.Messages().GetFlagStatesAsync(accountId, folderId, ct);
         cached.Single(m => m.Uid == 2).IsRead.Should().BeTrue();
         cached.Single(m => m.Uid == 1).IsRead.Should().BeFalse();
         session.SetFlagsCalls.Should().BeEmpty();
@@ -357,13 +367,13 @@ public class MailSyncServiceTests
         var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(db, new FakeSyncSettings(), [1], ct);
         session.SetServerFlags("INBOX", 1, false, true);
         await service.SyncAsync(accountId, ct);
-        (await StateAsync(db, folderId, 1, ct)).IsFlagged.Should().BeTrue();
+        (await StateAsync(db, accountId, folderId, 1, ct)).IsFlagged.Should().BeTrue();
         session.SetServerFlags("INBOX", 1, false, false);
 
         await service.SyncAsync(accountId, ct);
 
-        await using var verify = db.CreateContext();
-        (await new MessageRepository(verify).GetFlagStatesAsync(folderId, ct)).Single().IsFlagged.Should().BeFalse();
+        await using var verify = db.CreateVerifier();
+        (await verify.Messages().GetFlagStatesAsync(accountId, folderId, ct)).Single().IsFlagged.Should().BeFalse();
     }
 
     /// <summary>
@@ -375,7 +385,7 @@ public class MailSyncServiceTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(db, new FakeSyncSettings(), [1], ct);
-        await ChangeAsync(db, folderId, 1, m => m.SetRead(true), ct);
+        await ChangeAsync(db, accountId, folderId, 1, m => m.SetRead(true), ct);
         // The push fails, so the message stays pending while the server holds different values.
         session.SetFlagsFailure = new IOException("offline");
         session.SetServerFlags("INBOX", 1, false, true);
@@ -384,7 +394,7 @@ public class MailSyncServiceTests
         await service.SyncAsync(accountId, ct);
 
         session.FetchFlagsCalls.Should().ContainSingle().Which.Folder.Should().Be("INBOX");
-        var state = await StateAsync(db, folderId, 1, ct);
+        var state = await StateAsync(db, accountId, folderId, 1, ct);
         state.IsRead.Should().BeTrue();
         state.IsFlagged.Should().BeFalse();
         state.IsFlagSyncPending.Should().BeTrue();
@@ -403,8 +413,8 @@ public class MailSyncServiceTests
 
         await service.SyncAsync(accountId, ct);
 
-        await using var verify = db.CreateContext();
-        (await new MessageRepository(verify).GetFlagStatesAsync(folderId, ct)).Select(m => m.Uid).Should().Equal(1u, 2u);
+        await using var verify = db.CreateVerifier();
+        (await verify.Messages().GetFlagStatesAsync(accountId, folderId, ct)).Select(m => m.Uid).Should().Equal(1u, 2u);
     }
 
     /// <summary>
@@ -424,8 +434,8 @@ public class MailSyncServiceTests
 
         await service.SyncAsync(accountId, ct);
 
-        await using var verify = db.CreateContext();
-        (await new MessageRepository(verify).GetFlagStatesAsync(folderId, ct)).Select(m => m.Uid).Should().Equal(1u, 3u);
+        await using var verify = db.CreateVerifier();
+        (await verify.Messages().GetFlagStatesAsync(accountId, folderId, ct)).Select(m => m.Uid).Should().Equal(1u, 3u);
     }
 
     /// <summary>
@@ -445,8 +455,8 @@ public class MailSyncServiceTests
 
         await service.SyncAsync(accountId, ct);
 
-        await using var verify = db.CreateContext();
-        (await new MessageRepository(verify).GetFlagStatesAsync(folderId, ct)).Select(m => m.Uid).Should().Equal(2u);
+        await using var verify = db.CreateVerifier();
+        (await verify.Messages().GetFlagStatesAsync(accountId, folderId, ct)).Select(m => m.Uid).Should().Equal(2u);
     }
 
     /// <summary>
@@ -467,8 +477,8 @@ public class MailSyncServiceTests
 
         await service.SyncAsync(accountId, ct);
 
-        await using var verify = db.CreateContext();
-        (await new MessageRepository(verify).GetFlagStatesAsync(folderId, ct)).Should().HaveCount(2);
+        await using var verify = db.CreateVerifier();
+        (await verify.Messages().GetFlagStatesAsync(accountId, folderId, ct)).Should().HaveCount(2);
     }
 
     /// <summary>
@@ -484,7 +494,7 @@ public class MailSyncServiceTests
             new FakeSyncSettings { RemoveServerDeletedMessages = true },
             [1, 2],
             ct);
-        await ChangeAsync(db, folderId, 1, m => m.SetRead(true), ct);
+        await ChangeAsync(db, accountId, folderId, 1, m => m.SetRead(true), ct);
         session.UidValidity["INBOX"] = 999;
         session.Messages["INBOX"].Clear();
         session.FetchFlagsCalls.Clear();
@@ -493,8 +503,8 @@ public class MailSyncServiceTests
 
         session.SetFlagsCalls.Should().BeEmpty();
         session.FetchFlagsCalls.Should().BeEmpty();
-        await using var verify = db.CreateContext();
-        (await new MessageRepository(verify).GetFlagStatesAsync(folderId, ct)).Should().BeEmpty();
+        await using var verify = db.CreateVerifier();
+        (await verify.Messages().GetFlagStatesAsync(accountId, folderId, ct)).Should().BeEmpty();
     }
 
     /// <summary>
@@ -527,13 +537,13 @@ public class MailSyncServiceTests
         var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(db, settings, [1, 2], ct);
         session.RemoveFromServer("INBOX", 1);
         await service.SyncAsync(accountId, ct);
-        (await StatesAsync(db, folderId, ct)).Should().HaveCount(2);
+        (await StatesAsync(db, accountId, folderId, ct)).Should().HaveCount(2);
 
         settings.RemoveServerDeletedMessages = true;
         await service.SyncAsync(accountId, ct);
 
-        await using var verify = db.CreateContext();
-        (await new MessageRepository(verify).GetFlagStatesAsync(folderId, ct)).Select(m => m.Uid).Should().Equal(2u);
+        await using var verify = db.CreateVerifier();
+        (await verify.Messages().GetFlagStatesAsync(accountId, folderId, ct)).Select(m => m.Uid).Should().Equal(2u);
     }
 
     /// <summary>
@@ -557,7 +567,7 @@ public class MailSyncServiceTests
         result.NewMessages.Should().Be(3);
         result.FoldersSynced.Should().Be(2);
         result.FailedFolders.Should().BeEmpty();
-        var folders = await new FolderRepository(db.Context).GetByAccountAsync(account.Id, ct);
+        var folders = await db.CreateFolderRepository().GetByAccountAsync(account.Id, ct);
         folders.Select(f => f.FullName).Should().BeEquivalentTo("INBOX", "Sent");
         folders.Single(f => f.FullName == "Sent").Role.Should().Be(FolderRole.Sent);
         factory.Session.Disposed.Should().BeTrue();
@@ -583,8 +593,8 @@ public class MailSyncServiceTests
 
         second.NewMessages.Should().Be(1);
         factory.Session.FetchCalls.Last().AfterUid.Should().Be(2u);
-        var inbox = (await new FolderRepository(db.Context).GetByAccountAsync(account.Id, ct)).Single(f => f.FullName == "INBOX");
-        (await new MessageRepository(db.Context).GetMaxUidAsync(inbox.Id, ct)).Should().Be(3u);
+        var inbox = (await db.CreateFolderRepository().GetByAccountAsync(account.Id, ct)).Single(f => f.FullName == "INBOX");
+        (await db.CreateMessageRepository().GetMaxUidAsync(account.Id, inbox.Id, ct)).Should().Be(3u);
     }
 
     /// <summary>
@@ -608,7 +618,7 @@ public class MailSyncServiceTests
         var result = await service.SyncAsync(account.Id, ct);
 
         result.NewMessages.Should().Be(1);
-        var messages = new MessageRepository(db.Context);
+        var messages = db.CreateMessageRepository();
         (await messages.SearchAsync("renumbered", account.Id, 10, ct)).Should().HaveCount(1);
         (await messages.SearchAsync("old", account.Id, 10, ct)).Should().BeEmpty();
     }
@@ -629,8 +639,8 @@ public class MailSyncServiceTests
         var result = await CreateService(db, factory, maxPerFolder: 2).SyncAsync(account.Id, ct);
 
         result.NewMessages.Should().Be(2);
-        var inbox = (await new FolderRepository(db.Context).GetByAccountAsync(account.Id, ct)).Single();
-        var cached = await new MessageRepository(db.Context).GetByFolderAsync(inbox.Id, 0, 10, ct);
+        var inbox = (await db.CreateFolderRepository().GetByAccountAsync(account.Id, ct)).Single();
+        var cached = await db.CreateMessageRepository().GetByFolderAsync(account.Id, inbox.Id, 0, 10, ct);
         cached.Select(m => m.Uid).Should().BeEquivalentTo([5u, 4u]);
     }
 
@@ -675,8 +685,8 @@ public class MailSyncServiceTests
 
         await CreateService(db, factory).SyncAsync(account.Id, ct);
 
-        await using var verify = db.CreateContext();
-        var found = await new MessageRepository(verify).SearchAsync("quarterly numbers", null, 10, ct);
+        await using var verify = db.CreateVerifier();
+        var found = await verify.Messages().SearchAsync("quarterly numbers", null, 10, ct);
         var cached = found.Should().ContainSingle().Subject;
         cached.IsRead.Should().BeTrue();
         cached.Attachments.Should().ContainSingle().Which.FileName.Should().Be("q3.xlsx");

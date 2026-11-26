@@ -48,10 +48,11 @@ public sealed class GetFoldersQueryHandler(IFolderRepository folders)
 /// <summary>
 /// Gets a page of messages of a folder, newest first.
 /// </summary>
+/// <param name="AccountId">The account that owns the folder.</param>
 /// <param name="FolderId">The folder identifier.</param>
 /// <param name="Skip">The number of messages to skip.</param>
 /// <param name="Take">The maximum number of messages to return.</param>
-public sealed record GetMessagesQuery(Guid FolderId, int Skip, int Take) : IQuery<IReadOnlyList<MailMessage>>;
+public sealed record GetMessagesQuery(Guid AccountId, Guid FolderId, int Skip, int Take) : IQuery<IReadOnlyList<MailMessage>>;
 
 /// <summary>
 /// Handles <see cref="GetMessagesQuery"/>.
@@ -64,7 +65,7 @@ public sealed class GetMessagesQueryHandler(IMessageRepository messages)
     public async ValueTask<IReadOnlyList<MailMessage>> Handle(GetMessagesQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
-        return await messages.GetByFolderAsync(query.FolderId, query.Skip, query.Take, cancellationToken);
+        return await messages.GetByFolderAsync(query.AccountId, query.FolderId, query.Skip, query.Take, cancellationToken);
     }
 }
 

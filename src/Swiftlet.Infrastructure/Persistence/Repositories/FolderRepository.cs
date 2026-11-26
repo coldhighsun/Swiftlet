@@ -4,21 +4,24 @@ using Swiftlet.Domain.Folders;
 namespace Swiftlet.Infrastructure.Persistence.Repositories;
 
 /// <summary>
-/// EF Core implementation of <see cref="IFolderRepository"/>.
+/// EF Core implementation of <see cref="IFolderRepository"/> on the per-account databases.
 /// </summary>
-/// <param name="context">The database context.</param>
-internal sealed class FolderRepository(SwiftletDbContext context) : IFolderRepository
+/// <param name="contexts">The scope's account database contexts.</param>
+internal sealed class FolderRepository(AccountContextProvider contexts) : IFolderRepository
 {
     /// <inheritdoc />
     public async Task AddAsync(MailFolder folder, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(folder);
+        var context = await contexts.GetAsync(folder.AccountId, cancellationToken);
         context.Folders.Add(folder);
         await context.SaveChangesAsync(cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task<MailFolder?> GetAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<MailFolder?> GetAsync(Guid accountId, Guid id, CancellationToken cancellationToken = default)
     {
+        var context = await contexts.GetAsync(accountId, cancellationToken);
         return await context.Folders.FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
     }
 
@@ -27,6 +30,7 @@ internal sealed class FolderRepository(SwiftletDbContext context) : IFolderRepos
         Guid accountId,
         CancellationToken cancellationToken = default)
     {
+        var context = await contexts.GetAsync(accountId, cancellationToken);
         return await context.Folders
             .Where(f => f.AccountId == accountId)
             .OrderBy(f => f.FullName)
@@ -36,6 +40,6 @@ internal sealed class FolderRepository(SwiftletDbContext context) : IFolderRepos
     /// <inheritdoc />
     public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        await context.SaveChangesAsync(cancellationToken);
+        await contexts.SaveChangesAsync(cancellationToken);
     }
 }

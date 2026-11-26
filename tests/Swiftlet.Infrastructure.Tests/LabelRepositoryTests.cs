@@ -55,16 +55,18 @@ public class LabelRepositoryTests
         await repository.AddAsync(label, ct);
         var message = MailMessage.Create(account.Id, folder.Id, 1, "s", "A", "a@example.com", "me@example.com", DateTimeOffset.UtcNow, "b");
         message.AddLabel(label);
-        await new MessageRepository(db.Context).AddAsync(message, ct);
+        var messages = db.CreateMessageRepository();
+        await messages.AddAsync(message, ct);
+        await messages.SaveLabelsAsync(message, ct);
 
         await repository.DeleteAsync(label.Id, ct);
 
-        await using var verifyContext = db.CreateContext();
-        verifyContext.Labels.Should().BeEmpty();
-        var loaded = await new MessageRepository(verifyContext).GetAsync(message.Id, ct);
+        await using var verifyContext = db.CreateVerifier();
+        verifyContext.Global.Labels.Should().BeEmpty();
+        var loaded = await verifyContext.Messages().GetAsync(account.Id, message.Id, ct);
         loaded.Should().NotBeNull();
         loaded.Labels.Should().BeEmpty();
-        var links = await verifyContext.Database
+        var links = await verifyContext.Global.Database
             .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM MessageLabels")
             .SingleAsync(ct);
         links.Should().Be(0);

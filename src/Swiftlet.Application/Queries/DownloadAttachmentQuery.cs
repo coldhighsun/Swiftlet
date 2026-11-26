@@ -17,9 +17,10 @@ public sealed record DownloadedAttachment(string FileName, string ContentType, R
 /// <summary>
 /// Downloads an attachment from the IMAP server on demand (only metadata is cached locally).
 /// </summary>
+/// <param name="AccountId">The account that owns the message.</param>
 /// <param name="MessageId">The cached message identifier.</param>
 /// <param name="AttachmentId">The attachment identifier.</param>
-public sealed record DownloadAttachmentQuery(Guid MessageId, Guid AttachmentId) : IQuery<DownloadedAttachment>;
+public sealed record DownloadAttachmentQuery(Guid AccountId, Guid MessageId, Guid AttachmentId) : IQuery<DownloadedAttachment>;
 
 /// <summary>
 /// Handles <see cref="DownloadAttachmentQuery"/>.
@@ -39,11 +40,11 @@ public sealed class DownloadAttachmentQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        var message = await messages.GetAsync(query.MessageId, cancellationToken)
+        var message = await messages.GetAsync(query.AccountId, query.MessageId, cancellationToken)
             ?? throw new InvalidOperationException($"Message {query.MessageId} was not found.");
         var attachment = message.Attachments.FirstOrDefault(a => a.Id == query.AttachmentId)
             ?? throw new InvalidOperationException($"Attachment {query.AttachmentId} was not found.");
-        var folder = await folders.GetAsync(message.FolderId, cancellationToken)
+        var folder = await folders.GetAsync(message.AccountId, message.FolderId, cancellationToken)
             ?? throw new InvalidOperationException($"Folder {message.FolderId} was not found.");
         var account = await accounts.GetAsync(message.AccountId, cancellationToken)
             ?? throw new InvalidOperationException($"Account {message.AccountId} was not found.");

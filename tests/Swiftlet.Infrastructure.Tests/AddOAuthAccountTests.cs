@@ -30,12 +30,12 @@ public class AddOAuthAccountTests
         var secrets = new InMemorySecretStore();
         var factory = new FakeImapSessionFactory();
         var authorizer = new FakeOAuthAuthorizer { Result = SignedIn };
-        var handler = new AddOAuthAccountCommandHandler(new AccountRepository(db.Context), secrets, authorizer, factory, TimeProvider.System);
+        var handler = new AddOAuthAccountCommandHandler(db.CreateAccountRepository(), secrets, authorizer, factory, TimeProvider.System);
 
         var id = await handler.Handle(new AddOAuthAccountCommand(OAuthProvider.Google), ct);
 
-        await using var verify = db.CreateContext();
-        var saved = await new AccountRepository(verify).GetAsync(id, ct);
+        await using var verify = db.CreateVerifier();
+        var saved = await verify.Accounts().GetAsync(id, ct);
         saved!.AuthMethod.Should().Be(AuthMethod.OAuth2);
         saved.OAuthProvider.Should().Be(OAuthProvider.Google);
         saved.DisplayName.Should().Be("Me Myself");
@@ -55,11 +55,11 @@ public class AddOAuthAccountTests
         await using var db = await TestDatabase.CreateAsync(ct);
         var authorizer = new FakeOAuthAuthorizer { Result = SignedIn with { EmailAddress = "me@contoso.example" } };
         var handler = new AddOAuthAccountCommandHandler(
-            new AccountRepository(db.Context), new InMemorySecretStore(), authorizer, new FakeImapSessionFactory(), TimeProvider.System);
+            db.CreateAccountRepository(), new InMemorySecretStore(), authorizer, new FakeImapSessionFactory(), TimeProvider.System);
 
         var id = await handler.Handle(new AddOAuthAccountCommand(OAuthProvider.Microsoft, "Work"), ct);
 
-        var saved = await new AccountRepository(db.Context).GetAsync(id, ct);
+        var saved = await db.CreateAccountRepository().GetAsync(id, ct);
         saved!.OAuthProvider.Should().Be(OAuthProvider.Microsoft);
         saved.DisplayName.Should().Be("Work");
         saved.Imap.Host.Should().Be("outlook.office365.com");
@@ -77,13 +77,13 @@ public class AddOAuthAccountTests
         var secrets = new InMemorySecretStore();
         var factory = new FakeImapSessionFactory { Failure = new InvalidOperationException("IMAP access is disabled") };
         var handler = new AddOAuthAccountCommandHandler(
-            new AccountRepository(db.Context), secrets, new FakeOAuthAuthorizer { Result = SignedIn }, factory, TimeProvider.System);
+            db.CreateAccountRepository(), secrets, new FakeOAuthAuthorizer { Result = SignedIn }, factory, TimeProvider.System);
 
         var act = async () => await handler.Handle(new AddOAuthAccountCommand(OAuthProvider.Google), ct);
 
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("IMAP access is disabled");
         secrets.Values.Should().BeEmpty();
-        (await new AccountRepository(db.Context).GetAllAsync(ct)).Should().BeEmpty();
+        (await db.CreateAccountRepository().GetAllAsync(ct)).Should().BeEmpty();
     }
 
     /// <summary>
@@ -94,7 +94,7 @@ public class AddOAuthAccountTests
     {
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
-        var repository = new AccountRepository(db.Context);
+        var repository = db.CreateAccountRepository();
         await repository.AddAsync(OAuthTestData.OAuthAccount(email: "ME@gmail.com"), ct);
         var secrets = new InMemorySecretStore();
         var handler = new AddOAuthAccountCommandHandler(
@@ -116,7 +116,7 @@ public class AddOAuthAccountTests
         await using var db = await TestDatabase.CreateAsync(ct);
         var authorizer = new FakeOAuthAuthorizer { Failure = new OAuthNotConfiguredException(OAuthProvider.Google, "hint") };
         var handler = new AddOAuthAccountCommandHandler(
-            new AccountRepository(db.Context), new InMemorySecretStore(), authorizer, new FakeImapSessionFactory(), TimeProvider.System);
+            db.CreateAccountRepository(), new InMemorySecretStore(), authorizer, new FakeImapSessionFactory(), TimeProvider.System);
 
         var act = async () => await handler.Handle(new AddOAuthAccountCommand(OAuthProvider.Google), ct);
 
@@ -133,11 +133,11 @@ public class AddOAuthAccountTests
         await using var db = await TestDatabase.CreateAsync(ct);
         var account = OAuthTestData.OAuthAccount(OAuthProvider.Microsoft, "me@outlook.com");
         var passwordAccount = TestData.Account("pw@example.com");
-        await new AccountRepository(db.Context).AddAsync(account, ct);
-        await new AccountRepository(db.Context).AddAsync(passwordAccount, ct);
+        await db.CreateAccountRepository().AddAsync(account, ct);
+        await db.CreateAccountRepository().AddAsync(passwordAccount, ct);
 
-        await using var verify = db.CreateContext();
-        var repository = new AccountRepository(verify);
+        await using var verify = db.CreateVerifier();
+        var repository = verify.Accounts();
 
         (await repository.GetAsync(account.Id, ct))!.OAuthProvider.Should().Be(OAuthProvider.Microsoft);
         (await repository.GetAsync(passwordAccount.Id, ct))!.OAuthProvider.Should().BeNull();

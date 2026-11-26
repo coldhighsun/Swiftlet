@@ -93,7 +93,10 @@ public class SecretStoreAndWorkerTests
         services.AddApplication();
         services.AddSingleton<TimeProvider>(clock);
         services.AddSingleton<IImapSessionFactory>(factory);
-        services.AddDbContext<SwiftletDbContext>(o => o.UseSqlite(connection));
+        services.AddDbContext<GlobalDbContext>(o => o.UseSqlite(connection));
+        services.AddSingleton<InMemoryAccountDbContextFactory>();
+        services.AddSingleton<IAccountDbContextFactory>(sp => sp.GetRequiredService<InMemoryAccountDbContextFactory>());
+        services.AddScoped<AccountContextProvider>();
         services.AddScoped<IAccountRepository, AccountRepository>();
         services.AddScoped<IFolderRepository, FolderRepository>();
         services.AddScoped<IMessageRepository, MessageRepository>();
@@ -102,8 +105,8 @@ public class SecretStoreAndWorkerTests
         Guid accountId;
         await using (var setup = provider.CreateAsyncScope())
         {
-            var context = setup.ServiceProvider.GetRequiredService<SwiftletDbContext>();
-            await SqliteSchemaInitializer.InitializeAsync(context, ct);
+            var context = setup.ServiceProvider.GetRequiredService<GlobalDbContext>();
+            await SqliteSchemaInitializer.InitializeGlobalAsync(context, ct);
             var account = TestData.Account("me@example.com");
             account.ChangeSyncInterval(TimeSpan.FromMinutes(10));
             await setup.ServiceProvider.GetRequiredService<IAccountRepository>().AddAsync(account, ct);
@@ -127,7 +130,7 @@ public class SecretStoreAndWorkerTests
 
         await using var verify = provider.CreateAsyncScope();
         var folders = await verify.ServiceProvider.GetRequiredService<IFolderRepository>().GetByAccountAsync(accountId, ct);
-        var cached = await verify.ServiceProvider.GetRequiredService<IMessageRepository>().GetByFolderAsync(folders.Single().Id, 0, 10, ct);
+        var cached = await verify.ServiceProvider.GetRequiredService<IMessageRepository>().GetByFolderAsync(accountId, folders.Single().Id, 0, 10, ct);
         cached.Should().ContainSingle();
     }
 
@@ -148,14 +151,17 @@ public class SecretStoreAndWorkerTests
         services.AddApplication();
         services.AddSingleton<TimeProvider>(clock);
         services.AddSingleton<IImapSessionFactory>(factory);
-        services.AddDbContext<SwiftletDbContext>(o => o.UseSqlite(connection));
+        services.AddDbContext<GlobalDbContext>(o => o.UseSqlite(connection));
+        services.AddSingleton<InMemoryAccountDbContextFactory>();
+        services.AddSingleton<IAccountDbContextFactory>(sp => sp.GetRequiredService<InMemoryAccountDbContextFactory>());
+        services.AddScoped<AccountContextProvider>();
         services.AddScoped<IAccountRepository, AccountRepository>();
         services.AddScoped<IFolderRepository, FolderRepository>();
         services.AddScoped<IMessageRepository, MessageRepository>();
         await using var provider = services.BuildServiceProvider(validateScopes: true);
         await using (var setup = provider.CreateAsyncScope())
         {
-            await SqliteSchemaInitializer.InitializeAsync(setup.ServiceProvider.GetRequiredService<SwiftletDbContext>(), ct);
+            await SqliteSchemaInitializer.InitializeGlobalAsync(setup.ServiceProvider.GetRequiredService<GlobalDbContext>(), ct);
             await setup.ServiceProvider.GetRequiredService<IAccountRepository>().AddAsync(TestData.Account("me@example.com"), ct);
         }
 
@@ -190,7 +196,10 @@ public class SecretStoreAndWorkerTests
         services.AddApplication();
         services.AddSingleton<TimeProvider>(clock);
         services.AddSingleton<IImapSessionFactory>(factory);
-        services.AddDbContext<SwiftletDbContext>(o => o.UseSqlite(connection));
+        services.AddDbContext<GlobalDbContext>(o => o.UseSqlite(connection));
+        services.AddSingleton<InMemoryAccountDbContextFactory>();
+        services.AddSingleton<IAccountDbContextFactory>(sp => sp.GetRequiredService<InMemoryAccountDbContextFactory>());
+        services.AddScoped<AccountContextProvider>();
         services.AddScoped<IAccountRepository, AccountRepository>();
         services.AddScoped<IFolderRepository, FolderRepository>();
         services.AddScoped<IMessageRepository, MessageRepository>();
@@ -200,7 +209,7 @@ public class SecretStoreAndWorkerTests
         Guid secondId;
         await using (var setup = provider.CreateAsyncScope())
         {
-            await SqliteSchemaInitializer.InitializeAsync(setup.ServiceProvider.GetRequiredService<SwiftletDbContext>(), ct);
+            await SqliteSchemaInitializer.InitializeGlobalAsync(setup.ServiceProvider.GetRequiredService<GlobalDbContext>(), ct);
             var repository = setup.ServiceProvider.GetRequiredService<IAccountRepository>();
             await repository.AddAsync(TestData.Account("first@example.com"), ct);
             await repository.AddAsync(TestData.Account("second@example.com"), ct);
@@ -219,8 +228,15 @@ public class SecretStoreAndWorkerTests
 
             deleted = true;
             // The hook cannot be async, so block on the delete through a separate scope (its own DbContext).
-            using var other = provider.CreateScope();
-            other.ServiceProvider.GetRequiredService<IAccountRepository>().DeleteAsync(firstId).GetAwaiter().GetResult();
+            var other = provider.CreateAsyncScope();
+            try
+            {
+                other.ServiceProvider.GetRequiredService<IAccountRepository>().DeleteAsync(firstId).GetAwaiter().GetResult();
+            }
+            finally
+            {
+                other.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
         };
         var worker = new AccountSyncWorker(
             provider.GetRequiredService<IServiceScopeFactory>(),
@@ -234,7 +250,7 @@ public class SecretStoreAndWorkerTests
         await using var verify = provider.CreateAsyncScope();
         var folders = await verify.ServiceProvider.GetRequiredService<IFolderRepository>().GetByAccountAsync(secondId, ct);
         folders.Should().ContainSingle();
-        var cached = await verify.ServiceProvider.GetRequiredService<IMessageRepository>().GetByFolderAsync(folders[0].Id, 0, 10, ct);
+        var cached = await verify.ServiceProvider.GetRequiredService<IMessageRepository>().GetByFolderAsync(secondId, folders[0].Id, 0, 10, ct);
         cached.Should().ContainSingle();
     }
 }

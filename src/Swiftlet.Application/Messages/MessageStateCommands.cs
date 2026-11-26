@@ -6,9 +6,10 @@ namespace Swiftlet.Application.Messages;
 /// <summary>
 /// Marks a cached message as read or unread. The change is applied locally at once and written to the server by the next sync.
 /// </summary>
+/// <param name="AccountId">The account that owns the message.</param>
 /// <param name="MessageId">The message identifier.</param>
 /// <param name="IsRead">The new read state.</param>
-public sealed record SetMessageReadCommand(Guid MessageId, bool IsRead) : ICommand<Unit>;
+public sealed record SetMessageReadCommand(Guid AccountId, Guid MessageId, bool IsRead) : ICommand<Unit>;
 
 /// <summary>
 /// Handles <see cref="SetMessageReadCommand"/>.
@@ -20,7 +21,7 @@ public sealed class SetMessageReadCommandHandler(IMessageRepository messages) : 
     public async ValueTask<Unit> Handle(SetMessageReadCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
-        var message = await messages.GetAsync(command.MessageId, cancellationToken)
+        var message = await messages.GetAsync(command.AccountId, command.MessageId, cancellationToken)
             ?? throw new InvalidOperationException($"Message {command.MessageId} was not found.");
         message.SetRead(command.IsRead);
         await messages.SaveChangesAsync(cancellationToken);
@@ -31,9 +32,10 @@ public sealed class SetMessageReadCommandHandler(IMessageRepository messages) : 
 /// <summary>
 /// Flags or unflags (stars) a cached message. The change is applied locally at once and written to the server by the next sync.
 /// </summary>
+/// <param name="AccountId">The account that owns the message.</param>
 /// <param name="MessageId">The message identifier.</param>
 /// <param name="IsFlagged">The new flagged state.</param>
-public sealed record SetMessageFlaggedCommand(Guid MessageId, bool IsFlagged) : ICommand<Unit>;
+public sealed record SetMessageFlaggedCommand(Guid AccountId, Guid MessageId, bool IsFlagged) : ICommand<Unit>;
 
 /// <summary>
 /// Handles <see cref="SetMessageFlaggedCommand"/>.
@@ -46,7 +48,7 @@ public sealed class SetMessageFlaggedCommandHandler(IMessageRepository messages)
     public async ValueTask<Unit> Handle(SetMessageFlaggedCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
-        var message = await messages.GetAsync(command.MessageId, cancellationToken)
+        var message = await messages.GetAsync(command.AccountId, command.MessageId, cancellationToken)
             ?? throw new InvalidOperationException($"Message {command.MessageId} was not found.");
         message.SetFlagged(command.IsFlagged);
         await messages.SaveChangesAsync(cancellationToken);

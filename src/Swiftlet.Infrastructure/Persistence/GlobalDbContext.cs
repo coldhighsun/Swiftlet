@@ -1,16 +1,16 @@
 using Microsoft.EntityFrameworkCore;
 using Swiftlet.Domain.Accounts;
-using Swiftlet.Domain.Folders;
 using Swiftlet.Domain.Labels;
-using Swiftlet.Domain.Messages;
+using Swiftlet.Infrastructure.Persistence.Configurations;
 
 namespace Swiftlet.Infrastructure.Persistence;
 
 /// <summary>
-/// The EF Core context of the local mail cache.
+/// The EF Core context of the global store: the account registry, the labels and the links between labels and
+/// messages. The mail itself lives in one <see cref="AccountDbContext"/> database per account.
 /// </summary>
 /// <param name="options">The context options.</param>
-public sealed class SwiftletDbContext(DbContextOptions<SwiftletDbContext> options) : DbContext(options)
+public sealed class GlobalDbContext(DbContextOptions<GlobalDbContext> options) : DbContext(options)
 {
     /// <summary>
     /// Gets the accounts.
@@ -18,24 +18,14 @@ public sealed class SwiftletDbContext(DbContextOptions<SwiftletDbContext> option
     public DbSet<MailAccount> Accounts => Set<MailAccount>();
 
     /// <summary>
-    /// Gets the folders.
-    /// </summary>
-    public DbSet<MailFolder> Folders => Set<MailFolder>();
-
-    /// <summary>
-    /// Gets the messages.
-    /// </summary>
-    public DbSet<MailMessage> Messages => Set<MailMessage>();
-
-    /// <summary>
-    /// Gets the attachments.
-    /// </summary>
-    public DbSet<MailAttachment> Attachments => Set<MailAttachment>();
-
-    /// <summary>
     /// Gets the labels.
     /// </summary>
     public DbSet<Label> Labels => Set<Label>();
+
+    /// <summary>
+    /// Gets the links between labels and messages; messages are stored in the account databases, so there is no foreign key to them.
+    /// </summary>
+    internal DbSet<MessageLabel> MessageLabels => Set<MessageLabel>();
 
     /// <inheritdoc />
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
@@ -48,6 +38,8 @@ public sealed class SwiftletDbContext(DbContextOptions<SwiftletDbContext> option
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(SwiftletDbContext).Assembly);
+        modelBuilder.ApplyConfiguration(new MailAccountConfiguration());
+        modelBuilder.ApplyConfiguration(new LabelConfiguration());
+        modelBuilder.ApplyConfiguration(new MessageLabelConfiguration());
     }
 }

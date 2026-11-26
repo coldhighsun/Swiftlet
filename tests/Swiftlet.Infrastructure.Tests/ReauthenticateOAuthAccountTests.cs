@@ -32,20 +32,20 @@ public class ReauthenticateOAuthAccountTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var account = OAuthTestData.OAuthAccount(OAuthProvider.Microsoft, "me@outlook.com");
-        await new AccountRepository(db.Context).AddAsync(account, ct);
+        await db.CreateAccountRepository().AddAsync(account, ct);
         var secrets = new InMemorySecretStore();
         await OAuthTokenStorage.SaveAsync(secrets, account.Id, OldTokens, ct);
         var authorizer = new FakeOAuthAuthorizer { Result = new OAuthAuthorization("ME@Outlook.com", "Me", NewTokens) };
         var factory = new FakeImapSessionFactory();
-        var handler = new ReauthenticateOAuthAccountCommandHandler(new AccountRepository(db.Context), secrets, authorizer, factory, NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
+        var handler = new ReauthenticateOAuthAccountCommandHandler(db.CreateAccountRepository(), secrets, authorizer, factory, NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
 
         await handler.Handle(new ReauthenticateOAuthAccountCommand(account.Id), ct);
 
         (await OAuthTokenStorage.LoadAsync(secrets, account.Id, ct)).Should().Be(NewTokens);
         authorizer.Requested.Should().Equal(OAuthProvider.Microsoft);
         factory.ConnectCount.Should().Be(1);
-        await using var verify = db.CreateContext();
-        var all = await new AccountRepository(verify).GetAllAsync(ct);
+        await using var verify = db.CreateVerifier();
+        var all = await verify.Accounts().GetAllAsync(ct);
         all.Should().ContainSingle();
         all[0].EmailAddress.Should().Be("me@outlook.com");
         all[0].DisplayName.Should().Be(account.DisplayName);
@@ -60,12 +60,12 @@ public class ReauthenticateOAuthAccountTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var account = OAuthTestData.OAuthAccount(email: "me@gmail.com");
-        await new AccountRepository(db.Context).AddAsync(account, ct);
+        await db.CreateAccountRepository().AddAsync(account, ct);
         var secrets = new InMemorySecretStore();
         await OAuthTokenStorage.SaveAsync(secrets, account.Id, OldTokens, ct);
         var authorizer = new FakeOAuthAuthorizer { Result = new OAuthAuthorization("other@gmail.com", "Other", NewTokens) };
         var factory = new FakeImapSessionFactory();
-        var handler = new ReauthenticateOAuthAccountCommandHandler(new AccountRepository(db.Context), secrets, authorizer, factory, NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
+        var handler = new ReauthenticateOAuthAccountCommandHandler(db.CreateAccountRepository(), secrets, authorizer, factory, NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
 
         var act = async () => await handler.Handle(new ReauthenticateOAuthAccountCommand(account.Id), ct);
 
@@ -84,12 +84,12 @@ public class ReauthenticateOAuthAccountTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var account = OAuthTestData.OAuthAccount();
-        await new AccountRepository(db.Context).AddAsync(account, ct);
+        await db.CreateAccountRepository().AddAsync(account, ct);
         var secrets = new InMemorySecretStore();
         await OAuthTokenStorage.SaveAsync(secrets, account.Id, OldTokens, ct);
         var authorizer = new FakeOAuthAuthorizer { Result = new OAuthAuthorization("me@gmail.com", "Me", NewTokens) };
         var factory = new FakeImapSessionFactory { Failure = new InvalidOperationException("IMAP access is disabled") };
-        var handler = new ReauthenticateOAuthAccountCommandHandler(new AccountRepository(db.Context), secrets, authorizer, factory, NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
+        var handler = new ReauthenticateOAuthAccountCommandHandler(db.CreateAccountRepository(), secrets, authorizer, factory, NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
 
         var act = async () => await handler.Handle(new ReauthenticateOAuthAccountCommand(account.Id), ct);
 
@@ -106,11 +106,11 @@ public class ReauthenticateOAuthAccountTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var account = OAuthTestData.OAuthAccount();
-        await new AccountRepository(db.Context).AddAsync(account, ct);
+        await db.CreateAccountRepository().AddAsync(account, ct);
         var secrets = new InMemorySecretStore();
         var authorizer = new FakeOAuthAuthorizer { Result = new OAuthAuthorization("me@gmail.com", "Me", NewTokens) };
         var factory = new FakeImapSessionFactory { Failure = new InvalidOperationException("IMAP access is disabled") };
-        var handler = new ReauthenticateOAuthAccountCommandHandler(new AccountRepository(db.Context), secrets, authorizer, factory, NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
+        var handler = new ReauthenticateOAuthAccountCommandHandler(db.CreateAccountRepository(), secrets, authorizer, factory, NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
 
         var act = async () => await handler.Handle(new ReauthenticateOAuthAccountCommand(account.Id), ct);
 
@@ -127,10 +127,10 @@ public class ReauthenticateOAuthAccountTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var account = TestData.Account("pw@example.com");
-        await new AccountRepository(db.Context).AddAsync(account, ct);
+        await db.CreateAccountRepository().AddAsync(account, ct);
         var authorizer = new FakeOAuthAuthorizer { Result = new OAuthAuthorization("pw@example.com", "Pw", NewTokens) };
         var handler = new ReauthenticateOAuthAccountCommandHandler(
-            new AccountRepository(db.Context), new InMemorySecretStore(), authorizer, new FakeImapSessionFactory(), NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
+            db.CreateAccountRepository(), new InMemorySecretStore(), authorizer, new FakeImapSessionFactory(), NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
 
         var act = async () => await handler.Handle(new ReauthenticateOAuthAccountCommand(account.Id), ct);
 
@@ -148,7 +148,7 @@ public class ReauthenticateOAuthAccountTests
         await using var db = await TestDatabase.CreateAsync(ct);
         var authorizer = new FakeOAuthAuthorizer();
         var handler = new ReauthenticateOAuthAccountCommandHandler(
-            new AccountRepository(db.Context), new InMemorySecretStore(), authorizer, new FakeImapSessionFactory(), NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
+            db.CreateAccountRepository(), new InMemorySecretStore(), authorizer, new FakeImapSessionFactory(), NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
 
         var act = async () => await handler.Handle(new ReauthenticateOAuthAccountCommand(Guid.NewGuid()), ct);
 
@@ -165,13 +165,13 @@ public class ReauthenticateOAuthAccountTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var account = OAuthTestData.OAuthAccount();
-        await new AccountRepository(db.Context).AddAsync(account, ct);
+        await db.CreateAccountRepository().AddAsync(account, ct);
         var secrets = new InMemorySecretStore();
         await OAuthTokenStorage.SaveAsync(secrets, account.Id, OldTokens, ct);
         var failing = new SetFailingSecretStore(secrets);
         var authorizer = new FakeOAuthAuthorizer { Result = new OAuthAuthorization("me@gmail.com", "Me", NewTokens) };
         var factory = new FakeImapSessionFactory { Failure = new InvalidOperationException("IMAP access is disabled") };
-        var handler = new ReauthenticateOAuthAccountCommandHandler(new AccountRepository(db.Context), failing, authorizer, factory, NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
+        var handler = new ReauthenticateOAuthAccountCommandHandler(db.CreateAccountRepository(), failing, authorizer, factory, NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
         failing.AllowedSets = 1;
 
         var act = async () => await handler.Handle(new ReauthenticateOAuthAccountCommand(account.Id), ct);
@@ -190,12 +190,12 @@ public class ReauthenticateOAuthAccountTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var account = OAuthTestData.OAuthAccount();
-        await new AccountRepository(db.Context).AddAsync(account, ct);
+        await db.CreateAccountRepository().AddAsync(account, ct);
         var secrets = new InMemorySecretStore();
         secrets.Values[AccountSecrets.OAuthKey(account.Id)] = "{not json";
         var authorizer = new FakeOAuthAuthorizer { Result = new OAuthAuthorization("me@gmail.com", "Me", NewTokens) };
         var handler = new ReauthenticateOAuthAccountCommandHandler(
-            new AccountRepository(db.Context), secrets, authorizer, new FakeImapSessionFactory(), NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
+            db.CreateAccountRepository(), secrets, authorizer, new FakeImapSessionFactory(), NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
 
         await handler.Handle(new ReauthenticateOAuthAccountCommand(account.Id), ct);
 
@@ -211,12 +211,12 @@ public class ReauthenticateOAuthAccountTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var account = OAuthTestData.OAuthAccount();
-        await new AccountRepository(db.Context).AddAsync(account, ct);
+        await db.CreateAccountRepository().AddAsync(account, ct);
         var secrets = new InMemorySecretStore();
         secrets.Values[AccountSecrets.OAuthKey(account.Id)] = "{not json";
         var authorizer = new FakeOAuthAuthorizer { Result = new OAuthAuthorization("me@gmail.com", "Me", NewTokens) };
         var factory = new FakeImapSessionFactory { Failure = new InvalidOperationException("IMAP access is disabled") };
-        var handler = new ReauthenticateOAuthAccountCommandHandler(new AccountRepository(db.Context), secrets, authorizer, factory, NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
+        var handler = new ReauthenticateOAuthAccountCommandHandler(db.CreateAccountRepository(), secrets, authorizer, factory, NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
 
         var act = async () => await handler.Handle(new ReauthenticateOAuthAccountCommand(account.Id), ct);
 
@@ -233,18 +233,19 @@ public class ReauthenticateOAuthAccountTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var account = OAuthTestData.OAuthAccount();
-        await new AccountRepository(db.Context).AddAsync(account, ct);
+        await db.CreateAccountRepository().AddAsync(account, ct);
         var secrets = new InMemorySecretStore();
         var authorizer = new FakeOAuthAuthorizer { Result = new OAuthAuthorization("me@gmail.com", "Me", NewTokens) };
         authorizer.OnAuthorize = () =>
         {
             // The hook cannot be async, so block on the delete through a second context.
-            using var other = db.CreateContext();
-            new AccountRepository(other).DeleteAsync(account.Id).GetAwaiter().GetResult();
+            var other = db.CreateVerifier();
+            other.Accounts().DeleteAsync(account.Id).GetAwaiter().GetResult();
+            other.DisposeAsync().AsTask().GetAwaiter().GetResult();
         };
         var factory = new FakeImapSessionFactory();
         var handler = new ReauthenticateOAuthAccountCommandHandler(
-            new AccountRepository(db.Context), secrets, authorizer, factory, NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
+            db.CreateAccountRepository(), secrets, authorizer, factory, NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
 
         var act = async () => await handler.Handle(new ReauthenticateOAuthAccountCommand(account.Id), ct);
 
@@ -262,7 +263,7 @@ public class ReauthenticateOAuthAccountTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var account = OAuthTestData.OAuthAccount();
-        await new AccountRepository(db.Context).AddAsync(account, ct);
+        await db.CreateAccountRepository().AddAsync(account, ct);
         var secrets = new InMemorySecretStore();
         await OAuthTokenStorage.SaveAsync(secrets, account.Id, OldTokens, ct);
         var rotated = new OAuthTokens("rotated-access", "rotated-refresh", new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero));
@@ -270,7 +271,7 @@ public class ReauthenticateOAuthAccountTests
         authorizer.OnAuthorize = () => OAuthTokenStorage.SaveAsync(secrets, account.Id, rotated, CancellationToken.None).GetAwaiter().GetResult();
         var factory = new FakeImapSessionFactory { Failure = new InvalidOperationException("IMAP access is disabled") };
         var handler = new ReauthenticateOAuthAccountCommandHandler(
-            new AccountRepository(db.Context), secrets, authorizer, factory, NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
+            db.CreateAccountRepository(), secrets, authorizer, factory, NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
 
         var act = async () => await handler.Handle(new ReauthenticateOAuthAccountCommand(account.Id), ct);
 
@@ -323,12 +324,12 @@ public class ReauthenticateOAuthAccountTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var account = OAuthTestData.OAuthAccount();
-        await new AccountRepository(db.Context).AddAsync(account, ct);
+        await db.CreateAccountRepository().AddAsync(account, ct);
         var secrets = new InMemorySecretStore();
         await OAuthTokenStorage.SaveAsync(secrets, account.Id, OldTokens, ct);
         var authorizer = new FakeOAuthAuthorizer { Failure = new OAuthNotConfiguredException(OAuthProvider.Google, "hint") };
         var handler = new ReauthenticateOAuthAccountCommandHandler(
-            new AccountRepository(db.Context), secrets, authorizer, new FakeImapSessionFactory(), NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
+            db.CreateAccountRepository(), secrets, authorizer, new FakeImapSessionFactory(), NullLogger<ReauthenticateOAuthAccountCommandHandler>.Instance);
 
         var act = async () => await handler.Handle(new ReauthenticateOAuthAccountCommand(account.Id), ct);
 

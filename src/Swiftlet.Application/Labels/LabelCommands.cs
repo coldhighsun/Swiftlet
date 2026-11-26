@@ -88,10 +88,11 @@ public sealed class DeleteLabelCommandHandler(ILabelRepository labels) : IComman
 /// <summary>
 /// Attaches a label to a message or removes it. The state is local.
 /// </summary>
+/// <param name="AccountId">The account that owns the message.</param>
 /// <param name="MessageId">The message identifier.</param>
 /// <param name="LabelId">The label identifier.</param>
 /// <param name="Assigned">Whether the label should be attached.</param>
-public sealed record SetMessageLabelCommand(Guid MessageId, Guid LabelId, bool Assigned) : ICommand<Unit>;
+public sealed record SetMessageLabelCommand(Guid AccountId, Guid MessageId, Guid LabelId, bool Assigned) : ICommand<Unit>;
 
 /// <summary>
 /// Handles <see cref="SetMessageLabelCommand"/>.
@@ -105,7 +106,7 @@ public sealed class SetMessageLabelCommandHandler(IMessageRepository messages, I
     public async ValueTask<Unit> Handle(SetMessageLabelCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
-        var message = await messages.GetAsync(command.MessageId, cancellationToken)
+        var message = await messages.GetAsync(command.AccountId, command.MessageId, cancellationToken)
             ?? throw new InvalidOperationException($"Message {command.MessageId} was not found.");
         if (command.Assigned)
         {
@@ -118,7 +119,7 @@ public sealed class SetMessageLabelCommandHandler(IMessageRepository messages, I
             message.RemoveLabel(command.LabelId);
         }
 
-        await messages.SaveChangesAsync(cancellationToken);
+        await messages.SaveLabelsAsync(message, cancellationToken);
         return Unit.Value;
     }
 }

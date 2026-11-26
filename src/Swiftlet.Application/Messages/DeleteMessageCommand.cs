@@ -25,8 +25,9 @@ public enum DeleteOutcome
 /// <summary>
 /// Deletes a message on the IMAP server and then removes the cached copy.
 /// </summary>
+/// <param name="AccountId">The account that owns the message.</param>
 /// <param name="MessageId">The cached message identifier.</param>
-public sealed record DeleteMessageCommand(Guid MessageId) : ICommand<DeleteOutcome>;
+public sealed record DeleteMessageCommand(Guid AccountId, Guid MessageId) : ICommand<DeleteOutcome>;
 
 /// <summary>
 /// Handles <see cref="DeleteMessageCommand"/>.
@@ -46,9 +47,9 @@ public sealed class DeleteMessageCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        var message = await messages.GetAsync(command.MessageId, cancellationToken)
+        var message = await messages.GetAsync(command.AccountId, command.MessageId, cancellationToken)
             ?? throw new InvalidOperationException($"Message {command.MessageId} was not found.");
-        var folder = await folders.GetAsync(message.FolderId, cancellationToken)
+        var folder = await folders.GetAsync(message.AccountId, message.FolderId, cancellationToken)
             ?? throw new InvalidOperationException($"Folder {message.FolderId} was not found.");
         var account = await accounts.GetAsync(message.AccountId, cancellationToken)
             ?? throw new InvalidOperationException($"Account {message.AccountId} was not found.");
@@ -72,7 +73,7 @@ public sealed class DeleteMessageCommandHandler(
         }
 
         // Only after the server confirmed: a failure above leaves the local copy untouched.
-        await messages.DeleteAsync(message.Id, cancellationToken);
+        await messages.DeleteAsync(message.AccountId, message.Id, cancellationToken);
         return trashFullName is null ? DeleteOutcome.DeletedPermanently : DeleteOutcome.MovedToTrash;
     }
 }

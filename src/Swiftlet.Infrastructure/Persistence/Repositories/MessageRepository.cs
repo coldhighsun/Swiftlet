@@ -1,14 +1,17 @@
 using Microsoft.EntityFrameworkCore;
 using Swiftlet.Domain.Folders;
+using Swiftlet.Domain.Labels;
 using Swiftlet.Domain.Messages;
 
 namespace Swiftlet.Infrastructure.Persistence.Repositories;
 
 /// <summary>
-/// EF Core implementation of <see cref="IMessageRepository"/> with FTS5 search.
+/// EF Core implementation of <see cref="IMessageRepository"/> with FTS5 search. Mail is read from the account's own
+/// database; labels are read from the global store and attached to the loaded messages.
 /// </summary>
-/// <param name="context">The database context.</param>
-internal sealed class MessageRepository(SwiftletDbContext context) : IMessageRepository
+/// <param name="global">The global store holding accounts, labels and label links.</param>
+/// <param name="contexts">The scope's account database contexts.</param>
+internal sealed class MessageRepository(GlobalDbContext global, AccountContextProvider contexts) : IMessageRepository
 {
     /// <summary>
     /// The minimum term length supported by the FTS5 trigram tokenizer.
@@ -16,43 +19,75 @@ internal sealed class MessageRepository(SwiftletDbContext context) : IMessageRep
     private const int MinTrigramLength = 3;
 
     /// <summary>
-    /// The maximum number of identifiers per bulk delete statement.
+    /// The maximum number of identifiers per bulk statement.
     /// </summary>
-    private const int DeleteBatchSize = 500;
+    private const int BatchSize = 500;
 
     /// <inheritdoc />
     public async Task AddAsync(MailMessage message, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(message);
+        var context = await contexts.GetAsync(message.AccountId, cancellationToken);
         context.Messages.Add(message);
         await context.SaveChangesAsync(cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task<MailMessage?> GetAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<MailMessage?> GetAsync(Guid accountId, Guid id, CancellationToken cancellationToken = default)
     {
-        return await context.Messages
+        var context = await contexts.GetAsync(accountId, cancellationToken);
+        var message = await context.Messages
             .Include(m => m.Attachments)
-            .Include(m => m.Labels)
             .FirstOrDefaultAsync(m => m.Id == id, cancellationToken);
+        if (message is not null)
+        {
+            await AttachLabelsAsync([message], cancellationToken);
+        }
+
+        return message;
     }
 
     /// <inheritdoc />
     public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        await context.SaveChangesAsync(cancellationToken);
+        await contexts.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task SaveLabelsAsync(MailMessage message, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        var wanted = message.Labels.Select(l => l.Id).ToHashSet();
+        var existing = await global.MessageLabels
+            .Where(l => l.MessageId == message.Id)
+            .ToListAsync(cancellationToken);
+
+        global.MessageLabels.RemoveRange(existing.Where(l => !wanted.Contains(l.LabelId)));
+        var present = existing.Select(l => l.LabelId).ToHashSet();
+        foreach (var labelId in wanted.Where(id => !present.Contains(id)))
+        {
+            global.MessageLabels.Add(new MessageLabel { MessageId = message.Id, LabelId = labelId, AccountId = message.AccountId });
+        }
+
+        await global.SaveChangesAsync(cancellationToken);
     }
 
     /// <inheritdoc />
     public async Task AddRangeAsync(IReadOnlyCollection<MailMessage> messages, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(messages);
-        context.Messages.AddRange(messages);
-        await context.SaveChangesAsync(cancellationToken);
+        foreach (var group in messages.GroupBy(m => m.AccountId))
+        {
+            var context = await contexts.GetAsync(group.Key, cancellationToken);
+            context.Messages.AddRange(group);
+            await context.SaveChangesAsync(cancellationToken);
+        }
     }
 
     /// <inheritdoc />
-    public async Task<uint> GetMaxUidAsync(Guid folderId, CancellationToken cancellationToken = default)
+    public async Task<uint> GetMaxUidAsync(Guid accountId, Guid folderId, CancellationToken cancellationToken = default)
     {
+        var context = await contexts.GetAsync(accountId, cancellationToken);
         var max = await context.Messages
             .Where(m => m.FolderId == folderId)
             .MaxAsync(m => (uint?)m.Uid, cancellationToken);
@@ -60,32 +95,39 @@ internal sealed class MessageRepository(SwiftletDbContext context) : IMessageRep
     }
 
     /// <inheritdoc />
-    public async Task DeleteByFolderAsync(Guid folderId, CancellationToken cancellationToken = default)
+    public async Task DeleteByFolderAsync(Guid accountId, Guid folderId, CancellationToken cancellationToken = default)
     {
+        var context = await contexts.GetAsync(accountId, cancellationToken);
+        var ids = await context.Messages.Where(m => m.FolderId == folderId).Select(m => m.Id).ToListAsync(cancellationToken);
         await context.Messages.Where(m => m.FolderId == folderId).ExecuteDeleteAsync(cancellationToken);
+        await DeleteLabelLinksAsync(ids, cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task<bool> ExistsAsync(Guid folderId, uint uid, CancellationToken cancellationToken = default)
+    public async Task<bool> ExistsAsync(Guid accountId, Guid folderId, uint uid, CancellationToken cancellationToken = default)
     {
+        var context = await contexts.GetAsync(accountId, cancellationToken);
         return await context.Messages.AnyAsync(m => m.FolderId == folderId && m.Uid == uid, cancellationToken);
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<MailMessage>> GetByFolderAsync(
+        Guid accountId,
         Guid folderId,
         int skip,
         int take,
         CancellationToken cancellationToken = default)
     {
-        return await context.Messages
+        var context = await contexts.GetAsync(accountId, cancellationToken);
+        var messages = await context.Messages
             .Include(m => m.Attachments)
-            .Include(m => m.Labels)
             .Where(m => m.FolderId == folderId)
             .OrderByDescending(m => m.SentAt)
             .Skip(skip)
             .Take(take)
             .ToListAsync(cancellationToken);
+        await AttachLabelsAsync(messages, cancellationToken);
+        return messages;
     }
 
     /// <inheritdoc />
@@ -94,14 +136,22 @@ internal sealed class MessageRepository(SwiftletDbContext context) : IMessageRep
         int take,
         CancellationToken cancellationToken = default)
     {
-        return await context.Messages
-            .Include(m => m.Attachments)
-            .Include(m => m.Labels)
-            .Where(m => context.Folders.Any(f => f.Id == m.FolderId && f.Role == FolderRole.Inbox))
-            .OrderByDescending(m => m.SentAt)
-            .Skip(skip)
-            .Take(take)
-            .ToListAsync(cancellationToken);
+        // Every account database returns its newest skip+take inbox messages; the page is cut from the merged list.
+        var candidates = new List<MailMessage>();
+        foreach (var accountId in await GetAccountIdsAsync(cancellationToken))
+        {
+            var context = await contexts.GetAsync(accountId, cancellationToken);
+            candidates.AddRange(await context.Messages
+                .Include(m => m.Attachments)
+                .Where(m => context.Folders.Any(f => f.Id == m.FolderId && f.Role == FolderRole.Inbox))
+                .OrderByDescending(m => m.SentAt)
+                .Take(skip + take)
+                .ToListAsync(cancellationToken));
+        }
+
+        var page = candidates.OrderByDescending(m => m.SentAt).Skip(skip).Take(take).ToList();
+        await AttachLabelsAsync(page, cancellationToken);
+        return page;
     }
 
     /// <inheritdoc />
@@ -111,29 +161,47 @@ internal sealed class MessageRepository(SwiftletDbContext context) : IMessageRep
         int take,
         CancellationToken cancellationToken = default)
     {
-        return await context.Messages
-            .Include(m => m.Attachments)
-            .Include(m => m.Labels)
-            .Where(m => m.Labels.Any(l => l.Id == labelId))
-            .OrderByDescending(m => m.SentAt)
-            .Skip(skip)
-            .Take(take)
+        var links = await global.MessageLabels
+            .AsNoTracking()
+            .Where(l => l.LabelId == labelId)
+            .Select(l => new { l.AccountId, l.MessageId })
             .ToListAsync(cancellationToken);
+
+        var candidates = new List<MailMessage>();
+        foreach (var byAccount in links.GroupBy(l => l.AccountId))
+        {
+            var context = await contexts.GetAsync(byAccount.Key, cancellationToken);
+            foreach (var batch in byAccount.Select(l => l.MessageId).Chunk(BatchSize))
+            {
+                candidates.AddRange(await context.Messages
+                    .Include(m => m.Attachments)
+                    .Where(m => batch.Contains(m.Id))
+                    .ToListAsync(cancellationToken));
+            }
+        }
+
+        var page = candidates.OrderByDescending(m => m.SentAt).Skip(skip).Take(take).ToList();
+        await AttachLabelsAsync(page, cancellationToken);
+        return page;
     }
 
     /// <inheritdoc />
-    public async Task DeleteAsync(Guid messageId, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(Guid accountId, Guid messageId, CancellationToken cancellationToken = default)
     {
-        // Bulk delete relies on the database cascades (attachments, label links) and the FTS delete trigger.
+        // Bulk delete relies on the database cascade (attachments) and the FTS delete trigger.
+        var context = await contexts.GetAsync(accountId, cancellationToken);
         await context.Messages.Where(m => m.Id == messageId).ExecuteDeleteAsync(cancellationToken);
+        await DeleteLabelLinksAsync([messageId], cancellationToken);
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<MessageFlagState>> GetFlagStatesAsync(
+        Guid accountId,
         Guid folderId,
         CancellationToken cancellationToken = default)
     {
         // Projected and untracked: bodies are never read and nothing stays in the change tracker.
+        var context = await contexts.GetAsync(accountId, cancellationToken);
         return await context.Messages
             .AsNoTracking()
             .Where(m => m.FolderId == folderId)
@@ -144,9 +212,11 @@ internal sealed class MessageRepository(SwiftletDbContext context) : IMessageRep
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<MessageFlagState>> GetPendingFlagStatesAsync(
+        Guid accountId,
         Guid folderId,
         CancellationToken cancellationToken = default)
     {
+        var context = await contexts.GetAsync(accountId, cancellationToken);
         return await context.Messages
             .AsNoTracking()
             .Where(m => m.FolderId == folderId && m.IsFlagSyncPending)
@@ -157,12 +227,14 @@ internal sealed class MessageRepository(SwiftletDbContext context) : IMessageRep
 
     /// <inheritdoc />
     public async Task<int> ApplyServerFlagsAsync(
+        Guid accountId,
         Guid messageId,
         bool isRead,
         bool isFlagged,
         CancellationToken cancellationToken = default)
     {
         // The pending check is part of the statement, so a user change made after the caller loaded the row still wins.
+        var context = await contexts.GetAsync(accountId, cancellationToken);
         return await context.Messages
             .Where(m => m.Id == messageId && !m.IsFlagSyncPending)
             .ExecuteUpdateAsync(
@@ -172,6 +244,7 @@ internal sealed class MessageRepository(SwiftletDbContext context) : IMessageRep
 
     /// <inheritdoc />
     public async Task<int> ClearFlagSyncPendingAsync(
+        Guid accountId,
         IReadOnlyCollection<MessageFlagState> pushed,
         CancellationToken cancellationToken = default)
     {
@@ -184,6 +257,7 @@ internal sealed class MessageRepository(SwiftletDbContext context) : IMessageRep
         // One UPDATE per row because every row has its own compare values; a single transaction keeps this to one
         // commit (one fsync) instead of one per row. A row the user changed after it was loaded no longer matches
         // and keeps its marker, so the next sync pushes the newer value.
+        var context = await contexts.GetAsync(accountId, cancellationToken);
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         var cleared = 0;
         foreach (var state in pushed)
@@ -201,7 +275,10 @@ internal sealed class MessageRepository(SwiftletDbContext context) : IMessageRep
     }
 
     /// <inheritdoc />
-    public async Task DeleteRangeAsync(IReadOnlyCollection<Guid> messageIds, CancellationToken cancellationToken = default)
+    public async Task DeleteRangeAsync(
+        Guid accountId,
+        IReadOnlyCollection<Guid> messageIds,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(messageIds);
         if (messageIds.Count == 0)
@@ -210,10 +287,13 @@ internal sealed class MessageRepository(SwiftletDbContext context) : IMessageRep
         }
 
         // Batches stay below SQLite's bound-parameter limit; cascades and the FTS trigger do the rest.
-        foreach (var batch in messageIds.Chunk(DeleteBatchSize))
+        var context = await contexts.GetAsync(accountId, cancellationToken);
+        foreach (var batch in messageIds.Chunk(BatchSize))
         {
             await context.Messages.Where(m => batch.Contains(m.Id)).ExecuteDeleteAsync(cancellationToken);
         }
+
+        await DeleteLabelLinksAsync(messageIds, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -229,6 +309,33 @@ internal sealed class MessageRepository(SwiftletDbContext context) : IMessageRep
             return [];
         }
 
+        var accountIds = accountId is { } single ? [single] : await GetAccountIdsAsync(cancellationToken);
+        var results = new List<MailMessage>();
+        foreach (var id in accountIds)
+        {
+            var context = await contexts.GetAsync(id, cancellationToken);
+            results.AddRange(await SearchAccountAsync(context, terms, take, cancellationToken));
+        }
+
+        var page = results.OrderByDescending(m => m.SentAt).Take(take).ToList();
+        await AttachLabelsAsync(page, cancellationToken);
+        return page;
+    }
+
+    /// <summary>
+    /// Searches one account's database.
+    /// </summary>
+    /// <param name="context">The account's context.</param>
+    /// <param name="terms">The search terms; all must match.</param>
+    /// <param name="take">The maximum number of results.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The matching messages, newest first.</returns>
+    private static async Task<List<MailMessage>> SearchAccountAsync(
+        AccountDbContext context,
+        string[] terms,
+        int take,
+        CancellationToken cancellationToken)
+    {
         IQueryable<MailMessage> source;
         if (terms.All(t => t.Length >= MinTrigramLength))
         {
@@ -255,17 +362,75 @@ internal sealed class MessageRepository(SwiftletDbContext context) : IMessageRep
             }
         }
 
-        if (accountId is { } id)
-        {
-            source = source.Where(m => m.AccountId == id);
-        }
-
         return await source
             .Include(m => m.Attachments)
-            .Include(m => m.Labels)
             .OrderByDescending(m => m.SentAt)
             .Take(take)
             .ToListAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Gets the identifiers of all accounts.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The account identifiers.</returns>
+    private async Task<List<Guid>> GetAccountIdsAsync(CancellationToken cancellationToken)
+    {
+        return await global.Accounts.AsNoTracking().Select(a => a.Id).ToListAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Loads the labels of the given messages from the global store and attaches them.
+    /// </summary>
+    /// <param name="messages">The loaded messages.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the labels are attached.</returns>
+    private async Task AttachLabelsAsync(List<MailMessage> messages, CancellationToken cancellationToken)
+    {
+        if (messages.Count == 0)
+        {
+            return;
+        }
+
+        var labelsByMessage = new Dictionary<Guid, List<Label>>();
+        foreach (var batch in messages.Select(m => m.Id).Chunk(BatchSize))
+        {
+            var links = await global.MessageLabels
+                .AsNoTracking()
+                .Where(l => batch.Contains(l.MessageId))
+                .Join(global.Labels, l => l.LabelId, label => label.Id, (l, label) => new { l.MessageId, Label = label })
+                .ToListAsync(cancellationToken);
+            foreach (var link in links)
+            {
+                if (!labelsByMessage.TryGetValue(link.MessageId, out var list))
+                {
+                    list = [];
+                    labelsByMessage[link.MessageId] = list;
+                }
+
+                list.Add(link.Label);
+            }
+        }
+
+        foreach (var message in messages)
+        {
+            message.SetLabels(labelsByMessage.TryGetValue(message.Id, out var labels) ? labels : []);
+        }
+    }
+
+    /// <summary>
+    /// Removes the label links of deleted messages. A failure here only leaves harmless orphan links, because label
+    /// queries always go through existing messages.
+    /// </summary>
+    /// <param name="messageIds">The deleted message identifiers.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the links are removed.</returns>
+    private async Task DeleteLabelLinksAsync(IReadOnlyCollection<Guid> messageIds, CancellationToken cancellationToken)
+    {
+        foreach (var batch in messageIds.Chunk(BatchSize))
+        {
+            await global.MessageLabels.Where(l => batch.Contains(l.MessageId)).ExecuteDeleteAsync(cancellationToken);
+        }
     }
 
     /// <summary>

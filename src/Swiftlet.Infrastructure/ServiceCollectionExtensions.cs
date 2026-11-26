@@ -24,7 +24,7 @@ public static class ServiceCollectionExtensions
     /// Registers persistence, secret storage, OAuth 2.0, MailKit IMAP/SMTP services and the background sync worker.
     /// </summary>
     /// <param name="services">The service collection.</param>
-    /// <param name="dataDirectory">The directory holding the SQLite database, settings and file-based secrets.</param>
+    /// <param name="dataDirectory">The directory holding the global SQLite database, the per-account mail databases (accounts subdirectory), settings and file-based secrets.</param>
     /// <returns>The same service collection.</returns>
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, string dataDirectory)
     {
@@ -35,7 +35,9 @@ public static class ServiceCollectionExtensions
         var databasePath = Path.Combine(dataDirectory, "swiftlet.db");
         var oauthSettingsPath = Path.Combine(dataDirectory, "oauth.json");
 
-        services.AddDbContext<SwiftletDbContext>(options => options.UseSqlite($"Data Source={databasePath};Default Timeout=30"));
+        services.AddDbContext<GlobalDbContext>(options => options.UseSqlite($"Data Source={databasePath};Default Timeout=30"));
+        services.AddSingleton<IAccountDbContextFactory>(_ => new AccountDbContextFactory(Path.Combine(dataDirectory, "accounts")));
+        services.AddScoped<AccountContextProvider>();
         services.AddScoped<IAccountRepository, AccountRepository>();
         services.AddScoped<IFolderRepository, FolderRepository>();
         services.AddScoped<IMessageRepository, MessageRepository>();

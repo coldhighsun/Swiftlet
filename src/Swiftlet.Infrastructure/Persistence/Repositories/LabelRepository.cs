@@ -7,7 +7,7 @@ namespace Swiftlet.Infrastructure.Persistence.Repositories;
 /// EF Core implementation of <see cref="ILabelRepository"/>.
 /// </summary>
 /// <param name="context">The database context.</param>
-internal sealed class LabelRepository(SwiftletDbContext context) : ILabelRepository
+internal sealed class LabelRepository(GlobalDbContext context) : ILabelRepository
 {
     /// <inheritdoc />
     public async Task AddAsync(Label label, CancellationToken cancellationToken = default)

@@ -49,7 +49,7 @@ public class DeleteAccountTests
     /// <param name="table">The table name.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The row count.</returns>
-    private static async Task<int> CountAsync(SwiftletDbContext context, string table, CancellationToken cancellationToken)
+    private static async Task<int> CountAsync(DbContext context, string table, CancellationToken cancellationToken)
     {
         // The table names are hard-coded literals from this test class, never user input.
 #pragma warning disable EF1002
@@ -79,7 +79,9 @@ public class DeleteAccountTests
         var message = MailMessage.Create(account.Id, folder.Id, 1, subject, "A", "a@example.com", "r", DateTimeOffset.UtcNow, "body");
         message.AddAttachment("a.txt", "text/plain", 3);
         message.AddLabel(label);
-        await new MessageRepository(db.Context).AddAsync(message, cancellationToken);
+        var messages = db.CreateMessageRepository();
+        await messages.AddAsync(message, cancellationToken);
+        await messages.SaveLabelsAsync(message, cancellationToken);
     }
 
     /// <summary>
@@ -99,18 +101,21 @@ public class DeleteAccountTests
         await labels.AddAsync(labelTwo, ct);
         await AddMailAsync(db, first, firstFolder, labelOne, "deletedsubject", ct);
         await AddMailAsync(db, second, secondFolder, labelTwo, "keptsubject", ct);
-        var handler = new DeleteAccountCommandHandler(new AccountRepository(db.Context), new InMemorySecretStore());
+        var handler = new DeleteAccountCommandHandler(db.CreateAccountRepository(), new InMemorySecretStore());
 
         await handler.Handle(new DeleteAccountCommand(first.Id), ct);
 
-        await using var verify = db.CreateContext();
-        (await verify.Accounts.Select(a => a.Id).ToListAsync(ct)).Should().Equal(second.Id);
-        (await verify.Folders.Select(f => f.Id).ToListAsync(ct)).Should().Equal(secondFolder.Id);
-        (await CountAsync(verify, "Messages", ct)).Should().Be(1);
-        (await CountAsync(verify, "Attachments", ct)).Should().Be(1);
-        (await CountAsync(verify, "MessageLabels", ct)).Should().Be(1);
-        (await verify.Labels.CountAsync(ct)).Should().Be(2);
-        var search = new MessageRepository(verify);
+        await using var verify = db.CreateVerifier();
+        (await verify.Global.Accounts.Select(a => a.Id).ToListAsync(ct)).Should().Equal(second.Id);
+        var secondContext = await verify.AccountAsync(second.Id, ct);
+        (await secondContext.Folders.Select(f => f.Id).ToListAsync(ct)).Should().Equal(secondFolder.Id);
+        (await CountAsync(secondContext, "Messages", ct)).Should().Be(1);
+        (await CountAsync(secondContext, "Attachments", ct)).Should().Be(1);
+        (await CountAsync(verify.Global, "MessageLabels", ct)).Should().Be(1);
+        (await verify.Global.Labels.CountAsync(ct)).Should().Be(2);
+        db.Factory.DeletedAccounts.Should().Equal(first.Id);
+        db.Factory.OpenAccounts.Should().Equal(second.Id);
+        var search = verify.Messages();
         (await search.SearchAsync("deletedsubject", null, 10, ct)).Should().BeEmpty();
         (await search.SearchAsync("keptsubject", null, 10, ct)).Should().HaveCount(1);
     }
@@ -128,7 +133,7 @@ public class DeleteAccountTests
         secrets.Values[AccountSecrets.PasswordKey(account.Id)] = "pw";
         secrets.Values["unrelated"] = "keep";
 
-        await new DeleteAccountCommandHandler(new AccountRepository(db.Context), secrets)
+        await new DeleteAccountCommandHandler(db.CreateAccountRepository(), secrets)
             .Handle(new DeleteAccountCommand(account.Id), ct);
 
         secrets.Values.Should().NotContainKey(AccountSecrets.PasswordKey(account.Id));
@@ -151,12 +156,12 @@ public class DeleteAccountTests
             new ServerEndpoint("smtp.example.com", 465, true),
             DateTimeOffset.UtcNow,
             OAuthProvider.Google);
-        await new AccountRepository(db.Context).AddAsync(account, ct);
+        await db.CreateAccountRepository().AddAsync(account, ct);
         var secrets = new InMemorySecretStore();
         secrets.Values[AccountSecrets.OAuthKey(account.Id)] = "{}";
         secrets.Values["unrelated"] = "keep";
 
-        await new DeleteAccountCommandHandler(new AccountRepository(db.Context), secrets)
+        await new DeleteAccountCommandHandler(db.CreateAccountRepository(), secrets)
             .Handle(new DeleteAccountCommand(account.Id), ct);
 
         secrets.Values.Should().NotContainKey(AccountSecrets.OAuthKey(account.Id));
@@ -176,7 +181,7 @@ public class DeleteAccountTests
         var secrets = new InMemorySecretStore();
         secrets.Values["other"] = "keep";
 
-        var act = async () => await new DeleteAccountCommandHandler(new AccountRepository(db.Context), secrets)
+        var act = async () => await new DeleteAccountCommandHandler(db.CreateAccountRepository(), secrets)
             .Handle(new DeleteAccountCommand(Guid.NewGuid()), ct);
 
         await act.Should().NotThrowAsync();
@@ -198,7 +203,7 @@ public class DeleteAccountTests
         secrets.Values[AccountSecrets.OAuthKey(missingId)] = "{}";
         secrets.Values["unrelated"] = "keep";
 
-        await new DeleteAccountCommandHandler(new AccountRepository(db.Context), secrets)
+        await new DeleteAccountCommandHandler(db.CreateAccountRepository(), secrets)
             .Handle(new DeleteAccountCommand(missingId), ct);
 
         secrets.Values.Should().ContainSingle().Which.Key.Should().Be("unrelated");
@@ -213,14 +218,15 @@ public class DeleteAccountTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var (account, _) = await db.SeedAccountAsync(ct);
-        var handler = new DeleteAccountCommandHandler(new AccountRepository(db.Context), new FailingRemoveSecretStore());
+        var handler = new DeleteAccountCommandHandler(db.CreateAccountRepository(), new FailingRemoveSecretStore());
 
         var act = async () => await handler.Handle(new DeleteAccountCommand(account.Id), ct);
 
         await act.Should().ThrowAsync<IOException>();
-        await using var verify = db.CreateContext();
-        (await verify.Accounts.CountAsync(ct)).Should().Be(0);
-        (await verify.Folders.CountAsync(ct)).Should().Be(0);
+        await using var verify = db.CreateVerifier();
+        (await verify.Global.Accounts.CountAsync(ct)).Should().Be(0);
+        db.Factory.DeletedAccounts.Should().Equal(account.Id);
+        db.Factory.OpenAccounts.Should().BeEmpty();
     }
 
     /// <summary>
@@ -236,9 +242,9 @@ public class DeleteAccountTests
         factory.Session.Messages["INBOX"] = [TestData.Remote(1), TestData.Remote(2)];
         factory.Session.Messages["Archive"] = [TestData.Remote(1)];
         return new MailSyncService(
-            new AccountRepository(db.Context),
-            new FolderRepository(db.Context),
-            new MessageRepository(db.Context),
+            db.CreateAccountRepository(),
+            db.CreateFolderRepository(),
+            db.CreateMessageRepository(),
             factory,
             new FakeSyncSettings(),
             new MailSyncOptions(200),
@@ -252,35 +258,42 @@ public class DeleteAccountTests
     /// <param name="accountId">The account identifier.</param>
     private static void DeleteAccountBehindTheScenes(TestDatabase db, Guid accountId)
     {
-        using var other = db.CreateContext();
-        // The hook cannot be async, so block on the delete.
-        new AccountRepository(other).DeleteAsync(accountId).GetAwaiter().GetResult();
+        var other = db.CreateVerifier();
+        try
+        {
+            // The hook cannot be async, so block on the delete.
+            other.Accounts().DeleteAsync(accountId).GetAwaiter().GetResult();
+        }
+        finally
+        {
+            other.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
     }
 
     /// <summary>
-    /// Asserts nothing of the (deleted) account remains.
+    /// Asserts the account row, its label links and its database are gone.
     /// </summary>
     /// <param name="db">The test database.</param>
+    /// <param name="accountId">The deleted account.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    private static async Task AssertNothingRemainsAsync(TestDatabase db, CancellationToken cancellationToken)
+    private static async Task AssertNothingRemainsAsync(TestDatabase db, Guid accountId, CancellationToken cancellationToken)
     {
-        await using var verify = db.CreateContext();
-        (await CountAsync(verify, "Accounts", cancellationToken)).Should().Be(0);
-        (await CountAsync(verify, "Folders", cancellationToken)).Should().Be(0);
-        (await CountAsync(verify, "Messages", cancellationToken)).Should().Be(0);
-        (await CountAsync(verify, "Attachments", cancellationToken)).Should().Be(0);
+        await using var verify = db.CreateVerifier();
+        (await CountAsync(verify.Global, "Accounts", cancellationToken)).Should().Be(0);
+        (await CountAsync(verify.Global, "MessageLabels", cancellationToken)).Should().Be(0);
+        db.Factory.DeletedAccounts.Should().Contain(accountId);
+        db.Factory.OpenAccounts.Should().BeEmpty();
     }
 
     /// <summary>
-    /// Verifies deleting the account before the first folders are written fails the run cleanly and leaves nothing behind.
+    /// Verifies deleting the account before the first folders are written does not bring the account back.
     /// </summary>
     [Fact]
-    public async Task Sync_AccountDeletedDuringSync_LeavesNoOrphansAndDoesNotCorrupt()
+    public async Task Sync_AccountDeletedDuringSync_LeavesNoAccountRowsBehind()
     {
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var (account, _) = await db.SeedAccountAsync(ct);
-        await db.Context.Folders.Where(f => f.AccountId == account.Id).ExecuteDeleteAsync(ct);
         var factory = new FakeImapSessionFactory();
         var sync = CreateSync(db, factory);
         var deleted = false;
@@ -290,19 +303,26 @@ public class DeleteAccountTests
             DeleteAccountBehindTheScenes(db, account.Id);
         };
 
-        // Inserting folders for the vanished account violates the foreign key, which EF reports as DbUpdateException.
-        var act = async () => await sync.SyncAsync(account.Id, ct);
+        // The folders go to the account's own database, which no longer has a foreign key to the account row, so the
+        // in-flight run may finish; what matters is that nothing of the account is registered afterwards.
+        try
+        {
+            await sync.SyncAsync(account.Id, ct);
+        }
+        catch (DbUpdateException)
+        {
+            // Acceptable too: a failed write of the vanished account's data.
+        }
 
-        await act.Should().ThrowAsync<DbUpdateException>();
         deleted.Should().BeTrue();
-        await AssertNothingRemainsAsync(db, ct);
+        await AssertNothingRemainsAsync(db, account.Id, ct);
     }
 
     /// <summary>
-    /// Verifies deleting the account while the second folder is fetched leaves no orphan folders or messages.
+    /// Verifies deleting the account while the second folder is fetched leaves no account rows or database behind.
     /// </summary>
     [Fact]
-    public async Task Sync_AccountDeletedBetweenFolders_CompletesAndLeavesNoOrphans()
+    public async Task Sync_AccountDeletedBetweenFolders_CompletesAndLeavesNoAccountRowsBehind()
     {
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
@@ -319,11 +339,35 @@ public class DeleteAccountTests
             }
         };
 
-        // Message inserts for the vanished account fail per folder; the service logs them as failed folders and finishes.
-        var result = await sync.SyncAsync(account.Id, ct);
+        await sync.SyncAsync(account.Id, ct);
 
         deleted.Should().BeTrue();
-        result.FailedFolders.Should().NotBeEmpty();
-        await AssertNothingRemainsAsync(db, ct);
+        await AssertNothingRemainsAsync(db, account.Id, ct);
+    }
+
+    /// <summary>
+    /// Verifies the label links of the deleted account are removed while those of other accounts stay.
+    /// </summary>
+    [Fact]
+    public async Task Handle_AccountWithLabelledMail_KeepsOtherAccountsLabelLinks()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (first, firstFolder) = await db.SeedAccountAsync(ct);
+        var (second, secondFolder) = await db.SeedAccountAsync(ct);
+        var label = Label.Create("Shared", "#111111");
+        await db.CreateLabelRepository().AddAsync(label, ct);
+        await AddMailAsync(db, first, firstFolder, label, "one", ct);
+        await AddMailAsync(db, second, secondFolder, label, "two", ct);
+
+        await new DeleteAccountCommandHandler(db.CreateAccountRepository(), new InMemorySecretStore())
+            .Handle(new DeleteAccountCommand(first.Id), ct);
+
+        await using var verify = db.CreateVerifier();
+        var links = await verify.Global.Database
+            .SqlQueryRaw<string>("SELECT AccountId AS Value FROM MessageLabels")
+            .ToListAsync(ct);
+        links.Should().ContainSingle().Which.Should().BeEquivalentTo(second.Id.ToString().ToUpperInvariant(), o => o.IgnoringCase());
+        (await verify.Messages().GetByLabelAsync(label.Id, 0, 10, ct)).Should().ContainSingle().Which.AccountId.Should().Be(second.Id);
     }
 }

@@ -257,7 +257,7 @@ public class MainWindowViewModelTests
 
         item.IsRead.Should().BeTrue();
         scenario.Dispatcher.Sent<SetMessageReadCommand>().Should().ContainSingle()
-            .Which.Should().Be(new SetMessageReadCommand(item.Id, true));
+            .Which.Should().Be(new SetMessageReadCommand(item.Message.AccountId, item.Id, true));
     }
 
     /// <summary>

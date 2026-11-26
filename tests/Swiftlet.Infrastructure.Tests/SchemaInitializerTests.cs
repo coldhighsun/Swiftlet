@@ -16,7 +16,7 @@ public class SchemaInitializerTests
     /// <param name="context">The database context.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The number of matching columns.</returns>
-    private static async Task<int> CountPendingColumnsAsync(SwiftletDbContext context, CancellationToken cancellationToken)
+    private static async Task<int> CountPendingColumnsAsync(DbContext context, CancellationToken cancellationToken)
     {
         return await context.Database
             .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM pragma_table_info('Messages') WHERE name = 'IsFlagSyncPending'")
@@ -24,10 +24,24 @@ public class SchemaInitializerTests
     }
 
     /// <summary>
+    /// Counts the tables or virtual tables with a given name.
+    /// </summary>
+    /// <param name="context">The database context.</param>
+    /// <param name="table">The table name.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>1 if the table exists, otherwise 0.</returns>
+    private static async Task<int> CountTablesAsync(DbContext context, string table, CancellationToken cancellationToken)
+    {
+        return await context.Database
+            .SqlQuery<int>($"SELECT COUNT(*) AS Value FROM sqlite_master WHERE name = {table}")
+            .SingleAsync(cancellationToken);
+    }
+
+    /// <summary>
     /// Verifies a database created by the previous version gains the column and keeps its rows.
     /// </summary>
     [Fact]
-    public async Task Initialize_ExistingDatabaseWithoutColumn_AddsColumn()
+    public async Task InitializeAccount_ExistingDatabaseWithoutColumn_AddsColumn()
     {
         var ct = TestContext.Current.CancellationToken;
         await using var connection = new SqliteConnection("DataSource=:memory:");
@@ -50,34 +64,69 @@ public class SchemaInitializerTests
             await setup.ExecuteNonQueryAsync(ct);
         }
 
-        var options = new DbContextOptionsBuilder<SwiftletDbContext>().UseSqlite(connection).Options;
-        await using var context = new SwiftletDbContext(options);
+        var options = new DbContextOptionsBuilder<AccountDbContext>().UseSqlite(connection).Options;
+        await using var context = new AccountDbContext(options);
         (await CountPendingColumnsAsync(context, ct)).Should().Be(0);
 
-        await SqliteSchemaInitializer.InitializeAsync(context, ct);
+        await SqliteSchemaInitializer.InitializeAccountAsync(context, ct);
 
         (await CountPendingColumnsAsync(context, ct)).Should().Be(1);
         var pending = await context.Database
             .SqlQueryRaw<int>("SELECT IsFlagSyncPending AS Value FROM Messages")
             .SingleAsync(ct);
         pending.Should().Be(0);
-        var ftsTables = await context.Database
-            .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM sqlite_master WHERE name = 'MessageSearch'")
-            .SingleAsync(ct);
-        ftsTables.Should().Be(1);
+        (await CountTablesAsync(context, "MessageSearch", ct)).Should().Be(1);
     }
 
     /// <summary>
-    /// Verifies running the initializer repeatedly neither fails nor duplicates the column.
+    /// Verifies running the account initializer repeatedly neither fails nor duplicates the column.
     /// </summary>
     [Fact]
-    public async Task Initialize_CalledTwice_IsIdempotent()
+    public async Task InitializeAccount_CalledTwice_IsIdempotent()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        await using var context = await db.Factory.CreateAsync(Guid.NewGuid(), ct);
+
+        await SqliteSchemaInitializer.InitializeAccountAsync(context, ct);
+
+        (await CountPendingColumnsAsync(context, ct)).Should().Be(1);
+    }
+
+    /// <summary>
+    /// Verifies the global store holds the accounts, labels and label links, but no mail tables.
+    /// </summary>
+    [Fact]
+    public async Task InitializeGlobal_NewDatabase_HasOnlyGlobalTables()
     {
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
 
-        await SqliteSchemaInitializer.InitializeAsync(db.Context, ct);
+        (await CountTablesAsync(db.Context, "Accounts", ct)).Should().Be(1);
+        (await CountTablesAsync(db.Context, "Labels", ct)).Should().Be(1);
+        (await CountTablesAsync(db.Context, "MessageLabels", ct)).Should().Be(1);
+        (await CountTablesAsync(db.Context, "Messages", ct)).Should().Be(0);
+        (await CountTablesAsync(db.Context, "Folders", ct)).Should().Be(0);
+        (await CountTablesAsync(db.Context, "Attachments", ct)).Should().Be(0);
+        (await CountTablesAsync(db.Context, "MessageSearch", ct)).Should().Be(0);
+    }
 
-        (await CountPendingColumnsAsync(db.Context, ct)).Should().Be(1);
+    /// <summary>
+    /// Verifies an account database holds the mail tables and the full-text index, but no global tables.
+    /// </summary>
+    [Fact]
+    public async Task InitializeAccount_NewDatabase_HasOnlyMailTables()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        await using var context = await db.Factory.CreateAsync(Guid.NewGuid(), ct);
+
+        (await CountTablesAsync(context, "Folders", ct)).Should().Be(1);
+        (await CountTablesAsync(context, "Messages", ct)).Should().Be(1);
+        (await CountTablesAsync(context, "Attachments", ct)).Should().Be(1);
+        (await CountTablesAsync(context, "MessageSearch", ct)).Should().Be(1);
+        (await CountTablesAsync(context, "Accounts", ct)).Should().Be(0);
+        (await CountTablesAsync(context, "Labels", ct)).Should().Be(0);
+        (await CountTablesAsync(context, "MessageLabels", ct)).Should().Be(0);
     }
 }

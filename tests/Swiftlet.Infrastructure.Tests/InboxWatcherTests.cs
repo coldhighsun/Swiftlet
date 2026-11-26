@@ -557,7 +557,10 @@ internal sealed class WatcherHarness : IAsyncDisposable
         services.AddSingleton<IImapSessionFactory>(new FakeImapSessionFactory());
         services.AddSingleton<RecordingSender>();
         services.AddSingleton<ISender>(sp => sp.GetRequiredService<RecordingSender>());
-        services.AddDbContext<SwiftletDbContext>(o => o.UseSqlite(connection));
+        services.AddDbContext<GlobalDbContext>(o => o.UseSqlite(connection));
+        services.AddSingleton<InMemoryAccountDbContextFactory>();
+        services.AddSingleton<IAccountDbContextFactory>(sp => sp.GetRequiredService<InMemoryAccountDbContextFactory>());
+        services.AddScoped<AccountContextProvider>();
         services.AddScoped<IAccountRepository, AccountRepository>();
         services.AddScoped<IFolderRepository, FolderRepository>();
         services.AddSingleton<InboxWatcher>();
@@ -565,7 +568,7 @@ internal sealed class WatcherHarness : IAsyncDisposable
         var provider = services.BuildServiceProvider(validateScopes: true);
         await using (var setup = provider.CreateAsyncScope())
         {
-            await SqliteSchemaInitializer.InitializeAsync(setup.ServiceProvider.GetRequiredService<SwiftletDbContext>(), cancellationToken);
+            await SqliteSchemaInitializer.InitializeGlobalAsync(setup.ServiceProvider.GetRequiredService<GlobalDbContext>(), cancellationToken);
         }
 
         return new WatcherHarness(connection, provider, provider.GetRequiredService<InboxWatcher>());

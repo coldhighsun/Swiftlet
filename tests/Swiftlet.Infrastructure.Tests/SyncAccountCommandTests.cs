@@ -25,11 +25,11 @@ public class SyncAccountCommandTests
         SyncCoordinator coordinator,
         SyncEvents events)
     {
-        var context = db.CreateContext();
+        var context = db.CreateVerifier();
         var service = new MailSyncService(
-            new AccountRepository(context),
-            new FolderRepository(context),
-            new MessageRepository(context),
+            context.Accounts(),
+            context.Folders(),
+            context.Messages(),
             factory,
             new FakeSyncSettings(),
             new MailSyncOptions(),

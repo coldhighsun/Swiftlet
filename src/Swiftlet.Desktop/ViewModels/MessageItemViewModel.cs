@@ -14,15 +14,22 @@ public sealed class AttachmentItemViewModel
     /// <summary>
     /// Initializes a new instance of the <see cref="AttachmentItemViewModel"/> class.
     /// </summary>
+    /// <param name="accountId">The account that owns the attachment's message.</param>
     /// <param name="attachment">The attachment metadata.</param>
     /// <param name="save">The action invoked to save the attachment.</param>
-    public AttachmentItemViewModel(MailAttachment attachment, Func<AttachmentItemViewModel, Task> save)
+    public AttachmentItemViewModel(Guid accountId, MailAttachment attachment, Func<AttachmentItemViewModel, Task> save)
     {
         ArgumentNullException.ThrowIfNull(attachment);
         ArgumentNullException.ThrowIfNull(save);
+        AccountId = accountId;
         Attachment = attachment;
         SaveCommand = new AsyncRelayCommand(() => save(this));
     }
+
+    /// <summary>
+    /// Gets the account that owns the attachment's message.
+    /// </summary>
+    public Guid AccountId { get; }
 
     /// <summary>
     /// Gets the attachment metadata.
@@ -63,7 +70,7 @@ public sealed partial class MessageItemViewModel : ObservableObject
         Message = message;
         IsRead = message.IsRead;
         IsFlagged = message.IsFlagged;
-        Attachments = [.. message.Attachments.OrderBy(a => a.Ordinal).Select(a => new AttachmentItemViewModel(a, saveAttachment))];
+        Attachments = [.. message.Attachments.OrderBy(a => a.Ordinal).Select(a => new AttachmentItemViewModel(message.AccountId, a, saveAttachment))];
         Labels = BuildChips(message);
     }
 

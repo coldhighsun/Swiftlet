@@ -27,10 +27,10 @@ public class AccountAndFolderRepositoryTests
             DateTimeOffset.UtcNow,
             OAuthProvider.Microsoft);
         account.ChangeSyncInterval(TimeSpan.FromMinutes(15));
-        await new AccountRepository(db.Context).AddAsync(account, ct);
+        await db.CreateAccountRepository().AddAsync(account, ct);
 
-        await using var verifyContext = db.CreateContext();
-        var loaded = await new AccountRepository(verifyContext).GetAsync(account.Id, ct);
+        await using var verifyContext = db.CreateVerifier();
+        var loaded = await verifyContext.Accounts().GetAsync(account.Id, ct);
 
         loaded.Should().NotBeNull();
         loaded!.AuthMethod.Should().Be(AuthMethod.OAuth2);
@@ -48,7 +48,7 @@ public class AccountAndFolderRepositoryTests
     {
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
-        var repository = new AccountRepository(db.Context);
+        var repository = db.CreateAccountRepository();
         var imap = new ServerEndpoint("imap.example.com", 993, true);
         var smtp = new ServerEndpoint("smtp.example.com", 465, true);
         await repository.AddAsync(MailAccount.Create("A", "dup@example.com", AuthMethod.Password, imap, smtp, DateTimeOffset.UtcNow), ct);
@@ -68,13 +68,13 @@ public class AccountAndFolderRepositoryTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var (account, folder) = await db.SeedAccountAsync(ct);
-        var repository = new FolderRepository(db.Context);
+        var repository = db.CreateFolderRepository();
 
         folder.UpdateUidValidity(42);
         await repository.SaveChangesAsync(ct);
 
-        await using var verifyContext = db.CreateContext();
-        var folders = await new FolderRepository(verifyContext).GetByAccountAsync(account.Id, ct);
+        await using var verifyContext = db.CreateVerifier();
+        var folders = await verifyContext.Folders().GetByAccountAsync(account.Id, ct);
         folders.Should().ContainSingle().Which.UidValidity.Should().Be(42u);
     }
 }

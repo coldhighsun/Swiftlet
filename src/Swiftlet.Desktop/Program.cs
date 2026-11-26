@@ -1,4 +1,5 @@
 using Avalonia;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Swiftlet.Application;
@@ -73,6 +74,14 @@ internal static class Program
     private static async Task InitializeDatabaseAsync(IServiceProvider services)
     {
         await using var scope = services.CreateAsyncScope();
-        await SqliteSchemaInitializer.InitializeAsync(scope.ServiceProvider.GetRequiredService<SwiftletDbContext>());
+        var global = scope.ServiceProvider.GetRequiredService<GlobalDbContext>();
+        await SqliteSchemaInitializer.InitializeGlobalAsync(global);
+
+        // Existing account databases are opened once so their schema upgrades run before the UI reads them.
+        var factory = scope.ServiceProvider.GetRequiredService<IAccountDbContextFactory>();
+        foreach (var accountId in await global.Accounts.AsNoTracking().Select(a => a.Id).ToListAsync())
+        {
+            await using var accountContext = await factory.CreateAsync(accountId);
+        }
     }
 }

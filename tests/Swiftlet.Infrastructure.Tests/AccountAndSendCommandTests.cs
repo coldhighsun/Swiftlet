@@ -22,12 +22,12 @@ public class AccountAndSendCommandTests
         await using var db = await TestDatabase.CreateAsync(ct);
         var secrets = new InMemorySecretStore();
         var factory = new FakeImapSessionFactory();
-        var handler = new AddAccountCommandHandler(new AccountRepository(db.Context), secrets, factory, TimeProvider.System);
+        var handler = new AddAccountCommandHandler(db.CreateAccountRepository(), secrets, factory, TimeProvider.System);
 
         var id = await handler.Handle(new AddAccountCommand("Me", " me@gmail.com ", "app-password"), ct);
 
-        await using var verify = db.CreateContext();
-        var saved = await new AccountRepository(verify).GetAsync(id, ct);
+        await using var verify = db.CreateVerifier();
+        var saved = await verify.Accounts().GetAsync(id, ct);
         saved.Should().NotBeNull();
         saved!.EmailAddress.Should().Be("me@gmail.com");
         saved.Imap.Host.Should().Be("imap.gmail.com");
@@ -45,7 +45,7 @@ public class AccountAndSendCommandTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var handler = new AddAccountCommandHandler(
-            new AccountRepository(db.Context), new InMemorySecretStore(), new FakeImapSessionFactory(), TimeProvider.System);
+            db.CreateAccountRepository(), new InMemorySecretStore(), new FakeImapSessionFactory(), TimeProvider.System);
 
         var act = async () => await handler.Handle(new AddAccountCommand("Me", "me@corp.example", "pw"), ct);
 
@@ -61,13 +61,13 @@ public class AccountAndSendCommandTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var handler = new AddAccountCommandHandler(
-            new AccountRepository(db.Context), new InMemorySecretStore(), new FakeImapSessionFactory(), TimeProvider.System);
+            db.CreateAccountRepository(), new InMemorySecretStore(), new FakeImapSessionFactory(), TimeProvider.System);
         var imap = new ServerEndpoint("mail.corp.example", 993, true);
         var smtp = new ServerEndpoint("mail.corp.example", 587, false);
 
         var id = await handler.Handle(new AddAccountCommand("Me", "me@corp.example", "pw", imap, smtp), ct);
 
-        var saved = await new AccountRepository(db.Context).GetAsync(id, ct);
+        var saved = await db.CreateAccountRepository().GetAsync(id, ct);
         saved!.Smtp.Should().Be(smtp);
     }
 
@@ -81,13 +81,13 @@ public class AccountAndSendCommandTests
         await using var db = await TestDatabase.CreateAsync(ct);
         var secrets = new InMemorySecretStore();
         var factory = new FakeImapSessionFactory { Failure = new InvalidOperationException("bad credentials") };
-        var handler = new AddAccountCommandHandler(new AccountRepository(db.Context), secrets, factory, TimeProvider.System);
+        var handler = new AddAccountCommandHandler(db.CreateAccountRepository(), secrets, factory, TimeProvider.System);
 
         var act = async () => await handler.Handle(new AddAccountCommand("Me", "me@gmail.com", "wrong"), ct);
 
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("bad credentials");
         secrets.Values.Should().BeEmpty();
-        (await new AccountRepository(db.Context).GetAllAsync(ct)).Should().BeEmpty();
+        (await db.CreateAccountRepository().GetAllAsync(ct)).Should().BeEmpty();
     }
 
     /// <summary>
@@ -99,7 +99,7 @@ public class AccountAndSendCommandTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var handler = new AddAccountCommandHandler(
-            new AccountRepository(db.Context), new InMemorySecretStore(), new FakeImapSessionFactory(), TimeProvider.System);
+            db.CreateAccountRepository(), new InMemorySecretStore(), new FakeImapSessionFactory(), TimeProvider.System);
         await handler.Handle(new AddAccountCommand("Me", "me@gmail.com", "pw"), ct);
 
         var act = async () => await handler.Handle(new AddAccountCommand("Me", "ME@gmail.com", "pw"), ct);
@@ -123,7 +123,7 @@ public class AccountAndSendCommandTests
     {
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
-        var repository = new AccountRepository(db.Context);
+        var repository = db.CreateAccountRepository();
         var account = TestData.Account(email);
         await repository.AddAsync(account, ct);
         var sender = new RecordingMailSender();
@@ -145,7 +145,7 @@ public class AccountAndSendCommandTests
     {
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
-        var handler = new SendMessageCommandHandler(new AccountRepository(db.Context), new RecordingMailSender());
+        var handler = new SendMessageCommandHandler(db.CreateAccountRepository(), new RecordingMailSender());
 
         var act = async () => await handler.Handle(new SendMessageCommand(Guid.NewGuid(), new OutgoingMessage()), ct);
 

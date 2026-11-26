@@ -40,16 +40,30 @@ public static class SqliteSchemaInitializer
     ];
 
     /// <summary>
-    /// Ensures the schema and full-text index exist.
+    /// Ensures the global store (accounts, labels, label links) exists.
     /// </summary>
-    /// <param name="context">The database context.</param>
+    /// <param name="context">The global database context.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that completes when the schema is ready.</returns>
-    public static async Task InitializeAsync(SwiftletDbContext context, CancellationToken cancellationToken = default)
+    public static async Task InitializeGlobalAsync(GlobalDbContext context, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
 
         // WAL lets the UI read while the background worker writes; it is a no-op for in-memory databases.
+        await context.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", cancellationToken);
+        await context.Database.EnsureCreatedAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Ensures the schema and full-text index of one account's database exist.
+    /// </summary>
+    /// <param name="context">The account database context.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the schema is ready.</returns>
+    public static async Task InitializeAccountAsync(AccountDbContext context, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
         await context.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", cancellationToken);
         await context.Database.EnsureCreatedAsync(cancellationToken);
         await EnsureFlagSyncColumnAsync(context, cancellationToken);
@@ -65,7 +79,7 @@ public static class SqliteSchemaInitializer
     /// <param name="context">The database context.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that completes when the column exists.</returns>
-    internal static async Task EnsureFlagSyncColumnAsync(SwiftletDbContext context, CancellationToken cancellationToken = default)
+    internal static async Task EnsureFlagSyncColumnAsync(AccountDbContext context, CancellationToken cancellationToken = default)
     {
         var existing = await context.Database
             .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM pragma_table_info('Messages') WHERE name = 'IsFlagSyncPending'")

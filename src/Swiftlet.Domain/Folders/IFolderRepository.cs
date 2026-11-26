@@ -16,10 +16,11 @@ public interface IFolderRepository
     /// <summary>
     /// Gets a folder by identifier.
     /// </summary>
+    /// <param name="accountId">The owning account.</param>
     /// <param name="id">The folder identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The folder, or <see langword="null"/> if not found.</returns>
-    Task<MailFolder?> GetAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<MailFolder?> GetAsync(Guid accountId, Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets the folders of an account ordered by full name.

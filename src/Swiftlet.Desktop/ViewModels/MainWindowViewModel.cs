@@ -436,7 +436,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         item.IsFlagged = flagged;
         try
         {
-            await _dispatcher.SendAsync(new SetMessageFlaggedCommand(item.Id, flagged));
+            await _dispatcher.SendAsync(new SetMessageFlaggedCommand(item.Message.AccountId, item.Id, flagged));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -467,7 +467,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         await GuardedAsync("Error_DeleteMessage", async () =>
         {
-            var outcome = await _dispatcher.SendAsync(new DeleteMessageCommand(item.Id));
+            var outcome = await _dispatcher.SendAsync(new DeleteMessageCommand(item.Message.AccountId, item.Id));
             if (SelectedMessage == item)
             {
                 SelectedMessage = null;
@@ -606,7 +606,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         var assigned = choice.IsAssigned;
         try
         {
-            await _dispatcher.SendAsync(new SetMessageLabelCommand(item.Id, choice.Label.Id, assigned));
+            await _dispatcher.SendAsync(new SetMessageLabelCommand(item.Message.AccountId, item.Id, choice.Label.Id, assigned));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -720,7 +720,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         item.IsRead = true;
         try
         {
-            await _dispatcher.SendAsync(new SetMessageReadCommand(item.Id, true));
+            await _dispatcher.SendAsync(new SetMessageReadCommand(item.Message.AccountId, item.Id, true));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -747,7 +747,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             StatusText = _localizer.Format("Status_Downloading", attachment.Attachment.FileName);
             var downloaded = await _dispatcher.SendAsync(
-                new DownloadAttachmentQuery(attachment.Attachment.MessageId, attachment.Attachment.Id));
+                new DownloadAttachmentQuery(attachment.AccountId, attachment.Attachment.MessageId, attachment.Attachment.Id));
             await File.WriteAllBytesAsync(path, downloaded.Content);
             StatusText = _localizer.Format("Status_Saved", path);
         });
@@ -932,7 +932,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             {
                 UnifiedInboxNodeViewModel => await _dispatcher.SendAsync(new GetUnifiedInboxQuery(0, PageSize)),
                 LabelNodeViewModel label => await _dispatcher.SendAsync(new GetMessagesByLabelQuery(label.Label.Id, 0, PageSize)),
-                _ => await _dispatcher.SendAsync(new GetMessagesQuery(((FolderNodeViewModel)node).Folder.Id, 0, PageSize)),
+                _ => await _dispatcher.SendAsync(new GetMessagesQuery(((FolderNodeViewModel)node).Folder.AccountId, ((FolderNodeViewModel)node).Folder.Id, 0, PageSize)),
             };
             if (version == _loadVersion)
             {

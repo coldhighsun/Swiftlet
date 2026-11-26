@@ -59,8 +59,8 @@ public class LabelCommandTests
 
         await new UpdateLabelCommandHandler(repository).Handle(new UpdateLabelCommand(id, "work", "#AABBCC"), ct);
 
-        await using var verify = db.CreateContext();
-        var loaded = await new LabelRepository(verify).GetAsync(id, ct);
+        await using var verify = db.CreateVerifier();
+        var loaded = await verify.Labels().GetAsync(id, ct);
         loaded!.Name.Should().Be("work");
         loaded.Color.Should().Be("#AABBCC");
     }
@@ -74,24 +74,24 @@ public class LabelCommandTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var (account, folder) = await db.SeedAccountAsync(ct);
-        var messages = new MessageRepository(db.Context);
+        var messages = db.CreateMessageRepository();
         var labels = new LabelRepository(db.Context);
         var message = MailMessage.Create(account.Id, folder.Id, 1, "s", "A", "a@example.com", "r", DateTimeOffset.UtcNow, "b");
         await messages.AddAsync(message, ct);
         var labelId = await new CreateLabelCommandHandler(labels).Handle(new CreateLabelCommand("Work", "#112233"), ct);
         var handler = new SetMessageLabelCommandHandler(messages, labels);
 
-        await handler.Handle(new SetMessageLabelCommand(message.Id, labelId, true), ct);
-        await using (var verify = db.CreateContext())
+        await handler.Handle(new SetMessageLabelCommand(account.Id, message.Id, labelId, true), ct);
+        await using (var verify = db.CreateVerifier())
         {
-            var loaded = await new MessageRepository(verify).GetAsync(message.Id, ct);
+            var loaded = await verify.Messages().GetAsync(account.Id, message.Id, ct);
             loaded!.Labels.Select(l => l.Id).Should().Equal(labelId);
         }
 
-        await handler.Handle(new SetMessageLabelCommand(message.Id, labelId, false), ct);
-        await using (var verify = db.CreateContext())
+        await handler.Handle(new SetMessageLabelCommand(account.Id, message.Id, labelId, false), ct);
+        await using (var verify = db.CreateVerifier())
         {
-            var loaded = await new MessageRepository(verify).GetAsync(message.Id, ct);
+            var loaded = await verify.Messages().GetAsync(account.Id, message.Id, ct);
             loaded!.Labels.Should().BeEmpty();
         }
     }
@@ -106,9 +106,9 @@ public class LabelCommandTests
         await using var db = await TestDatabase.CreateAsync(ct);
         var labels = new LabelRepository(db.Context);
         var labelId = await new CreateLabelCommandHandler(labels).Handle(new CreateLabelCommand("Work", "#112233"), ct);
-        var handler = new SetMessageLabelCommandHandler(new MessageRepository(db.Context), labels);
+        var handler = new SetMessageLabelCommandHandler(db.CreateMessageRepository(), labels);
 
-        var act = async () => await handler.Handle(new SetMessageLabelCommand(Guid.NewGuid(), labelId, true), ct);
+        var act = async () => await handler.Handle(new SetMessageLabelCommand(Guid.NewGuid(), Guid.NewGuid(), labelId, true), ct);
 
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
@@ -122,12 +122,12 @@ public class LabelCommandTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var (account, folder) = await db.SeedAccountAsync(ct);
-        var messages = new MessageRepository(db.Context);
+        var messages = db.CreateMessageRepository();
         var message = MailMessage.Create(account.Id, folder.Id, 1, "s", "A", "a@example.com", "r", DateTimeOffset.UtcNow, "b");
         await messages.AddAsync(message, ct);
         var handler = new SetMessageLabelCommandHandler(messages, new LabelRepository(db.Context));
 
-        var act = async () => await handler.Handle(new SetMessageLabelCommand(message.Id, Guid.NewGuid(), true), ct);
+        var act = async () => await handler.Handle(new SetMessageLabelCommand(account.Id, message.Id, Guid.NewGuid(), true), ct);
 
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
@@ -141,20 +141,20 @@ public class LabelCommandTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var (account, folder) = await db.SeedAccountAsync(ct);
-        var messages = new MessageRepository(db.Context);
+        var messages = db.CreateMessageRepository();
         var labels = new LabelRepository(db.Context);
         var message = MailMessage.Create(account.Id, folder.Id, 1, "s", "A", "a@example.com", "r", DateTimeOffset.UtcNow, "b");
         await messages.AddAsync(message, ct);
         var labelId = await new CreateLabelCommandHandler(labels).Handle(new CreateLabelCommand("Work", "#112233"), ct);
-        await new SetMessageLabelCommandHandler(messages, labels).Handle(new SetMessageLabelCommand(message.Id, labelId, true), ct);
+        await new SetMessageLabelCommandHandler(messages, labels).Handle(new SetMessageLabelCommand(account.Id, message.Id, labelId, true), ct);
 
         await new DeleteLabelCommandHandler(labels).Handle(new DeleteLabelCommand(labelId), ct);
 
-        await using var verify = db.CreateContext();
-        var loaded = await new MessageRepository(verify).GetAsync(message.Id, ct);
+        await using var verify = db.CreateVerifier();
+        var loaded = await verify.Messages().GetAsync(account.Id, message.Id, ct);
         loaded.Should().NotBeNull();
         loaded.Labels.Should().BeEmpty();
-        (await new LabelRepository(verify).GetAsync(labelId, ct)).Should().BeNull();
+        (await verify.Labels().GetAsync(labelId, ct)).Should().BeNull();
     }
 
     /// <summary>
@@ -166,14 +166,14 @@ public class LabelCommandTests
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var (account, folder) = await db.SeedAccountAsync(ct);
-        var messages = new MessageRepository(db.Context);
+        var messages = db.CreateMessageRepository();
         var labels = new LabelRepository(db.Context);
         var first = MailMessage.Create(account.Id, folder.Id, 1, "one", "A", "a@example.com", "r", DateTimeOffset.UtcNow, "b");
         var second = MailMessage.Create(account.Id, folder.Id, 2, "two", "A", "a@example.com", "r", DateTimeOffset.UtcNow, "b");
         await messages.AddAsync(first, ct);
         await messages.AddAsync(second, ct);
         var labelId = await new CreateLabelCommandHandler(labels).Handle(new CreateLabelCommand("Work", "#112233"), ct);
-        await new SetMessageLabelCommandHandler(messages, labels).Handle(new SetMessageLabelCommand(first.Id, labelId, true), ct);
+        await new SetMessageLabelCommandHandler(messages, labels).Handle(new SetMessageLabelCommand(account.Id, first.Id, labelId, true), ct);
 
         var all = await new GetLabelsQueryHandler(labels).Handle(new GetLabelsQuery(), ct);
         var inbox = await new GetUnifiedInboxQueryHandler(messages).Handle(new GetUnifiedInboxQuery(0, 10), ct);
