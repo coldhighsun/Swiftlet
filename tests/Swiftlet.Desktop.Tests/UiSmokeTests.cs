@@ -117,8 +117,7 @@ public class UiSmokeTests
                 texts.Should().Contain(t => t != null && t.Contains("line one", StringComparison.Ordinal));
                 window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Text == "选择一封邮件阅读")
                     .Should().OnlyContain(t => !t.IsEffectivelyVisible);
-                window.GetVisualDescendants().OfType<Button>()
-                    .Should().Contain(b => (b.Content as string) != null && ((string)b.Content!).Contains("quarterly-report.pdf", StringComparison.Ordinal));
+                UiQueries.ButtonCaptions(window).Should().Contain(c => c != null && c.Contains("quarterly-report.pdf", StringComparison.Ordinal));
                 window.Close();
             },
             TestContext.Current.CancellationToken);
@@ -947,6 +946,70 @@ public class UiSmokeTests
                 Color(presenter.Background).Should().Be(Token(window, "Brush.AccentSubtle"));
                 Color(presenter.BorderBrush).Should().Be(Token(window, "Brush.Accent"));
                 presenter.BorderThickness.Left.Should().Be(3);
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies a window without accounts shows the notice with a button that adds one.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_NoAccounts_ShowsAddAccountNotice()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference("en");
+                var scenario = new MainWindowViewModelTests.Scenario(hasAccount: false);
+                scenario.Localizer.SetPreference("en");
+                await scenario.StartAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-no-accounts", "en");
+
+                var pane = window.FindControl<Control>("MessagePane")!;
+                pane.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible).Select(t => t.Text)
+                    .Should().Contain("Add a mail account to get started").And.NotContain("No messages here");
+                var button = pane.GetVisualDescendants().OfType<Button>()
+                    .Single(b => b.IsEffectivelyVisible && UiQueries.Caption(b) == "Add account");
+                button.Command.Should().BeSameAs(scenario.ViewModel.AddAccountCommand);
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies a very long subject and attachment name stay inside the reading pane of the narrowest window, and the
+    /// sender avatar shows.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_LongTextsAt800_StayInsideReader()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Messages[1] = TestData.Message(scenario.Account, scenario.Inbox, 2, new string('W', 160));
+                scenario.Messages[1].AddAttachment($"{new string('f', 120)}.pdf", "application/pdf", 10);
+                await scenario.StartAsync();
+                scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+                await scenario.ViewModel.WhenIdleAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel, Width = 800, Height = 480 };
+                Render(window, "main-window-long-texts");
+
+                var reader = window.FindControl<Control>("ReaderPane")!;
+                var visible = reader.GetVisualDescendants().OfType<Control>()
+                    .Where(c => c is TextBlock or Button && c.IsEffectivelyVisible).ToList();
+                visible.OfType<TextBlock>().Select(t => t.Text).Should().Contain("A");
+                var body = reader.GetVisualDescendants().OfType<SelectableTextBlock>().Single();
+                body.GetVisualAncestors().OfType<ScrollViewer>().First().Bounds.Height
+                    .Should().BeGreaterThan(60, "a long subject must not push the text out of sight");
+                foreach (var control in visible)
+                {
+                    control.TranslatePoint(new Point(control.Bounds.Width, 0), window)!.Value.X
+                        .Should().BeLessThanOrEqualTo(800.5, (control as TextBlock)?.Text ?? control.ToString());
+                }
+
                 window.Close();
             },
             TestContext.Current.CancellationToken);

@@ -460,6 +460,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public bool IsNoMessageSelected => SelectedMessage is null;
 
     /// <summary>
+    /// Gets or sets why the message list has nothing to show.
+    /// </summary>
+    [ObservableProperty]
+    public partial EmptyState ListEmptyState { get; set; }
+
+    /// <summary>
     /// Gets or sets the search text.
     /// </summary>
     [ObservableProperty]
@@ -565,6 +571,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         _logger.LogInformation("Searching ({Length} characters)", text.Length);
         var version = ++_loadVersion;
+        ListEmptyState = EmptyState.None;
         await GuardedAsync("Error_Search", async () =>
         {
             var results = await FetchPageAsync(SelectedNode, text, 0, PageSize);
@@ -576,6 +583,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             _shownSearchText = text;
             _hasMore = results.Count >= PageSize;
             ReplaceMessages(results);
+            ShowEmptyState();
             StatusText = _localizer.Format("Status_SearchResults", results.Count);
         });
     }
@@ -799,6 +807,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             {
                 _hasMore = results.Count >= take;
                 ReplaceMessages(results);
+                ShowEmptyState();
             }
         });
     }
@@ -964,6 +973,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             // The label view lists messages carrying the label, so the message no longer belongs there.
             SelectedMessage = null;
             Messages.Remove(item);
+            ShowEmptyState();
         }
     }
 
@@ -1373,6 +1383,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 .OrderBy(f => f.SortRank)
                 .FirstOrDefault();
         }
+
+        if (Accounts.Count == 0)
+        {
+            ListEmptyState = EmptyState.NoAccounts;
+        }
+        else if (ListEmptyState == EmptyState.NoAccounts)
+        {
+            ListEmptyState = EmptyState.None;
+        }
     }
 
     /// <summary>
@@ -1424,10 +1443,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             _hasMore = false;
             ReplaceMessages([]);
+            ListEmptyState = Accounts.Count == 0 ? EmptyState.NoAccounts : EmptyState.None;
             return;
         }
 
         var take = keepLoaded ? Math.Max(PageSize, Messages.Count) : PageSize;
+        if (!keepLoaded)
+        {
+            ListEmptyState = EmptyState.None;
+        }
+
         await GuardedAsync("Error_LoadMessages", async () =>
         {
             var messages = await FetchPageAsync(node, null, 0, take);
@@ -1435,8 +1460,28 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             {
                 _hasMore = messages.Count >= take;
                 ReplaceMessages(messages);
+                ShowEmptyState();
             }
         });
+    }
+
+    /// <summary>
+    /// Says why the list is empty, if it is; call it only after the list shows the complete result of a view or search.
+    /// </summary>
+    private void ShowEmptyState()
+    {
+        if (Accounts.Count == 0)
+        {
+            ListEmptyState = EmptyState.NoAccounts;
+        }
+        else if (Messages.Count > 0)
+        {
+            ListEmptyState = EmptyState.None;
+        }
+        else
+        {
+            ListEmptyState = _shownSearchText is null ? EmptyState.EmptyView : EmptyState.NoSearchResults;
+        }
     }
 
     /// <summary>

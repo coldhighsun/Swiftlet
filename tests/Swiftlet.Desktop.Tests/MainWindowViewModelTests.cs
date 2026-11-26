@@ -171,6 +171,119 @@ public class MainWindowViewModelTests
     }
 
     /// <summary>
+    /// Without accounts the list invites adding one.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task ListEmptyState_NoAccounts_IsNoAccounts()
+    {
+        var scenario = new Scenario(hasAccount: false);
+
+        await scenario.StartAsync();
+
+        scenario.ViewModel.ListEmptyState.Should().Be(EmptyState.NoAccounts);
+    }
+
+    /// <summary>
+    /// An opened folder without messages says so, and a folder with messages does not.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task ListEmptyState_FolderWithoutMessages_IsEmptyView()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        scenario.ViewModel.ListEmptyState.Should().Be(EmptyState.None);
+
+        scenario.ViewModel.SelectedNode = scenario.ViewModel.Accounts[0].Folders.Single(f => f.Folder.Id == scenario.Sent.Id);
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.ViewModel.ListEmptyState.Should().Be(EmptyState.EmptyView);
+    }
+
+    /// <summary>
+    /// A search without hits says so, and clearing it removes the notice.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task ListEmptyState_SearchWithoutHits_IsNoSearchResults()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        scenario.ViewModel.SearchText = "nothing matches this";
+
+        await scenario.ViewModel.SearchCommand.ExecuteAsync(null);
+
+        scenario.ViewModel.ListEmptyState.Should().Be(EmptyState.NoSearchResults);
+        scenario.ViewModel.SearchText = string.Empty;
+        await scenario.ViewModel.SearchCommand.ExecuteAsync(null);
+        scenario.ViewModel.ListEmptyState.Should().Be(EmptyState.None);
+    }
+
+    /// <summary>
+    /// While a view is still loading the list does not claim to be empty.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task ListEmptyState_WhileLoading_IsNone()
+    {
+        var scenario = new Scenario();
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        scenario.Dispatcher.OnAsync<GetMessagesQuery>(async (_, _) =>
+        {
+            await gate.Task;
+            return new List<MailMessage>();
+        });
+
+        await scenario.ViewModel.InitializeAsync();
+
+        scenario.ViewModel.ListEmptyState.Should().Be(EmptyState.None);
+        gate.SetResult();
+        await scenario.ViewModel.WhenIdleAsync();
+        scenario.ViewModel.ListEmptyState.Should().Be(EmptyState.EmptyView);
+    }
+
+    /// <summary>
+    /// A failed load does not claim the view is empty.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task ListEmptyState_LoadFails_IsNone()
+    {
+        var scenario = new Scenario();
+        scenario.Dispatcher.On<GetMessagesQuery>(_ => throw new IOException("db locked"));
+
+        await scenario.StartAsync();
+
+        scenario.ViewModel.ListEmptyState.Should().Be(EmptyState.None);
+    }
+
+    /// <summary>
+    /// Deleting the last message leaves the empty notice.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task ListEmptyState_LastMessageDeleted_IsEmptyView()
+    {
+        var scenario = new Scenario();
+        scenario.Dialogs.ConfirmResult = true;
+        scenario.Dispatcher.On<DeleteMessagesCommand>(c =>
+        {
+            scenario.Messages.Clear();
+            return c.Messages.Count;
+        });
+        await scenario.StartAsync();
+        foreach (var item in scenario.ViewModel.Messages)
+        {
+            scenario.ViewModel.SelectedMessages.Add(item);
+        }
+
+        await scenario.ViewModel.DeleteSelectedCommand.ExecuteAsync(null);
+
+        scenario.ViewModel.ListEmptyState.Should().Be(EmptyState.EmptyView);
+    }
+
+    /// <summary>
     /// A sync raised on a background thread refreshes exactly once, through the UI marshaller.
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>

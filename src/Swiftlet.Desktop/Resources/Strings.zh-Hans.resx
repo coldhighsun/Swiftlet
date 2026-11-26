@@ -186,4 +186,7 @@
   <data name="Settings_SectionSync" xml:space="preserve"><value>同步</value></data>
   <data name="Settings_SectionData" xml:space="preserve"><value>数据安全</value></data>
   <data name="Time_Yesterday" xml:space="preserve"><value>昨天</value></data>
+  <data name="Empty_NoAccounts" xml:space="preserve"><value>添加一个邮件账号即可开始使用</value></data>
+  <data name="Empty_View" xml:space="preserve"><value>这里没有邮件</value></data>
+  <data name="Empty_Search" xml:space="preserve"><value>没有符合搜索条件的邮件</value></data>
 </root>

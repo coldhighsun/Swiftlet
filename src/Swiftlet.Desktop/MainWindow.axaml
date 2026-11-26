@@ -26,6 +26,21 @@
     <Style Selector="Grid.node.section">
       <Setter Property="Margin" Value="0,12,0,0" />
     </Style>
+    <Style Selector="StackPanel.empty">
+      <Setter Property="Spacing" Value="12" />
+      <Setter Property="Margin" Value="24" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="StackPanel.empty > PathIcon">
+      <Setter Property="Width" Value="48" />
+      <Setter Property="Height" Value="48" />
+      <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}" />
+    </Style>
+    <Style Selector="StackPanel.empty > TextBlock">
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="TextAlignment" Value="Center" />
+    </Style>
     <Style Selector="GridSplitter">
       <Setter Property="Background" Value="Transparent" />
     </Style>
@@ -153,61 +168,80 @@
             </Button>
           </Grid>
 
-          <ListBox Classes="messages" Background="Transparent" ItemsSource="{Binding Messages}" SelectedItem="{Binding SelectedMessage}"
-                   SelectionMode="Multiple" SelectedItems="{Binding SelectedMessages}"
-                   ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                   ScrollViewer.ScrollChanged="OnMessageListScrollChanged">
-            <ListBox.KeyBindings>
-              <KeyBinding Gesture="Delete" Command="{Binding DeleteSelectedCommand}" />
-            </ListBox.KeyBindings>
-            <ListBox.ContextMenu>
-              <ContextMenu>
-                <MenuItem Header="{loc:Loc Toolbar_Delete}" Command="{Binding DeleteSelectedCommand}" />
-              </ContextMenu>
-            </ListBox.ContextMenu>
-            <ListBox.ItemTemplate>
-              <DataTemplate DataType="vm:MessageItemViewModel">
-                <Border Padding="8,8,12,8" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Brush.Border}">
-                  <Grid ColumnDefinitions="16,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="2">
-                    <Border Classes="unreadDot" Width="8" Height="8" CornerRadius="4" HorizontalAlignment="Left" VerticalAlignment="Center"
-                            Background="{DynamicResource Brush.Accent}" IsVisible="{Binding IsUnread}" />
-                    <TextBlock Grid.Column="1" Text="{Binding FromDisplay}" Classes.unread="{Binding IsUnread}"
-                               TextTrimming="CharacterEllipsis" />
-                    <TextBlock Grid.Column="2" Classes="caption" Text="{Binding ListTimeText}" Margin="8,0,0,0" VerticalAlignment="Center" />
-                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Subject}" Classes.unread="{Binding IsUnread}"
-                               TextTrimming="CharacterEllipsis" />
-                    <StackPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0"
-                                HorizontalAlignment="Right">
-                      <PathIcon Data="{StaticResource Icon.Attach}" Width="14" Height="14" IsVisible="{Binding HasAttachments}"
-                                Foreground="{DynamicResource Brush.TextSecondary}" />
-                      <PathIcon Data="{StaticResource Icon.StarFilled}" Width="14" Height="14" IsVisible="{Binding IsFlagged}"
-                                Foreground="{DynamicResource Brush.Star}" />
-                    </StackPanel>
-                    <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Classes="caption" Text="{Binding Preview}"
-                               TextTrimming="CharacterEllipsis" />
-                    <ItemsControl Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" ItemsSource="{Binding Labels}"
-                                  IsVisible="{Binding HasLabels}" Margin="0,2,0,0">
-                      <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                          <WrapPanel />
-                        </ItemsPanelTemplate>
-                      </ItemsControl.ItemsPanel>
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="vm:LabelChipViewModel">
-                          <Border Classes="chip" Background="{Binding TintBrush}" CornerRadius="4" Padding="6,1" Margin="0,0,4,2">
-                            <StackPanel Orientation="Horizontal" Spacing="4">
-                              <Border Width="6" Height="6" CornerRadius="3" Background="{Binding Brush}" VerticalAlignment="Center" />
-                              <TextBlock Text="{Binding Name}" FontSize="12" />
-                            </StackPanel>
-                          </Border>
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                  </Grid>
-                </Border>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
+          <Grid>
+            <ListBox Classes="messages" Background="Transparent" ItemsSource="{Binding Messages}" SelectedItem="{Binding SelectedMessage}"
+                     SelectionMode="Multiple" SelectedItems="{Binding SelectedMessages}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.ScrollChanged="OnMessageListScrollChanged">
+              <ListBox.KeyBindings>
+                <KeyBinding Gesture="Delete" Command="{Binding DeleteSelectedCommand}" />
+              </ListBox.KeyBindings>
+              <ListBox.ContextMenu>
+                <ContextMenu>
+                  <MenuItem Header="{loc:Loc Toolbar_Delete}" Command="{Binding DeleteSelectedCommand}" />
+                </ContextMenu>
+              </ListBox.ContextMenu>
+              <ListBox.ItemTemplate>
+                <DataTemplate DataType="vm:MessageItemViewModel">
+                  <Border Padding="8,8,12,8" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Brush.Border}">
+                    <Grid ColumnDefinitions="16,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="2">
+                      <Border Classes="unreadDot" Width="8" Height="8" CornerRadius="4" HorizontalAlignment="Left" VerticalAlignment="Center"
+                              Background="{DynamicResource Brush.Accent}" IsVisible="{Binding IsUnread}" />
+                      <TextBlock Grid.Column="1" Text="{Binding FromDisplay}" Classes.unread="{Binding IsUnread}"
+                                 TextTrimming="CharacterEllipsis" />
+                      <TextBlock Grid.Column="2" Classes="caption" Text="{Binding ListTimeText}" Margin="8,0,0,0" VerticalAlignment="Center" />
+                      <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Subject}" Classes.unread="{Binding IsUnread}"
+                                 TextTrimming="CharacterEllipsis" />
+                      <StackPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0"
+                                  HorizontalAlignment="Right">
+                        <PathIcon Data="{StaticResource Icon.Attach}" Width="14" Height="14" IsVisible="{Binding HasAttachments}"
+                                  Foreground="{DynamicResource Brush.TextSecondary}" />
+                        <PathIcon Data="{StaticResource Icon.StarFilled}" Width="14" Height="14" IsVisible="{Binding IsFlagged}"
+                                  Foreground="{DynamicResource Brush.Star}" />
+                      </StackPanel>
+                      <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Classes="caption" Text="{Binding Preview}"
+                                 TextTrimming="CharacterEllipsis" />
+                      <ItemsControl Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" ItemsSource="{Binding Labels}"
+                                    IsVisible="{Binding HasLabels}" Margin="0,2,0,0">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate>
+                            <WrapPanel />
+                          </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate DataType="vm:LabelChipViewModel">
+                            <Border Classes="chip" Background="{Binding TintBrush}" CornerRadius="4" Padding="6,1" Margin="0,0,4,2">
+                              <StackPanel Orientation="Horizontal" Spacing="4">
+                                <Border Width="6" Height="6" CornerRadius="3" Background="{Binding Brush}" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding Name}" FontSize="12" />
+                              </StackPanel>
+                            </Border>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+            <StackPanel Classes="empty"
+                        IsVisible="{Binding ListEmptyState, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:EmptyState.NoAccounts}}">
+              <PathIcon Data="{StaticResource Icon.AddAccount}" />
+              <TextBlock Classes="secondary" Text="{loc:Loc Empty_NoAccounts}" />
+              <Button Classes="accent" HorizontalAlignment="Center" Command="{Binding AddAccountCommand}"
+                      Content="{loc:Loc Toolbar_AddAccount}" />
+            </StackPanel>
+            <StackPanel Classes="empty"
+                        IsVisible="{Binding ListEmptyState, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:EmptyState.EmptyView}}">
+              <PathIcon Data="{StaticResource Icon.Mail}" />
+              <TextBlock Classes="secondary" Text="{loc:Loc Empty_View}" />
+            </StackPanel>
+            <StackPanel Classes="empty"
+                        IsVisible="{Binding ListEmptyState, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:EmptyState.NoSearchResults}}">
+              <PathIcon Data="{StaticResource Icon.Search}" />
+              <TextBlock Classes="secondary" Text="{loc:Loc Empty_Search}" />
+            </StackPanel>
+          </Grid>
         </DockPanel>
       </Border>
 
@@ -268,23 +302,32 @@
             </Button>
           </WrapPanel>
           <Grid>
-            <TextBlock Classes="secondary" Text="{loc:Loc Reader_Placeholder}" HorizontalAlignment="Center" VerticalAlignment="Center"
-                       IsVisible="{Binding IsNoMessageSelected}" />
+            <StackPanel Classes="empty" IsVisible="{Binding IsNoMessageSelected}">
+              <PathIcon Data="{StaticResource Icon.Mail}" />
+              <TextBlock Classes="secondary" Text="{loc:Loc Reader_Placeholder}" />
+            </StackPanel>
             <ContentControl Content="{Binding SelectedMessage}">
             <ContentControl.DataTemplates>
               <DataTemplate DataType="vm:MessageItemViewModel">
                 <DockPanel Margin="16">
-                  <StackPanel DockPanel.Dock="Top" Spacing="4">
-                    <TextBlock Text="{Binding Subject}" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
-                    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="6" RowSpacing="2">
-                      <TextBlock Grid.Row="0" Text="{loc:Loc Reader_From}" Opacity="0.6" />
-                      <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding FromFull}" TextWrapping="Wrap" />
-                      <TextBlock Grid.Row="1" Text="{loc:Loc Reader_To}" Opacity="0.6" />
-                      <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Recipients}" TextWrapping="Wrap" />
-                      <TextBlock Grid.Row="2" Text="{loc:Loc Reader_Time}" Opacity="0.6" />
-                      <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SentAtText}" />
+                  <StackPanel DockPanel.Dock="Top" Spacing="12">
+                    <TextBlock Classes="title" Text="{Binding Subject}" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
+                               ToolTip.Tip="{Binding Subject}" />
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                      <Border Width="40" Height="40" CornerRadius="20" Background="{Binding SenderBrush}" VerticalAlignment="Top">
+                        <TextBlock Text="{Binding SenderInitial}" Foreground="White" FontSize="16" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                      </Border>
+                      <Grid Grid.Column="1" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="2">
+                        <TextBlock Grid.Row="0" Classes="secondary" Text="{loc:Loc Reader_From}" />
+                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding FromFull}" TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="1" Classes="caption" Text="{loc:Loc Reader_To}" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Classes="caption" Text="{Binding Recipients}" TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="2" Classes="caption" Text="{loc:Loc Reader_Time}" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Classes="caption" Text="{Binding SentAtText}" />
+                      </Grid>
                     </Grid>
-                    <ItemsControl ItemsSource="{Binding Attachments}" IsVisible="{Binding HasAttachments}" Margin="0,8,0,0">
+                    <ItemsControl ItemsSource="{Binding Attachments}" IsVisible="{Binding HasAttachments}">
                       <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                           <WrapPanel />
@@ -292,14 +335,26 @@
                       </ItemsControl.ItemsPanel>
                       <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vm:AttachmentItemViewModel">
-                          <Button Content="{Binding Label}" Command="{Binding SaveCommand}" Margin="0,0,6,6" />
+                          <Button Command="{Binding SaveCommand}" Margin="0,0,8,8" Padding="12,8" CornerRadius="12"
+                                  Background="{DynamicResource Brush.WindowBg}" BorderThickness="1"
+                                  BorderBrush="{DynamicResource Brush.Border}" ToolTip.Tip="{Binding Label}"
+                                  AutomationProperties.Name="{Binding Label}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                              <PathIcon Data="{StaticResource Icon.Attach}" />
+                              <StackPanel>
+                                <TextBlock Text="{Binding FileName}" MaxWidth="180" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Classes="caption" Text="{Binding SizeText}" />
+                              </StackPanel>
+                              <PathIcon Data="{StaticResource Icon.Download}" />
+                            </StackPanel>
+                          </Button>
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <Separator Margin="0,8" />
+                    <Border Height="1" Margin="0,0,0,12" Background="{DynamicResource Brush.Border}" />
                   </StackPanel>
-                  <Border DockPanel.Dock="Top" IsVisible="{Binding HasBlockedRemoteImages}" Padding="8,6" Margin="0,0,0,6"
-                          Background="{DynamicResource SystemFillColorCautionBackgroundBrush}" CornerRadius="4">
+                  <Border DockPanel.Dock="Top" IsVisible="{Binding HasBlockedRemoteImages}" Padding="12,8" Margin="0,0,0,8"
+                          Background="{DynamicResource Brush.WarningBg}" CornerRadius="8">
                     <DockPanel>
                       <SplitButton DockPanel.Dock="Right" Content="{loc:Loc Reader_LoadImages}" Command="{Binding LoadRemoteImagesCommand}">
                         <SplitButton.Flyout>
