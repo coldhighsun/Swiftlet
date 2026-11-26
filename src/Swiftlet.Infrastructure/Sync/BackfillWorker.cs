@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Application.Sync;
 using Swiftlet.Domain.Accounts;
+using Swiftlet.Infrastructure.Resilience;
 
 namespace Swiftlet.Infrastructure.Sync;
 
@@ -47,6 +48,11 @@ public sealed class BackfillWorker(
     /// How long an account waits after a failed pass (offline, bad credentials) before the next attempt.
     /// </summary>
     internal static readonly TimeSpan RetryInterval = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// How many times a pass that failed with a passing error is repeated at once, on a new connection, before the account waits <see cref="RetryInterval"/>.
+    /// </summary>
+    private const int Retries = 3;
 
     /// <summary>
     /// The running passes by account identifier.
@@ -144,7 +150,20 @@ public sealed class BackfillWorker(
         var downloaded = 0;
         try
         {
-            var complete = await BackfillAccountAsync(account, count => downloaded = count, cancellationToken);
+            var pipeline = RetryPipelines.Transient(
+                timeProvider,
+                Retries,
+                RetryPipelines.InitialDelay,
+                logger,
+                $"History backfill of {account.EmailAddress}");
+            var complete = await pipeline.ExecuteAsync(
+                async token =>
+                {
+                    // A repeated attempt resumes from the cache, so what earlier attempts downloaded still counts.
+                    var earlier = downloaded;
+                    return await BackfillAccountAsync(account, count => downloaded = earlier + count, token);
+                },
+                cancellationToken);
             _notBefore[account.Id] = timeProvider.GetUtcNow() + (complete ? RecheckInterval : TimeSpan.FromMinutes(1));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

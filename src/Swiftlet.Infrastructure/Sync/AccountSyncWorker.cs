@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Sync;
 using Swiftlet.Domain.Accounts;
+using Swiftlet.Infrastructure.Resilience;
 
 namespace Swiftlet.Infrastructure.Sync;
 
@@ -24,6 +25,11 @@ public sealed class AccountSyncWorker(
     /// How often the worker checks which accounts are due.
     /// </summary>
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// How many times a sync that failed with a passing error is repeated before the account waits for its next interval.
+    /// </summary>
+    private const int Retries = 2;
 
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -53,18 +59,37 @@ public sealed class AccountSyncWorker(
         foreach (var account in due)
         {
             schedule.MarkAttempted(account.Id, timeProvider.GetUtcNow());
-            try
-            {
-                // One scope (and DbContext) per account: a failed SaveChanges leaves tracked entities behind that must not leak into the next account.
-                await using var scope = scopeFactory.CreateAsyncScope();
-                var sender = scope.ServiceProvider.GetRequiredService<ISender>();
-                await sender.Send(new SyncAccountCommand(account.Id), cancellationToken);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                // A failing account (network down, bad credentials) must not stop the loop for the other accounts.
-                logger.LogError(ex, "Background sync failed for account {Account}.", account.EmailAddress);
-            }
+        }
+
+        // Side by side, so one account waiting for a retry does not hold up the others.
+        await Task.WhenAll(due.Select(account => SyncAsync(account, cancellationToken)));
+    }
+
+    /// <summary>
+    /// Synchronizes one account, repeating the attempt after passing errors; a failure is logged, not thrown.
+    /// </summary>
+    /// <param name="account">The account.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the account has been attempted.</returns>
+    private async Task SyncAsync(MailAccount account, CancellationToken cancellationToken)
+    {
+        var pipeline = RetryPipelines.Transient(timeProvider, Retries, RetryPipelines.InitialDelay, logger, $"Sync of {account.EmailAddress}");
+        try
+        {
+            await pipeline.ExecuteAsync(
+                async token =>
+                {
+                    // One scope (and DbContext) per attempt: a failed SaveChanges leaves tracked entities behind that must not leak into another sync.
+                    await using var scope = scopeFactory.CreateAsyncScope();
+                    var sender = scope.ServiceProvider.GetRequiredService<ISender>();
+                    await sender.Send(new SyncAccountCommand(account.Id), token);
+                },
+                cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            // A failing account (network down, bad credentials) must not stop the loop for the other accounts.
+            logger.LogError(ex, "Background sync failed for account {Account}.", account.EmailAddress);
         }
     }
 }

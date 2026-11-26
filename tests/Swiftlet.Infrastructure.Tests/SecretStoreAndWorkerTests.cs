@@ -135,16 +135,17 @@ public class SecretStoreAndWorkerTests
     }
 
     /// <summary>
-    /// Verifies a failing account does not stop the worker and is not retried before its interval elapses.
+    /// Verifies a failing account does not stop the worker: a passing error is repeated twice (after 5 and 10 seconds),
+    /// then the account waits for its interval.
     /// </summary>
     [Fact]
-    public async Task RunOnceAsync_SyncFails_DoesNotThrowAndBacksOff()
+    public async Task RunOnceAsync_SyncFails_RetriesTwiceThenWaitsForInterval()
     {
         var ct = TestContext.Current.CancellationToken;
         await using var connection = new SqliteConnection("DataSource=:memory:");
         await connection.OpenAsync(ct);
         var factory = new FakeImapSessionFactory { Failure = new IOException("network down") };
-        var clock = new ManualTimeProvider();
+        var clock = new VirtualTimeProvider();
 
         var services = new ServiceCollection();
         services.AddLogging();
@@ -171,10 +172,17 @@ public class SecretStoreAndWorkerTests
             clock,
             NullLogger<AccountSyncWorker>.Instance);
 
-        await worker.RunOnceAsync(ct);
+        var first = worker.RunOnceAsync(ct);
+        foreach (var (seconds, attempts) in new[] { (5, 1), (10, 2) })
+        {
+            await WatcherHarness.WaitUntilAsync(() => factory.ConnectCount == attempts && clock.PendingTimerCount == 1, ct);
+            clock.Advance(TimeSpan.FromSeconds(seconds));
+        }
+
+        await first;
         await worker.RunOnceAsync(ct);
 
-        factory.ConnectCount.Should().Be(1);
+        factory.ConnectCount.Should().Be(3);
     }
 
     /// <summary>

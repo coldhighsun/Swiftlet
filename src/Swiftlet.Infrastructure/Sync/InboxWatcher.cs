@@ -2,10 +2,12 @@ using Mediator;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Polly;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Application.Sync;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Folders;
+using Swiftlet.Infrastructure.Resilience;
 
 namespace Swiftlet.Infrastructure.Sync;
 
@@ -30,21 +32,6 @@ public sealed class InboxWatcher(
     /// The longest a single IDLE wait lasts before it is re-issued (servers drop idle connections after about 30 minutes).
     /// </summary>
     internal static readonly TimeSpan MaxWait = TimeSpan.FromMinutes(5);
-
-    /// <summary>
-    /// The first reconnect delay after a failure.
-    /// </summary>
-    internal static readonly TimeSpan InitialBackoff = TimeSpan.FromSeconds(5);
-
-    /// <summary>
-    /// The longest reconnect delay.
-    /// </summary>
-    internal static readonly TimeSpan MaxBackoff = TimeSpan.FromMinutes(5);
-
-    /// <summary>
-    /// The retry delay when the stored sign-in is no longer valid, so a revoked token is not hammered.
-    /// </summary>
-    internal static readonly TimeSpan ReauthenticationDelay = TimeSpan.FromMinutes(5);
 
     /// <summary>
     /// The running loops by account identifier; only touched by the sequential reconcile passes and shutdown.
@@ -166,6 +153,7 @@ public sealed class InboxWatcher(
 
     /// <summary>
     /// Runs the watch cycle of one account until it is cancelled or the server turns out not to support IDLE.
+    /// Any connection, protocol or database failure is retried with exponential backoff; the loop must outlive them all.
     /// </summary>
     /// <param name="accountId">The account identifier.</param>
     /// <param name="state">The loop state.</param>
@@ -173,46 +161,40 @@ public sealed class InboxWatcher(
     /// <returns>A task that completes when the loop ends.</returns>
     private async Task RunAccountLoopAsync(Guid accountId, AccountLoop state, CancellationToken cancellationToken)
     {
-        var backoff = InitialBackoff;
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            TimeSpan delay;
-            try
+        var streak = new FailureStreak();
+        var pipeline = RetryPipelines.Endless(
+            timeProvider,
+            static _ => true,
+            (error, delay) =>
             {
-                var outcome = await WatchAsync(accountId, () => backoff = InitialBackoff, cancellationToken);
-                if (outcome == WatchOutcome.IdleUnsupported)
+                if (error is OAuthReauthenticationRequiredException)
                 {
-                    state.IdleUnsupported = true;
+                    // Retrying cannot help until the user signs in again, so it is checked only rarely.
+                    logger.LogWarning(error, "Account {Account} needs to sign in again; IDLE watching is paused.", accountId);
                 }
-
-                return;
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                else
+                {
+                    logger.LogWarning(error, "IDLE watching failed for account {Account}; retrying in {Delay}.", accountId, delay);
+                }
+            });
+        var context = RetryPipelines.Rent(streak, cancellationToken);
+        try
+        {
+            var outcome = await pipeline.ExecuteAsync(
+                async resilience => await WatchAsync(accountId, streak.Reset, resilience.CancellationToken),
+                context);
+            if (outcome == WatchOutcome.IdleUnsupported)
             {
-                return;
+                state.IdleUnsupported = true;
             }
-            catch (OAuthReauthenticationRequiredException ex)
-            {
-                // Retrying cannot help until the user signs in again, so check back only rarely.
-                logger.LogWarning(ex, "Account {Account} needs to sign in again; IDLE watching is paused.", accountId);
-                delay = ReauthenticationDelay;
-            }
-            catch (Exception ex)
-            {
-                // Any connection, protocol or database failure is retried with exponential backoff; the loop must outlive them all.
-                logger.LogWarning(ex, "IDLE watching failed for account {Account}; retrying in {Delay}.", accountId, backoff);
-                delay = backoff;
-                backoff = TimeSpan.FromTicks(Math.Min(backoff.Ticks * 2, MaxBackoff.Ticks));
-            }
-
-            try
-            {
-                await Task.Delay(delay, timeProvider, cancellationToken);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                return;
-            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The account was removed or the application is shutting down.
+        }
+        finally
+        {
+            ResilienceContextPool.Shared.Return(context);
         }
     }
 

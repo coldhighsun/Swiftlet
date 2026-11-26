@@ -261,7 +261,8 @@ public class BackfillWorkerTests
     }
 
     /// <summary>
-    /// Verifies a failed pass is logged, not thrown, and is not retried until the retry interval has passed.
+    /// Verifies a pass that keeps failing with a passing error is repeated three times (after 5, 10 and 20 seconds), is logged
+    /// rather than thrown, and is then not started again until the retry interval has passed.
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>
     [Fact]
@@ -269,18 +270,25 @@ public class BackfillWorkerTests
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        await using var h = await Harness.CreateAsync(250, ct);
+        var clock = new VirtualTimeProvider();
+        await using var h = await Harness.CreateAsync(250, ct, timeProvider: clock);
         var connectsBefore = h.Factory.ConnectCount;
         h.Factory.Failure = new IOException("offline");
 
         // Act
         await h.Worker.ReconcileAsync(ct);
+        foreach (var (seconds, attempts) in new[] { (5, 1), (10, 2), (20, 3) })
+        {
+            await WatcherHarness.WaitUntilAsync(() => h.Factory.ConnectCount == connectsBefore + attempts && clock.PendingTimerCount == 1, ct);
+            clock.Advance(TimeSpan.FromSeconds(seconds));
+        }
+
         await h.Worker.WhenPassesCompleteAsync();
         await h.Worker.ReconcileAsync(ct);
         await h.Worker.WhenPassesCompleteAsync();
 
         // Assert
-        (h.Factory.ConnectCount - connectsBefore).Should().Be(1);
+        (h.Factory.ConnectCount - connectsBefore).Should().Be(4);
         (await h.CachedCountAsync("INBOX", ct)).Should().Be(20);
     }
 
@@ -369,11 +377,13 @@ public class BackfillWorkerTests
         /// <param name="inboxCount">The number of messages on the server's INBOX.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <param name="extraFolders">Further server folders, each holding 50 messages.</param>
+        /// <param name="timeProvider">The clock of the worker, or <see langword="null"/> for the system clock.</param>
         /// <returns>The harness.</returns>
         public static async Task<Harness> CreateAsync(
             int inboxCount,
             CancellationToken cancellationToken,
-            (string Name, FolderRole Role)[]? extraFolders = null)
+            (string Name, FolderRole Role)[]? extraFolders = null,
+            TimeProvider? timeProvider = null)
         {
             var connection = new SqliteConnection("DataSource=:memory:");
             await connection.OpenAsync(cancellationToken);
@@ -395,7 +405,7 @@ public class BackfillWorkerTests
             services.AddSingleton(new MailSyncOptions(BackfillBatchSize: 100));
             services.AddSingleton<SyncCoordinator>();
             services.AddSingleton<SyncEvents>();
-            services.AddSingleton(TimeProvider.System);
+            services.AddSingleton(timeProvider ?? TimeProvider.System);
             services.AddDbContext<GlobalDbContext>(o => o.UseSqlite(connection));
             services.AddSingleton<InMemoryAccountDbContextFactory>();
             services.AddSingleton<IAccountDbContextFactory>(sp => sp.GetRequiredService<InMemoryAccountDbContextFactory>());

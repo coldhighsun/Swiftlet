@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Domain.Accounts;
+using Swiftlet.Infrastructure.Resilience;
 
 namespace Swiftlet.Infrastructure.OAuth;
 
@@ -45,6 +46,17 @@ internal sealed record TokenResponse(string AccessToken, string? RefreshToken, D
 internal sealed class OAuthTokenClient(HttpClient http, OAuthClientConfiguration configuration, TimeProvider timeProvider)
 {
     /// <summary>
+    /// How many times a token refresh that failed with a passing error is repeated.
+    /// </summary>
+    private const int RefreshRetries = 3;
+
+    /// <summary>
+    /// Repeats a token refresh after network errors and busy answers. A code exchange never goes through it: a code works once.
+    /// </summary>
+    private readonly Polly.ResiliencePipeline _refreshRetry =
+        RetryPipelines.Transient(timeProvider, RefreshRetries, RetryPipelines.TokenRefreshDelay, null, "Token refresh");
+
+    /// <summary>
     /// Exchanges an authorization code for tokens.
     /// </summary>
     /// <param name="provider">The provider.</param>
@@ -81,13 +93,15 @@ internal sealed class OAuthTokenClient(HttpClient http, OAuthClientConfiguration
     /// <returns>The refreshed tokens.</returns>
     public async Task<TokenResponse> RefreshAsync(OAuthProvider provider, string refreshToken, CancellationToken cancellationToken)
     {
-        return await PostAsync(
-            provider,
-            new Dictionary<string, string>
-            {
-                ["grant_type"] = "refresh_token",
-                ["refresh_token"] = refreshToken,
-            },
+        return await _refreshRetry.ExecuteAsync(
+            async token => await PostAsync(
+                provider,
+                new Dictionary<string, string>
+                {
+                    ["grant_type"] = "refresh_token",
+                    ["refresh_token"] = refreshToken,
+                },
+                token),
             cancellationToken);
     }
 
@@ -111,6 +125,15 @@ internal sealed class OAuthTokenClient(HttpClient http, OAuthClientConfiguration
         var endpoints = OAuthProviderEndpoints.For(provider);
         using var content = new FormUrlEncodedContent(form);
         using var response = await http.PostAsync(endpoints.TokenEndpoint, content, cancellationToken);
+        if (TransientErrors.IsTransient(response.StatusCode))
+        {
+            // Checked before parsing: a busy gateway often answers with a page that is not JSON.
+            throw new HttpRequestException(
+                $"The token endpoint answered {(int)response.StatusCode}.",
+                null,
+                response.StatusCode);
+        }
+
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         using var document = JsonDocument.Parse(body);
         var root = document.RootElement;
