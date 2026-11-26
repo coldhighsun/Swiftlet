@@ -10,6 +10,8 @@ using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
 using Swiftlet.Desktop.Settings;
 using Swiftlet.Desktop.ViewModels;
+using Swiftlet.Desktop.ViewModels.Compose;
+using Swiftlet.Desktop.ViewModels.Settings;
 using Swiftlet.Domain.Folders;
 
 namespace Swiftlet.Desktop.Tests;

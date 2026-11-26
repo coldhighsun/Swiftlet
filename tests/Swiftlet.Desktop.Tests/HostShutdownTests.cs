@@ -4,7 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Serilog.Core;
-using Swiftlet.Desktop.Services;
+using Swiftlet.Desktop.Hosting;
 
 namespace Swiftlet.Desktop.Tests;
 

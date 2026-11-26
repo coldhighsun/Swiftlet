@@ -10,7 +10,7 @@ using Swiftlet.Application.Messages;
 using Swiftlet.Application.Queries;
 using Swiftlet.Application.Sync;
 using Swiftlet.Desktop.Services;
-using Swiftlet.Desktop.ViewModels;
+using Swiftlet.Desktop.ViewModels.Main;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Folders;
 using Swiftlet.Domain.Labels;

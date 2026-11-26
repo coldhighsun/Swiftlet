@@ -1,5 +1,5 @@
 using AwesomeAssertions;
-using Swiftlet.Desktop.Services;
+using Swiftlet.Desktop.Html;
 
 namespace Swiftlet.Desktop.Tests;
 

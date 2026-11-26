@@ -4,10 +4,13 @@ using Avalonia.Markup.Xaml;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Swiftlet.Desktop.Hosting;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
 using Swiftlet.Desktop.Settings;
 using Swiftlet.Desktop.ViewModels;
+using Swiftlet.Desktop.ViewModels.Main;
+using Swiftlet.Desktop.Views;
 using Swiftlet.Infrastructure.Persistence;
 using Swiftlet.Infrastructure.Persistence.Encryption;
 

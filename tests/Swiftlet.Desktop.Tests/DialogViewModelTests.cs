@@ -4,6 +4,7 @@ using Swiftlet.Application.Accounts;
 using Swiftlet.Application.Sending;
 using Swiftlet.Desktop.Services;
 using Swiftlet.Desktop.ViewModels;
+using Swiftlet.Desktop.ViewModels.Compose;
 
 namespace Swiftlet.Desktop.Tests;
 

@@ -8,8 +8,11 @@ using Avalonia.VisualTree;
 using Microsoft.Extensions.DependencyInjection;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
-using Swiftlet.Desktop.Settings;
 using Swiftlet.Desktop.ViewModels;
+using Swiftlet.Desktop.ViewModels.Compose;
+using Swiftlet.Desktop.ViewModels.Main;
+using Swiftlet.Desktop.ViewModels.Settings;
+using Swiftlet.Desktop.Views;
 
 namespace Swiftlet.Desktop.Tests;
 

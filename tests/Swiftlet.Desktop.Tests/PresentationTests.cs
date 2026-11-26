@@ -1,7 +1,7 @@
 using AwesomeAssertions;
 using Avalonia.Media;
-using Swiftlet.Desktop.Services;
-using Swiftlet.Desktop.ViewModels;
+using Swiftlet.Desktop.Formatting;
+using Swiftlet.Desktop.ViewModels.Main;
 using Swiftlet.Domain.Folders;
 using Swiftlet.Domain.Messages;
 

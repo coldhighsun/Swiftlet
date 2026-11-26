@@ -1,7 +1,7 @@
 using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Swiftlet.Desktop.Services;
+using Swiftlet.Desktop.Hosting;
 using Swiftlet.Infrastructure.Persistence.Encryption;
 
 namespace Swiftlet.Desktop.Tests;

@@ -1,6 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
-using Swiftlet.Desktop.Services;
+using Swiftlet.Desktop.Html;
 
 namespace Swiftlet.Desktop.Controls;
 

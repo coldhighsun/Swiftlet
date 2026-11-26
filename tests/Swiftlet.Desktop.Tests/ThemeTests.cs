@@ -5,6 +5,7 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Swiftlet.Desktop.Views;
 
 namespace Swiftlet.Desktop.Tests;
 
@@ -256,10 +257,10 @@ public class ThemeTests
     [Fact]
     public void Xaml_Windows_UseTokensForColors()
     {
-        var directory = Path.Combine(Path.GetDirectoryName(SourceFile())!, "..", "..", "src", "Swiftlet.Desktop");
+        var directory = Path.Combine(Path.GetDirectoryName(SourceFile())!, "..", "..", "src", "Swiftlet.Desktop", "Views");
         var windows = Directory.GetFiles(Path.GetFullPath(directory), "*.axaml");
 
-        windows.Should().HaveCountGreaterThanOrEqualTo(7);
+        windows.Should().HaveCountGreaterThanOrEqualTo(6);
         foreach (var file in windows)
         {
             var text = File.ReadAllText(file);

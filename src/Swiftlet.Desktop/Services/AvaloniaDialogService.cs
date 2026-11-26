@@ -3,8 +3,12 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Swiftlet.Desktop.Html;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.ViewModels;
+using Swiftlet.Desktop.ViewModels.Compose;
+using Swiftlet.Desktop.ViewModels.Settings;
+using Swiftlet.Desktop.Views;
 using Swiftlet.Domain.Accounts;
 
 namespace Swiftlet.Desktop.Services;

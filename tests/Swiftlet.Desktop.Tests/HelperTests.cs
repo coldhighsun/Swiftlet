@@ -1,7 +1,8 @@
 using AwesomeAssertions;
 using Swiftlet.Application.Abstractions;
-using Swiftlet.Desktop.Services;
-using Swiftlet.Desktop.ViewModels;
+using Swiftlet.Desktop.Formatting;
+using Swiftlet.Desktop.Html;
+using Swiftlet.Desktop.ViewModels.Compose;
 using Swiftlet.Domain.Folders;
 
 namespace Swiftlet.Desktop.Tests;

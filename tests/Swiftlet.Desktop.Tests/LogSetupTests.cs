@@ -1,6 +1,6 @@
 using AwesomeAssertions;
 using Serilog;
-using Swiftlet.Desktop.Services;
+using Swiftlet.Desktop.Hosting;
 
 namespace Swiftlet.Desktop.Tests;
 
