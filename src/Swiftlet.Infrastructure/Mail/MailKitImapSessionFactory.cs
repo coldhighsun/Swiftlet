@@ -49,6 +49,13 @@ internal sealed class MailKitImapSessionFactory(
 
             await MailAuthentication.AuthenticateAsync(client, account, secrets, accessTokens, cancellationToken);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The caller gave up (another message was selected, the application is closing); that is not a connection problem, so no warning and no stack trace.
+            client.Dispose();
+            logger.LogInformation("IMAP connection for {Account} was cancelled after {ElapsedMs} ms", account.EmailAddress, started.ElapsedMilliseconds);
+            throw;
+        }
         catch (Exception ex)
         {
             // Release the socket when connecting or logging in fails; the error still propagates.
