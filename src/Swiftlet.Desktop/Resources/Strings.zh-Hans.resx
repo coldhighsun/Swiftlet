@@ -174,4 +174,7 @@
   <data name="Startup_Quit" xml:space="preserve"><value>退出</value></data>
   <data name="Startup_ResetConfirmTitle" xml:space="preserve"><value>重置本地数据</value></data>
   <data name="Startup_ResetConfirm" xml:space="preserve"><value>读不出的文件会改名保留。应用内无法撤销。是否继续？</value></data>
+  <data name="Settings_DatabaseEncrypted" xml:space="preserve"><value>本地邮件数据已加密。</value></data>
+  <data name="Settings_DatabaseNoKeychain" xml:space="preserve"><value>本地邮件数据未加密：没有可用的系统钥匙串。</value></data>
+  <data name="Settings_DatabasePartly" xml:space="preserve"><value>部分本地邮件数据尚未加密，下次启动会再试。</value></data>
 </root>

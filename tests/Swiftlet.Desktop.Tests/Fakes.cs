@@ -648,10 +648,15 @@ internal sealed class FakeDatabaseProtection : IDatabaseProtection
     /// <inheritdoc />
     public DatabaseProtectionStatus Status { get; set; }
 
+    /// <summary>
+    /// Gets or sets what the assessment reports.
+    /// </summary>
+    public DatabaseProtectionAssessment Assessment { get; set; } = new(new DatabaseProtectionResult(DatabaseProtectionProblem.None), 0);
+
     /// <inheritdoc />
     public Task<DatabaseProtectionAssessment> AssessAsync(CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(new DatabaseProtectionAssessment(new DatabaseProtectionResult(DatabaseProtectionProblem.None), 0));
+        return Task.FromResult(Assessment);
     }
 
     /// <inheritdoc />

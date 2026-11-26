@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Settings;
+using Swiftlet.Infrastructure.Persistence.Encryption;
 
 namespace Swiftlet.Desktop.ViewModels;
 
@@ -33,7 +34,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <param name="settings">The settings store.</param>
     /// <param name="localizer">The localizer.</param>
     /// <param name="remoteImageRules">The saved rules that allow remote images for senders.</param>
-    public SettingsViewModel(IAppSettings settings, ILocalizer localizer, IRemoteImageRules remoteImageRules)
+    /// <param name="protection">The protection of the local data; optional.</param>
+    public SettingsViewModel(
+        IAppSettings settings,
+        ILocalizer localizer,
+        IRemoteImageRules remoteImageRules,
+        IDatabaseProtection? protection = null)
     {
         _settings = settings;
         _localizer = localizer;
@@ -42,7 +48,19 @@ public sealed partial class SettingsViewModel : ObservableObject
         DownloadFullHistory = settings.DownloadFullHistory;
         DownloadAllMail = settings.DownloadAllMail;
         RefreshRemoteImageRules();
+        DatabaseStatusText = protection?.Status switch
+        {
+            DatabaseProtectionStatus.Encrypted => localizer["Settings_DatabaseEncrypted"],
+            DatabaseProtectionStatus.NotEncryptedNoKeychain => localizer["Settings_DatabaseNoKeychain"],
+            DatabaseProtectionStatus.PartlyEncrypted => localizer["Settings_DatabasePartly"],
+            _ => null,
+        };
     }
+
+    /// <summary>
+    /// Gets the text saying whether the local data is encrypted, or <see langword="null"/> when unknown.
+    /// </summary>
+    public string? DatabaseStatusText { get; }
 
     /// <summary>
     /// The largest number of rules shown at once; the filter box narrows longer lists.

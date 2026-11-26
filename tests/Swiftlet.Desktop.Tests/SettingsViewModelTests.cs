@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using Swiftlet.Desktop.Settings;
 using Swiftlet.Desktop.ViewModels;
+using Swiftlet.Infrastructure.Persistence.Encryption;
 
 namespace Swiftlet.Desktop.Tests;
 
@@ -279,6 +280,35 @@ public class SettingsViewModelTests
 
         viewModel.DownloadFullHistory.Should().BeTrue();
         viewModel.ErrorText.Should().Contain("disk full");
+    }
+
+    /// <summary>
+    /// Verifies the window says how well the local data is protected.
+    /// </summary>
+    /// <param name="status">The protection status.</param>
+    /// <param name="expected">The expected text.</param>
+    [Theory]
+    [InlineData(DatabaseProtectionStatus.Encrypted, "Local mail data is encrypted.")]
+    [InlineData(DatabaseProtectionStatus.NotEncryptedNoKeychain, "Local mail data is not encrypted: no system keychain is available.")]
+    [InlineData(DatabaseProtectionStatus.PartlyEncrypted, "Part of the local mail data is not encrypted yet; the next start tries again.")]
+    public void Constructor_ProtectionStatus_ShowsStatusText(DatabaseProtectionStatus status, string expected)
+    {
+        var protection = new FakeDatabaseProtection { Status = status };
+
+        var viewModel = new SettingsViewModel(new FakeAppSettings(), TestLocalizer.English(), new FakeRemoteImageRules(), protection);
+
+        viewModel.DatabaseStatusText.Should().Be(expected);
+    }
+
+    /// <summary>
+    /// Verifies nothing is claimed when the protection is unknown.
+    /// </summary>
+    [Fact]
+    public void Constructor_NoProtection_HasNoStatusText()
+    {
+        var viewModel = new SettingsViewModel(new FakeAppSettings(), TestLocalizer.English(), new FakeRemoteImageRules());
+
+        viewModel.DatabaseStatusText.Should().BeNull();
     }
 
     /// <summary>

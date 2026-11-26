@@ -9,6 +9,7 @@ using Swiftlet.Domain.Messages;
 using Swiftlet.Infrastructure.Mail;
 using Swiftlet.Infrastructure.OAuth;
 using Swiftlet.Infrastructure.Persistence;
+using Swiftlet.Infrastructure.Persistence.Encryption;
 using Swiftlet.Infrastructure.Persistence.Repositories;
 using Swiftlet.Infrastructure.Security;
 using Swiftlet.Infrastructure.Sync;
@@ -35,8 +36,21 @@ public static class ServiceCollectionExtensions
         var databasePath = Path.Combine(dataDirectory, "swiftlet.db");
         var oauthSettingsPath = Path.Combine(dataDirectory, "oauth.json");
 
-        services.AddDbContext<GlobalDbContext>(options => options.UseSqlite($"Data Source={databasePath};Default Timeout=30"));
-        services.AddSingleton<IAccountDbContextFactory>(sp => new AccountDbContextFactory(Path.Combine(dataDirectory, "accounts"), sp.GetService<ILogger<AccountDbContextFactory>>()));
+        services.AddSingleton(sp =>
+        {
+            // The file-based fallback store keeps its key beside the data, so encrypting with it would protect nothing.
+            var store = sp.GetRequiredService<ISecretStore>();
+            return new DatabaseProtection(
+                dataDirectory, store, store is not DataProtectionSecretStore, logger: sp.GetService<ILogger<DatabaseProtection>>());
+        });
+        services.AddSingleton<IDatabaseProtection>(sp => sp.GetRequiredService<DatabaseProtection>());
+        services.AddSingleton<IDatabaseConnectionStrings>(sp => sp.GetRequiredService<DatabaseProtection>());
+        services.AddDbContext<GlobalDbContext>((sp, options) =>
+            options.UseSqlite(sp.GetRequiredService<IDatabaseConnectionStrings>().GetConnectionString(databasePath)));
+        services.AddSingleton<IAccountDbContextFactory>(sp => new AccountDbContextFactory(
+            Path.Combine(dataDirectory, "accounts"),
+            sp.GetService<ILogger<AccountDbContextFactory>>(),
+            sp.GetRequiredService<IDatabaseConnectionStrings>()));
         services.AddScoped<AccountContextProvider>();
         services.AddScoped<IAccountRepository, AccountRepository>();
         services.AddScoped<IFolderRepository, FolderRepository>();

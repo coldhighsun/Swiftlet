@@ -174,4 +174,7 @@
   <data name="Startup_Quit" xml:space="preserve"><value>Quit</value></data>
   <data name="Startup_ResetConfirmTitle" xml:space="preserve"><value>Reset local data</value></data>
   <data name="Startup_ResetConfirm" xml:space="preserve"><value>The unreadable files are renamed and kept. This cannot be undone from within the app. Continue?</value></data>
+  <data name="Settings_DatabaseEncrypted" xml:space="preserve"><value>Local mail data is encrypted.</value></data>
+  <data name="Settings_DatabaseNoKeychain" xml:space="preserve"><value>Local mail data is not encrypted: no system keychain is available.</value></data>
+  <data name="Settings_DatabasePartly" xml:space="preserve"><value>Part of the local mail data is not encrypted yet; the next start tries again.</value></data>
 </root>

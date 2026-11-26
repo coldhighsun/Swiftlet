@@ -27,6 +27,8 @@
     </Grid>
     <TextBlock Text="{Binding ErrorText}" Foreground="IndianRed" TextWrapping="Wrap"
                IsVisible="{Binding ErrorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+    <TextBlock Text="{Binding DatabaseStatusText}" Opacity="0.7" TextWrapping="Wrap"
+               IsVisible="{Binding DatabaseStatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
     <Button HorizontalAlignment="Right" Content="{loc:Loc Common_Close}" Command="{Binding CloseCommand}" IsCancel="True" />
   </StackPanel>
 </Window>

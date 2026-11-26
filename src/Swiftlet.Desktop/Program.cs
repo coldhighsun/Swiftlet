@@ -13,6 +13,7 @@ using Swiftlet.Desktop.ViewModels;
 using Swiftlet.Infrastructure;
 using Swiftlet.Infrastructure.Mail;
 using Swiftlet.Infrastructure.Persistence;
+using Swiftlet.Infrastructure.Persistence.Encryption;
 using Swiftlet.Infrastructure.Security;
 
 namespace Swiftlet.Desktop;
@@ -58,19 +59,26 @@ internal static class Program
         builder.Services.ConfigureHostShutdown();
 
         using var host = builder.Build();
-        InitializeDatabaseAsync(host.Services).GetAwaiter().GetResult();
         // Mail previews are plain text: those a crashed run left behind are removed now, this run's own ones on exit.
         var previews = host.Services.GetRequiredService<HtmlPreviewStore>();
         previews.RemoveLeftovers();
-        host.Start();
+        var startup = new AppStartup(host, InitializeDatabaseAsync, host.Services.GetService<ILogger<AppStartup>>());
+
+        // Usually the databases are ready at once; otherwise the application shows the startup window first.
+        var protection = host.Services.GetRequiredService<IDatabaseProtection>();
+        Task.Run(() => startup.TryStartQuietlyAsync(protection)).GetAwaiter().GetResult();
         try
         {
-            BuildAvaloniaApp(host.Services).StartWithClassicDesktopLifetime(args);
+            BuildAvaloniaApp(host.Services, startup).StartWithClassicDesktopLifetime(args);
         }
         finally
         {
             previews.Clear();
-            HostShutdown.Stop(host, logger);
+            if (startup.IsStarted)
+            {
+                HostShutdown.Stop(host, logger);
+            }
+
             logger.Information("Swiftlet stopped");
         }
     }
@@ -111,10 +119,11 @@ internal static class Program
     /// Builds the Avalonia application configuration.
     /// </summary>
     /// <param name="services">The application's service provider.</param>
+    /// <param name="startup">Starts the application once the databases are ready.</param>
     /// <returns>The configured app builder.</returns>
-    public static AppBuilder BuildAvaloniaApp(IServiceProvider services)
+    public static AppBuilder BuildAvaloniaApp(IServiceProvider services, AppStartup startup)
     {
-        return AppBuilder.Configure(() => new App(services))
+        return AppBuilder.Configure(() => new App(services, startup))
             .UsePlatformDetect()
             .WithInterFont()
             .LogToTrace();
@@ -128,6 +137,12 @@ internal static class Program
     private static async Task InitializeDatabaseAsync(IServiceProvider services)
     {
         await using var scope = services.CreateAsyncScope();
+        if (services.GetRequiredService<IDatabaseProtection>().Status == DatabaseProtectionStatus.NotEncryptedNoKeychain)
+        {
+            services.GetRequiredService<ILoggerFactory>().CreateLogger("Swiftlet.Desktop.Startup")
+                .LogWarning("The local mail data is not encrypted because no system keychain is available");
+        }
+
         var global = scope.ServiceProvider.GetRequiredService<GlobalDbContext>();
         await SqliteSchemaInitializer.InitializeGlobalAsync(global);
 
