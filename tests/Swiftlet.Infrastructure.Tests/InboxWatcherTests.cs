@@ -418,7 +418,7 @@ public class InboxWatcherTests
                 // Each loop only finishes once the other one has also been cancelled, which a sequential stop never allows.
                 if (Interlocked.Increment(ref cancelled) == 2)
                 {
-                    bothCancelled.SetResult();
+                    bothCancelled.TrySetResult();
                 }
 
                 await bothCancelled.Task;
@@ -427,12 +427,20 @@ public class InboxWatcherTests
 
             return false;
         };
-        await h.Watcher.ReconcileAsync(ct);
-        await WatcherHarness.WaitUntilAsync(() => h.Session.WaitCount == 2, ct);
+        try
+        {
+            await h.Watcher.ReconcileAsync(ct);
+            await WatcherHarness.WaitUntilAsync(() => h.Session.WaitCount == 2, ct);
 
-        await h.Watcher.StopLoopsAsync().WaitAsync(TimeSpan.FromSeconds(5), ct);
+            await h.Watcher.StopLoopsAsync().WaitAsync(TimeSpan.FromSeconds(5), ct);
 
-        h.Watcher.RunningAccountIds.Should().BeEmpty();
+            h.Watcher.RunningAccountIds.Should().BeEmpty();
+        }
+        finally
+        {
+            // Release a cancelled loop even when the test fails early; otherwise disposing the harness waits for it forever.
+            bothCancelled.TrySetResult();
+        }
     }
 }
 
@@ -472,7 +480,7 @@ internal sealed class CancellingAccountRepository : IAccountRepository
 internal sealed class WatcherHarness : IAsyncDisposable
 {
     /// <summary>
-    /// The connection keeping the in-memory database alive.
+    /// The connection keeping the in-memory global database alive; the contexts open their own connections to it.
     /// </summary>
     private readonly SqliteConnection _connection;
 
@@ -547,7 +555,10 @@ internal sealed class WatcherHarness : IAsyncDisposable
     /// <returns>The harness.</returns>
     public static async Task<WatcherHarness> CreateAsync(Action<IServiceCollection>? configure, CancellationToken cancellationToken)
     {
-        var connection = new SqliteConnection("DataSource=:memory:");
+        // Account loops query the global store concurrently, so every context needs its own connection (a SqliteConnection is not
+        // thread safe). A named shared-cache database gives that while staying in memory; it lives as long as this first connection.
+        var connectionString = $"Data Source=watcher-{Guid.NewGuid():N};Mode=Memory;Cache=Shared;Pooling=False";
+        var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
         var services = new ServiceCollection();
         services.AddSingleton<EventLog>();
@@ -557,7 +568,7 @@ internal sealed class WatcherHarness : IAsyncDisposable
         services.AddSingleton<IImapSessionFactory>(new FakeImapSessionFactory());
         services.AddSingleton<RecordingSender>();
         services.AddSingleton<ISender>(sp => sp.GetRequiredService<RecordingSender>());
-        services.AddDbContext<GlobalDbContext>(o => o.UseSqlite(connection));
+        services.AddDbContext<GlobalDbContext>(o => o.UseSqlite(connectionString));
         services.AddSingleton<InMemoryAccountDbContextFactory>();
         services.AddSingleton<IAccountDbContextFactory>(sp => sp.GetRequiredService<InMemoryAccountDbContextFactory>());
         services.AddScoped<AccountContextProvider>();
