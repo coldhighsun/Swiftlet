@@ -416,6 +416,69 @@ public class MainWindowViewModelTests
     }
 
     /// <summary>
+    /// Verifies another account can be added while the first sync of the previous one is still running.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task AddAccountCommand_FirstSyncRunning_CanAddAnotherAccount()
+    {
+        // Arrange
+        var scenario = new Scenario();
+        var accounts = new List<MailAccount> { scenario.Account };
+        scenario.Dispatcher.On<GetAccountsQuery>(_ => accounts.ToList());
+        var sync = new TaskCompletionSource<object?>();
+        scenario.Dispatcher.OnAsync<SyncAccountCommand>((_, _) => sync.Task);
+        await scenario.StartAsync();
+        scenario.Dialogs.AddAccountResult = true;
+        scenario.Dialogs.OnAddAccount = () => accounts.Add(TestData.Account($"added{accounts.Count}@example.com"));
+
+        // Act
+        var first = scenario.ViewModel.AddAccountCommand.ExecuteAsync(null);
+        var canAddAgain = scenario.ViewModel.AddAccountCommand.CanExecute(null);
+        var second = scenario.ViewModel.AddAccountCommand.ExecuteAsync(null);
+        sync.SetResult(new SyncResult(1, 0, []));
+        await Task.WhenAll(first, second);
+
+        // Assert
+        canAddAgain.Should().BeTrue();
+        scenario.Dialogs.AddAccountCalls.Should().Be(2);
+        scenario.Dispatcher.Sent<SyncAccountCommand>().Select(c => c.AccountId)
+            .Should().Equal(accounts[1].Id, accounts[2].Id);
+    }
+
+    /// <summary>
+    /// Verifies the progress bar stays until the last of several overlapping first syncs has finished.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task AddAccountCommand_OverlappingSyncs_StaysBusyUntilAllFinished()
+    {
+        // Arrange
+        var scenario = new Scenario();
+        var accounts = new List<MailAccount> { scenario.Account };
+        scenario.Dispatcher.On<GetAccountsQuery>(_ => accounts.ToList());
+        var firstSync = new TaskCompletionSource<object?>();
+        var secondSync = new TaskCompletionSource<object?>();
+        scenario.Dispatcher.OnAsync<SyncAccountCommand>((c, _) => c.AccountId == accounts[1].Id ? firstSync.Task : secondSync.Task);
+        await scenario.StartAsync();
+        scenario.Dialogs.AddAccountResult = true;
+        scenario.Dialogs.OnAddAccount = () => accounts.Add(TestData.Account($"added{accounts.Count}@example.com"));
+        var first = scenario.ViewModel.AddAccountCommand.ExecuteAsync(null);
+        var second = scenario.ViewModel.AddAccountCommand.ExecuteAsync(null);
+
+        // Act
+        firstSync.SetResult(new SyncResult(1, 0, []));
+        await first;
+        var busyWhileSecondRuns = scenario.ViewModel.IsBusy;
+        secondSync.SetResult(new SyncResult(1, 0, []));
+        await second;
+
+        // Assert
+        busyWhileSecondRuns.Should().BeTrue();
+        scenario.ViewModel.IsBusy.Should().BeFalse();
+    }
+
+    /// <summary>
     /// Waits until a condition that another thread makes true holds.
     /// </summary>
     /// <param name="condition">The condition.</param>

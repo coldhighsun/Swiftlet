@@ -79,6 +79,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private int _loadVersion;
 
     /// <summary>
+    /// The number of long-running operations in progress.
+    /// </summary>
+    private int _busyCount;
+
+    /// <summary>
     /// The most recent message list load.
     /// </summary>
     private Task _loadTask = Task.CompletedTask;
@@ -473,9 +478,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     /// <summary>
     /// Opens the add-account dialog and synchronizes the new account.
+    /// Runs concurrently, so a first sync in progress does not block adding the next account.
     /// </summary>
     /// <returns>A task that completes when the dialog and the first sync are done.</returns>
-    [RelayCommand]
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task AddAccountAsync()
     {
         var known = _accounts.Select(a => a.Id).ToHashSet();
@@ -821,7 +827,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         ArgumentNullException.ThrowIfNull(node);
         var account = node.Account;
         var signedIn = false;
-        IsBusy = true;
+        BeginBusy();
         try
         {
             StatusText = _localizer.Format("Status_Reauthenticating", account.EmailAddress);
@@ -833,7 +839,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
         finally
         {
-            IsBusy = false;
+            EndBusy();
         }
 
         if (signedIn)
@@ -1173,7 +1179,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
-        IsBusy = true;
+        BeginBusy();
         try
         {
             var running = targets.ToList();
@@ -1193,8 +1199,26 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
         finally
         {
-            IsBusy = false;
+            EndBusy();
         }
+    }
+
+    /// <summary>
+    /// Counts a long-running operation as started.
+    /// </summary>
+    private void BeginBusy()
+    {
+        _busyCount++;
+        IsBusy = true;
+    }
+
+    /// <summary>
+    /// Counts a long-running operation as finished; the view stays busy while others still run.
+    /// </summary>
+    private void EndBusy()
+    {
+        _busyCount--;
+        IsBusy = _busyCount > 0;
     }
 
     /// <summary>
