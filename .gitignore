@@ -485,3 +485,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# PNG snapshots written by the UI smoke tests (SWIFTLET_UI_SNAPSHOT_DIR)
+.ui-snapshots/
