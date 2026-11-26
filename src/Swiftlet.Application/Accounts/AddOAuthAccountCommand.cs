@@ -1,4 +1,5 @@
 using Mediator;
+using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Domain.Accounts;
 
@@ -19,12 +20,14 @@ public sealed record AddOAuthAccountCommand(OAuthProvider Provider, string? Disp
 /// <param name="authorizer">The interactive OAuth sign-in.</param>
 /// <param name="imapFactory">The IMAP connection factory used to verify the tokens.</param>
 /// <param name="timeProvider">The clock.</param>
+/// <param name="logger">The logger; optional.</param>
 public sealed class AddOAuthAccountCommandHandler(
     IAccountRepository accounts,
     ISecretStore secrets,
     IOAuthAuthorizer authorizer,
     IImapSessionFactory imapFactory,
-    TimeProvider timeProvider) : ICommandHandler<AddOAuthAccountCommand, Guid>
+    TimeProvider timeProvider,
+    ILogger<AddOAuthAccountCommandHandler>? logger = null) : ICommandHandler<AddOAuthAccountCommand, Guid>
 {
     /// <inheritdoc />
     public async ValueTask<Guid> Handle(AddOAuthAccountCommand command, CancellationToken cancellationToken)
@@ -65,6 +68,7 @@ public sealed class AddOAuthAccountCommandHandler(
             throw;
         }
 
+        logger?.LogInformation("Account {Account} added ({Provider} sign-in)", email, command.Provider);
         return account.Id;
     }
 }

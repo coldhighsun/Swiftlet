@@ -1,6 +1,7 @@
 using MailKit;
 using MailKit.Net.Imap;
 using MailKit.Security;
+using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Domain.Accounts;
 
@@ -11,7 +12,11 @@ namespace Swiftlet.Infrastructure.Mail;
 /// </summary>
 /// <param name="secrets">The secret store holding account passwords.</param>
 /// <param name="accessTokens">The OAuth 2.0 access token provider.</param>
-internal sealed class MailKitImapSessionFactory(ISecretStore secrets, IAccessTokenProvider accessTokens) : IImapSessionFactory
+/// <param name="logger">The logger handed to the sessions.</param>
+internal sealed class MailKitImapSessionFactory(
+    ISecretStore secrets,
+    IAccessTokenProvider accessTokens,
+    ILogger<MailKitImapSession> logger) : IImapSessionFactory
 {
     /// <summary>
     /// The network timeout for IMAP operations.
@@ -23,6 +28,13 @@ internal sealed class MailKitImapSessionFactory(ISecretStore secrets, IAccessTok
     {
         ArgumentNullException.ThrowIfNull(account);
 
+        logger.LogInformation(
+            "Connecting to IMAP {Host}:{Port} for {Account} ({Auth})",
+            account.Imap.Host,
+            account.Imap.Port,
+            account.EmailAddress,
+            account.AuthMethod);
+        var started = System.Diagnostics.Stopwatch.StartNew();
         var client = new ImapClient { Timeout = (int)NetworkTimeout.TotalMilliseconds };
         try
         {
@@ -37,13 +49,15 @@ internal sealed class MailKitImapSessionFactory(ISecretStore secrets, IAccessTok
 
             await MailAuthentication.AuthenticateAsync(client, account, secrets, accessTokens, cancellationToken);
         }
-        catch
+        catch (Exception ex)
         {
             // Release the socket when connecting or logging in fails; the error still propagates.
             client.Dispose();
+            logger.LogWarning(ex, "IMAP connection for {Account} failed after {ElapsedMs} ms", account.EmailAddress, started.ElapsedMilliseconds);
             throw;
         }
 
-        return new MailKitImapSession(client);
+        logger.LogInformation("IMAP connected for {Account} in {ElapsedMs} ms", account.EmailAddress, started.ElapsedMilliseconds);
+        return new MailKitImapSession(client, logger);
     }
 }

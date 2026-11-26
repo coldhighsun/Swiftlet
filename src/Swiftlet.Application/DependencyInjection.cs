@@ -20,7 +20,11 @@ public static class DependencyInjection
         ArgumentNullException.ThrowIfNull(services);
 
         // Handlers depend on scoped repositories, so they must be scoped too.
-        services.AddMediator(options => options.ServiceLifetime = ServiceLifetime.Scoped);
+        services.AddMediator(options =>
+        {
+            options.ServiceLifetime = ServiceLifetime.Scoped;
+            options.PipelineBehaviors = [typeof(LoggingBehavior<,>)];
+        });
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new MailSyncOptions());
         services.AddSingleton<SyncSchedule>();

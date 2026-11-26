@@ -36,6 +36,13 @@ internal sealed class MailKitMailSender(
         ArgumentNullException.ThrowIfNull(message);
 
         var mime = OutgoingMimeBuilder.Build(account, message);
+        logger.LogInformation(
+            "Sending a message from {Account} via {Host}:{Port} ({Recipients} recipients, {Attachments} attachments)",
+            account.EmailAddress,
+            account.Smtp.Host,
+            account.Smtp.Port,
+            mime.To.Count + mime.Cc.Count + mime.Bcc.Count,
+            message.Attachments.Count);
 
         using (var smtp = new SmtpClient { Timeout = (int)NetworkTimeout.TotalMilliseconds })
         {
@@ -45,6 +52,8 @@ internal sealed class MailKitMailSender(
             await smtp.SendAsync(mime, cancellationToken);
             await smtp.DisconnectAsync(true, cancellationToken);
         }
+
+        logger.LogInformation("Message sent from {Account}", account.EmailAddress);
 
         if (!saveToSent)
         {

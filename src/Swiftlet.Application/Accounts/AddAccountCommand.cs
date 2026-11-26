@@ -1,4 +1,5 @@
 using Mediator;
+using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Domain.Accounts;
 
@@ -26,11 +27,13 @@ public sealed record AddAccountCommand(
 /// <param name="secrets">The secret store.</param>
 /// <param name="imapFactory">The IMAP connection factory used to verify credentials.</param>
 /// <param name="timeProvider">The clock.</param>
+/// <param name="logger">The logger; optional.</param>
 public sealed class AddAccountCommandHandler(
     IAccountRepository accounts,
     ISecretStore secrets,
     IImapSessionFactory imapFactory,
-    TimeProvider timeProvider) : ICommandHandler<AddAccountCommand, Guid>
+    TimeProvider timeProvider,
+    ILogger<AddAccountCommandHandler>? logger = null) : ICommandHandler<AddAccountCommand, Guid>
 {
     /// <inheritdoc />
     public async ValueTask<Guid> Handle(AddAccountCommand command, CancellationToken cancellationToken)
@@ -82,6 +85,7 @@ public sealed class AddAccountCommandHandler(
             throw;
         }
 
+        logger?.LogInformation("Account {Account} added (password)", email);
         return account.Id;
     }
 }
