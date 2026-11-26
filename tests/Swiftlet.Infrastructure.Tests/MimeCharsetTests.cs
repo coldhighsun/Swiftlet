@@ -11,14 +11,6 @@ namespace Swiftlet.Infrastructure.Tests;
 public class MimeCharsetTests
 {
     /// <summary>
-    /// Initializes static members of the <see cref="MimeCharsetTests"/> class; the tests encode bytes with legacy code pages.
-    /// </summary>
-    static MimeCharsetTests()
-    {
-        MailEncodings.Register();
-    }
-
-    /// <summary>
     /// Builds a raw RFC 822 message from header lines and a body that is already encoded to bytes.
     /// </summary>
     /// <param name="headerLines">The header lines without line endings; non-ASCII text must be passed through <paramref name="rawHeaders"/>.</param>
