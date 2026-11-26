@@ -139,12 +139,14 @@
             <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto" Margin="2,4">
               <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding FromDisplay}"
                          Classes.unread="{Binding !IsRead}" TextTrimming="CharacterEllipsis" />
-              <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SentAtText}" FontSize="12" Opacity="0.6" />
+              <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding ListTimeText}" Classes="caption" />
               <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding Subject}"
                          Classes.unread="{Binding !IsRead}" TextTrimming="CharacterEllipsis" />
               <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="4">
-                <TextBlock Text="📎" IsVisible="{Binding HasAttachments}" />
-                <TextBlock Text="{Binding FlagGlyph}" />
+                <PathIcon Data="{StaticResource Icon.Attach}" Width="14" Height="14" IsVisible="{Binding HasAttachments}"
+                          Foreground="{DynamicResource Brush.TextSecondary}" />
+                <PathIcon Data="{StaticResource Icon.StarFilled}" Width="14" Height="14" IsVisible="{Binding IsFlagged}"
+                          Foreground="{DynamicResource Brush.Star}" />
               </StackPanel>
               <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding Preview}" FontSize="12" Opacity="0.6"
                          TextTrimming="CharacterEllipsis" />

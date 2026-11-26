@@ -108,6 +108,9 @@ internal sealed class FakeClock : TimeProvider
         return _now;
     }
 
+    /// <inheritdoc />
+    public override TimeZoneInfo LocalTimeZone => TimeZoneInfo.Utc;
+
     /// <summary>
     /// Moves the clock forward.
     /// </summary>

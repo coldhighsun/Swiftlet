@@ -1521,7 +1521,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <returns>The new item.</returns>
     private MessageItemViewModel CreateItem(MailMessage message)
     {
-        return new MessageItemViewModel(message, SaveAttachmentAsync, _localizer, RememberRemoteImagesAsync);
+        return new MessageItemViewModel(message, SaveAttachmentAsync, _localizer, RememberRemoteImagesAsync, _timeProvider);
     }
 
     /// <summary>

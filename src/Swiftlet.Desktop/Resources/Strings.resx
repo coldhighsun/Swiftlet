@@ -185,4 +185,5 @@
   <data name="Settings_SectionGeneral" xml:space="preserve"><value>General</value></data>
   <data name="Settings_SectionSync" xml:space="preserve"><value>Sync</value></data>
   <data name="Settings_SectionData" xml:space="preserve"><value>Data security</value></data>
+  <data name="Time_Yesterday" xml:space="preserve"><value>Yesterday</value></data>
 </root>

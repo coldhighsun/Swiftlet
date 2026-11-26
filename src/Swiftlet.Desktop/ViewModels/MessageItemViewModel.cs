@@ -1,3 +1,4 @@
+using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Swiftlet.Application.Abstractions;
@@ -39,9 +40,19 @@ public sealed class AttachmentItemViewModel
     public MailAttachment Attachment { get; }
 
     /// <summary>
-    /// Gets the text shown on the attachment button.
+    /// Gets the name and size, which also names the attachment button for assistive technology.
     /// </summary>
-    public string Label => $"📎 {Attachment.FileName} ({FileSizeFormatter.Format(Attachment.Size)})";
+    public string Label => $"{FileName} ({SizeText})";
+
+    /// <summary>
+    /// Gets the file name.
+    /// </summary>
+    public string FileName => Attachment.FileName;
+
+    /// <summary>
+    /// Gets the readable file size.
+    /// </summary>
+    public string SizeText => FileSizeFormatter.Format(Attachment.Size);
 
     /// <summary>
     /// Gets the command that saves the attachment to disk.
@@ -65,20 +76,28 @@ public sealed partial class MessageItemViewModel : ObservableObject
     private readonly Func<MessageItemViewModel, string, Task>? _rememberRemoteImages;
 
     /// <summary>
+    /// The clock the list time is relative to.
+    /// </summary>
+    private readonly TimeProvider _timeProvider;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="MessageItemViewModel"/> class.
     /// </summary>
     /// <param name="message">The cached message.</param>
     /// <param name="saveAttachment">The action invoked to save one of the attachments.</param>
     /// <param name="localizer">The localizer used for the placeholder subject.</param>
     /// <param name="rememberRemoteImages">The action invoked to save a rule that always allows remote images (the rule is an address or a domain).</param>
+    /// <param name="timeProvider">The clock the list time is relative to; optional.</param>
     public MessageItemViewModel(
         MailMessage message,
         Func<AttachmentItemViewModel, Task> saveAttachment,
         ILocalizer localizer,
-        Func<MessageItemViewModel, string, Task>? rememberRemoteImages = null)
+        Func<MessageItemViewModel, string, Task>? rememberRemoteImages = null,
+        TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(message);
         _localizer = localizer;
+        _timeProvider = timeProvider ?? TimeProvider.System;
         _rememberRemoteImages = rememberRemoteImages;
         Message = message;
         IsRead = message.IsRead;
@@ -133,6 +152,9 @@ public sealed partial class MessageItemViewModel : ObservableObject
         }
 
         RefreshLabels();
+
+        // The day may have changed since the item was shown.
+        OnPropertyChanged(nameof(ListTimeText));
     }
 
     /// <summary>
@@ -149,13 +171,33 @@ public sealed partial class MessageItemViewModel : ObservableObject
     /// Gets or sets a value indicating whether the message is read.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsUnread))]
     public partial bool IsRead { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the message is unread.
+    /// </summary>
+    public bool IsUnread => !IsRead;
+
+    /// <summary>
+    /// Gets the short time shown in the message list.
+    /// </summary>
+    public string ListTimeText => MessageTimeFormatter.Format(Message.SentAt, _timeProvider, _localizer);
+
+    /// <summary>
+    /// Gets the initial shown in the sender's avatar.
+    /// </summary>
+    public string SenderInitial => Avatar.Initial(Message.FromName, Message.FromAddress);
+
+    /// <summary>
+    /// Gets the avatar color of the sender; created on first use so view models stay creatable off the UI thread.
+    /// </summary>
+    public IBrush SenderBrush => field ??= new SolidColorBrush(Color.Parse(Avatar.Color(Message.FromAddress)));
 
     /// <summary>
     /// Gets or sets a value indicating whether the message is flagged.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FlagGlyph))]
     public partial bool IsFlagged { get; set; }
 
     /// <summary>
@@ -174,6 +216,7 @@ public sealed partial class MessageItemViewModel : ObservableObject
     public void RefreshLanguage()
     {
         OnPropertyChanged(nameof(Subject));
+        OnPropertyChanged(nameof(ListTimeText));
     }
 
     /// <summary>
@@ -329,9 +372,4 @@ public sealed partial class MessageItemViewModel : ObservableObject
     /// Gets a value indicating whether the message has attachments.
     /// </summary>
     public bool HasAttachments => Attachments.Count > 0;
-
-    /// <summary>
-    /// Gets the glyph representing the flagged state.
-    /// </summary>
-    public string FlagGlyph => IsFlagged ? "★" : "☆";
 }

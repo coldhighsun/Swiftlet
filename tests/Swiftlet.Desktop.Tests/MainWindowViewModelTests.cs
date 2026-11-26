@@ -594,7 +594,6 @@ public class MainWindowViewModelTests
 
         await scenario.ViewModel.ToggleFlagCommand.ExecuteAsync(null);
         item.IsFlagged.Should().BeTrue();
-        item.FlagGlyph.Should().Be("★");
         scenario.Dispatcher.Sent<SetMessageFlaggedCommand>().Single().IsFlagged.Should().BeTrue();
 
         scenario.Dispatcher.On<SetMessageFlaggedCommand>(_ => throw new IOException("locked"));

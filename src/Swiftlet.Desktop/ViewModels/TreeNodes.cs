@@ -25,6 +25,16 @@ public sealed class AccountNodeViewModel(MailAccount account)
     public string DisplayName => Account.EmailAddress;
 
     /// <summary>
+    /// Gets the initial shown in the account's avatar; taken from the address, which is what the tree shows.
+    /// </summary>
+    public string Initial => Avatar.Initial(null, Account.EmailAddress);
+
+    /// <summary>
+    /// Gets the avatar color; created on first use so view models stay creatable off the UI thread.
+    /// </summary>
+    public IBrush AvatarBrush => field ??= new SolidColorBrush(Color.Parse(Avatar.Color(Account.EmailAddress)));
+
+    /// <summary>
     /// Gets a value indicating whether the account signs in with OAuth 2.0 and can therefore be signed in again.
     /// </summary>
     public bool CanReauthenticate => Account.AuthMethod == AuthMethod.OAuth2;
@@ -72,6 +82,21 @@ public sealed class FolderNodeViewModel(MailFolder folder, MailAccount account, 
         FolderRole.Archive => localizer["Folder_Archive"],
         FolderRole.AllMail => localizer["Folder_AllMail"],
         _ => Folder.Name,
+    };
+
+    /// <summary>
+    /// Gets the resource key of the folder's icon.
+    /// </summary>
+    public string IconKey => Folder.Role switch
+    {
+        FolderRole.Inbox => "Icon.Inbox",
+        FolderRole.Sent => "Icon.Sent",
+        FolderRole.Drafts => "Icon.Drafts",
+        FolderRole.Trash => "Icon.Trash",
+        FolderRole.Junk => "Icon.Junk",
+        FolderRole.Archive => "Icon.Archive",
+        FolderRole.AllMail => "Icon.AllMail",
+        _ => "Icon.Folder",
     };
 
     /// <summary>
@@ -156,4 +181,19 @@ public sealed record LabelChipViewModel(string Name, string Color)
     /// Gets the brush used to paint the chip; created on first use so view models stay creatable off the UI thread.
     /// </summary>
     public IBrush Brush => field ??= new SolidColorBrush(Avalonia.Media.Color.Parse(Color));
+
+    /// <summary>
+    /// Gets the light background of the chip: the label color mostly see-through, so the text stays readable on any color.
+    /// </summary>
+    public IBrush TintBrush => field ??= Tint(Avalonia.Media.Color.Parse(Color));
+
+    /// <summary>
+    /// Creates the see-through brush of a color.
+    /// </summary>
+    /// <param name="color">The color.</param>
+    /// <returns>The brush.</returns>
+    private static SolidColorBrush Tint(Avalonia.Media.Color color)
+    {
+        return new SolidColorBrush(Avalonia.Media.Color.FromArgb(0x26, color.R, color.G, color.B));
+    }
 }
