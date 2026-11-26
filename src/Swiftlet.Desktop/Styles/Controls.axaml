@@ -131,4 +131,14 @@
     <Setter Property="Data" Value="{StaticResource Icon.StarFilled}" />
     <Setter Property="Foreground" Value="{DynamicResource Brush.Star}" />
   </Style>
+
+  <!-- Last, so the colors set above never hide that a button cannot be pressed. -->
+  <Style Selector="Button.accent:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ButtonBackgroundDisabled}" />
+    <Setter Property="Foreground" Value="{DynamicResource ButtonForegroundDisabled}" />
+  </Style>
+  <Style Selector="Button.danger:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Foreground" Value="{DynamicResource ButtonForegroundDisabled}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorderBrushDisabled}" />
+  </Style>
 </Styles>

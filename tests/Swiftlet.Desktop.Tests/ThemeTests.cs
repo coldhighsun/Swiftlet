@@ -188,6 +188,48 @@ public class ThemeTests
     }
 
     /// <summary>
+    /// Verifies a disabled primary or destructive button does not look like one that can be pressed.
+    /// </summary>
+    /// <param name="style">The style class of the button.</param>
+    /// <param name="dark">Whether the dark theme is used.</param>
+    [Theory]
+    [InlineData("accent", false)]
+    [InlineData("accent", true)]
+    [InlineData("danger", false)]
+    [InlineData("danger", true)]
+    public async Task Controls_DisabledButton_LooksDisabled(string style, bool dark)
+    {
+        await UiSmokeTests.Session.Dispatch(
+            () =>
+            {
+                var enabled = new Button { Content = "Send", Classes = { style } };
+                var disabled = new Button { Content = "Send", Classes = { style }, IsEnabled = false };
+                var variant = dark ? ThemeVariant.Dark : ThemeVariant.Light;
+                var window = new Window
+                {
+                    Content = new StackPanel { Children = { enabled, disabled } },
+                    RequestedThemeVariant = variant,
+                };
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                Avalonia.Application.Current!.TryGetResource("ButtonForegroundDisabled", variant, out var expected).Should().BeTrue();
+                var presenter = disabled.GetVisualDescendants().OfType<ContentPresenter>().First();
+                var usual = enabled.GetVisualDescendants().OfType<ContentPresenter>().First();
+                var text = presenter.Foreground.Should().BeAssignableTo<ISolidColorBrush>().Subject.Color;
+                text.Should().Be(((ISolidColorBrush)expected!).Color);
+                text.Should().NotBe(((ISolidColorBrush)usual.Foreground!).Color);
+                if (style == "accent")
+                {
+                    ((ISolidColorBrush)presenter.Background!).Color.Should().NotBe(Color("Brush.Accent", variant));
+                }
+
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Verifies check boxes stay square: the rounder control radius would make them look like radio buttons.
     /// </summary>
     [Fact]
