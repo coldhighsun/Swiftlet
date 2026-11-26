@@ -460,10 +460,10 @@ public class MailSyncServiceTests
     }
 
     /// <summary>
-    /// Verifies an empty server result never wipes the cache.
+    /// Verifies an empty flag result that the server's search contradicts is treated as a hiccup.
     /// </summary>
     [Fact]
-    public async Task Sync_SettingOn_EmptyServerResult_RemovesNothing()
+    public async Task Sync_SettingOn_EmptyFetchButSearchFindsMessages_RemovesNothing()
     {
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
@@ -472,13 +472,52 @@ public class MailSyncServiceTests
             new FakeSyncSettings { RemoveServerDeletedMessages = true },
             [1, 2],
             ct);
-        session.RemoveFromServer("INBOX", 1);
-        session.RemoveFromServer("INBOX", 2);
+        session.FetchFlagsReturnsEmpty = true;
 
         await service.SyncAsync(accountId, ct);
 
         await using var verify = db.CreateVerifier();
         (await verify.Messages().GetFlagStatesAsync(accountId, folderId, ct)).Should().HaveCount(2);
+    }
+
+    /// <summary>
+    /// Verifies a folder emptied on the server is emptied locally once the search confirms it.
+    /// </summary>
+    [Fact]
+    public async Task Sync_SettingOn_ServerFolderEmptied_RemovesAllLocalMessages()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(
+            db,
+            new FakeSyncSettings { RemoveServerDeletedMessages = true },
+            [3, 4],
+            ct);
+        session.RemoveFromServer("INBOX", 3);
+        session.RemoveFromServer("INBOX", 4);
+
+        await service.SyncAsync(accountId, ct);
+
+        session.RangeCalls.Should().Equal(("INBOX", 2u, uint.MaxValue));
+        await using var verify = db.CreateVerifier();
+        (await verify.Messages().GetFlagStatesAsync(accountId, folderId, ct)).Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies the confirming search is not sent when nothing would be removed anyway.
+    /// </summary>
+    [Fact]
+    public async Task Sync_SettingOff_EmptyServerResult_DoesNotSearch()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(db, new FakeSyncSettings(), [1], ct);
+        session.RemoveFromServer("INBOX", 1);
+
+        await service.SyncAsync(accountId, ct);
+
+        session.RangeCalls.Should().BeEmpty();
+        (await StatesAsync(db, accountId, folderId, ct)).Should().HaveCount(1);
     }
 
     /// <summary>

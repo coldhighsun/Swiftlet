@@ -424,12 +424,16 @@ public sealed class MailSyncService(
 
         if (remote.Count == 0)
         {
-            // An empty answer for a non-empty cache is more likely a server hiccup than a wiped mailbox.
-            logger.LogWarning(
-                "Server returned no flags for {Folder} although {Count} messages are cached; removing nothing.",
-                folder.FullName,
-                cached.Count);
-            return changed;
+            // Either the folder was emptied or the server hiccupped, so nothing is removed unless a search agrees.
+            var found = await session.ListUidsBetweenAsync(folder.FullName, cached[0].Uid - 1, uint.MaxValue, cancellationToken);
+            if (found.Count > 0)
+            {
+                logger.LogWarning(
+                    "Server returned no flags for {Folder} although a search finds {Count} messages; removing nothing.",
+                    folder.FullName,
+                    found.Count);
+                return changed;
+            }
         }
 
         await database.RunAsync(() => messages.DeleteRangeAsync(folder.AccountId, gone, cancellationToken), cancellationToken);

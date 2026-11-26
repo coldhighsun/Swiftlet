@@ -347,6 +347,11 @@ internal sealed class FakeImapSession : IImapSession
     public Exception? SetFlagsFailure { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether <see cref="FetchFlagsAsync"/> answers with nothing although messages exist, like a misbehaving server.
+    /// </summary>
+    public bool FetchFlagsReturnsEmpty { get; set; }
+
+    /// <summary>
     /// Gets or sets an exception to throw from <see cref="FetchFlagsAsync"/>.
     /// </summary>
     public Exception? FetchFlagsFailure { get; set; }
@@ -452,6 +457,11 @@ internal sealed class FakeImapSession : IImapSession
         if (FetchFlagsFailure is not null)
         {
             return Task.FromException<IReadOnlyList<RemoteFlagState>>(FetchFlagsFailure);
+        }
+
+        if (FetchFlagsReturnsEmpty)
+        {
+            return Task.FromResult<IReadOnlyList<RemoteFlagState>>([]);
         }
 
         var states = (Messages.GetValueOrDefault(folderFullName) ?? [])
