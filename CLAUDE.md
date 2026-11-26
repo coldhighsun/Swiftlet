@@ -1,13 +1,13 @@
 # CLAUDE.md — Swiftlet
 
 Cross-platform email client: .NET 11 + Avalonia 12, IMAP/SMTP (MailKit 5), SQLite + FTS5, OAuth2 (Google / Microsoft), English and Simplified Chinese UI.
-This file lets Claude Code pick the project up in a fresh session. Human-readable progress and the roadmap are in `docs/HANDOFF.md`.
+This file lets Claude Code pick the project up in a fresh session; it also holds the project's progress and roadmap.
 
 ## First steps when taking over
 
-1. Run `git log --oneline` and confirm HEAD is at `b6d25c9` (M4) or newer; run `git status` to see whether anything is uncommitted.
-2. Run `dotnet build Swiftlet.slnx`, then run the tests project by project (see below). The baseline is **723 passing tests** (Domain 45 / Application 66 / Infrastructure 374 / Desktop 238) with a 0-warning build. Account management and IMAP IDLE may still be uncommitted in the working tree, so check `git status`.
-3. Read "Remaining work" in `docs/HANDOFF.md`. **M5a (unified inbox + labels + server-side delete) and M5.5 (read/starred flag sync) are done.** **Account management (delete + OAuth re-sign-in) and IMAP IDLE are implemented.** The next step is not chosen yet; candidates are verifying other providers or M6. Ask the user before starting. The rules feature was cancelled by the user: do not build it.
+1. Run `git log --oneline` and `git status` to see where the project stands and whether anything is uncommitted.
+2. Run `dotnet build Swiftlet.slnx`, then run the tests project by project (see below). The baseline is **723 passing tests** (Domain 45 / Application 66 / Infrastructure 374 / Desktop 238) with a 0-warning build.
+3. Read "Remaining work" at the end of this file. **M5a (unified inbox + labels + server-side delete) and M5.5 (read/starred flag sync) are done.** **Account management (delete + OAuth re-sign-in), IMAP IDLE, history backfill, parallel sync and the immediate flag push are implemented.** The next step is not chosen yet; candidates are verifying against real providers or M6. Ask the user before starting. The rules feature and the local trash were cancelled by the user: do not build them.
 4. Storage is split per account (see **Database** below). There are no EF migrations and no code that moves data out of an old single-file database: the local dev database `%LocalAppData%\Swiftlet\swiftlet.db` created by an earlier version must be deleted once and the accounts added again, otherwise the global store has the wrong schema. Inside an account database, `SqliteSchemaInitializer` still adds the column `Messages.IsFlagSyncPending` in place.
 
 ## Common commands
@@ -132,7 +132,8 @@ All tests are unit tests with fake objects. The code has **never connected to a 
 - Fast path for remote changes against real servers: how soon a read or delete in webmail shows locally, whether servers push flag changes during IDLE, and how long a backfill batch takes to make way. A sync that is already running (all folders) still makes a push-triggered sync wait, and the IDLE connection resumes only after the whole sync. Server-side deletions show only with `RemoveServerDeletedMessages` on.
 - Parallel sync and backfill against real servers: per-account connection limits and throttling (QQ/163 in particular; sync 3 + backfill 3 + IDLE 1 plus short-lived ones), whether the two extra logins on every IDLE-triggered or timer sync trigger login rate limits, the actual speed-up, UI responsiveness during a manual sync of several accounts (handler continuations run on the UI thread), and the skipped re-SELECT in `FetchMessagesAsync`. Only fakes were tested.
 
-## Remaining work (summary; details in docs/HANDOFF.md)
+## Remaining work
 
-- **M6**: search `from:` / `subject:` prefix syntax, notifications, tray icon, settings page additions (sync interval, theme; the Settings window exists with one checkbox), packaging (MSIX or Inno Setup, `.app`, AppImage/deb), three-platform GitHub Actions CI.
-- **Gaps**: account editing (settings of an existing account), CONDSTORE/incremental flag pull for big folders (the pull fetches the whole cached UID range each sync), drafts, reply all, forwarding with attachments, recipient parsing (display names containing commas), manual light/dark theme switch, file logging, EF migrations, README.
+- **M6**: search `from:` / `subject:` prefix syntax and search scope options (all accounts / current account / current folder), new-mail notifications, tray icon, settings page additions (sync interval, theme, notification switch), packaging (MSIX or Inno Setup, `.app`, AppImage/deb), three-platform GitHub Actions CI.
+- **Gaps**: account editing (settings of an existing account, including the sync interval), CONDSTORE/incremental flag pull for big folders (the pull fetches the whole cached UID range each sync), drafts, reply all, forwarding with attachments, recipient parsing (display names containing commas), moving messages between folders, per-folder unread counts, manual light/dark theme switch, EF migrations, README.
+- **Provider presets**: Microsoft 365 work/school accounts need `smtp.office365.com` (the Outlook preset only has `smtp-mail.outlook.com`); whether QQ / 163 / 126 / Yahoo / iCloud save a sent copy themselves is unknown (set to false, which may duplicate Sent mail).
