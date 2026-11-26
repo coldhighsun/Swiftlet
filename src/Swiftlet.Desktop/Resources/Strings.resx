@@ -26,6 +26,10 @@
   <data name="Reader_From" xml:space="preserve"><value>From:</value></data>
   <data name="Reader_To" xml:space="preserve"><value>To:</value></data>
   <data name="Reader_Time" xml:space="preserve"><value>Time:</value></data>
+  <data name="Reader_RemoteImagesBlocked" xml:space="preserve"><value>Remote images were blocked to protect your privacy.</value></data>
+  <data name="Reader_LoadImages" xml:space="preserve"><value>Load images</value></data>
+  <data name="Reader_AlwaysAllowSender" xml:space="preserve"><value>Always load images from {0}</value></data>
+  <data name="Reader_AlwaysAllowDomain" xml:space="preserve"><value>Always load images from senders at {0}</value></data>
 
   <data name="Folder_Inbox" xml:space="preserve"><value>Inbox</value></data>
   <data name="Folder_Sent" xml:space="preserve"><value>Sent</value></data>
@@ -44,6 +48,8 @@
   <data name="Error_SaveAttachment" xml:space="preserve"><value>Failed to save attachment</value></data>
   <data name="Error_Flag" xml:space="preserve"><value>Failed to update star</value></data>
   <data name="Error_MarkRead" xml:space="preserve"><value>Failed to mark as read</value></data>
+  <data name="Error_InlineImages" xml:space="preserve"><value>Failed to load images embedded in the message</value></data>
+  <data name="Error_SaveImageRule" xml:space="preserve"><value>Failed to save the image rule</value></data>
   <data name="Error_DeleteMessage" xml:space="preserve"><value>Failed to delete message</value></data>
   <data name="Error_DeleteAccount" xml:space="preserve"><value>Failed to remove account</value></data>
   <data name="Error_Reauthenticate" xml:space="preserve"><value>Re-sign-in failed</value></data>
@@ -123,4 +129,12 @@
   <data name="Settings_RemoveServerDeleted" xml:space="preserve"><value>Remove local messages that were deleted on the server</value></data>
   <data name="Settings_RemoveServerDeletedHint" xml:space="preserve"><value>Only your local copy is removed; nothing changes on the server. Messages you delete in another app or on the web will then disappear from Swiftlet too. Off by default.</value></data>
   <data name="Settings_SaveFailed" xml:space="preserve"><value>Failed to save settings</value></data>
+  <data name="Settings_RemoteImages" xml:space="preserve"><value>Remote images</value></data>
+  <data name="Settings_RemoteImagesHint" xml:space="preserve"><value>Images are loaded automatically for mail from these senders (an address) or sender domains (including subdomains). Loading remote images tells the sender that you opened the mail.</value></data>
+  <data name="Settings_RemoteImagesFilter" xml:space="preserve"><value>Search rules</value></data>
+  <data name="Settings_RemoteImagesCount" xml:space="preserve"><value>Showing {0} of {1}</value></data>
+  <data name="Settings_RemoteImagesPlaceholder" xml:space="preserve"><value>Address or domain, for example news@shop.com or shop.com</value></data>
+  <data name="Settings_RemoteImagesAdd" xml:space="preserve"><value>Add</value></data>
+  <data name="Settings_RemoteImagesRemove" xml:space="preserve"><value>Remove selected</value></data>
+  <data name="Settings_RemoteImagesInvalid" xml:space="preserve"><value>Enter a valid sender address or domain, for example news@shop.com or shop.com.</value></data>
 </root>

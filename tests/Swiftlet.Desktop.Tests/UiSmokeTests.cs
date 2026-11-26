@@ -104,6 +104,33 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies the reading pane hosts the HTML view (and hides the plain-text body) for a message with an HTML body.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_HtmlMessageSelected_ShowsHtmlBodyView()
+    {
+        await Session.Dispatch(
+            async () =>
+            {
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Messages[1] = TestData.Message(scenario.Account, scenario.Inbox, 2, "Hello 2", html: "<p>rich</p>");
+                await scenario.StartAsync();
+                scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+                await scenario.ViewModel.WhenIdleAsync();
+
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-html");
+
+                var htmlView = window.GetVisualDescendants().OfType<Swiftlet.Desktop.Controls.HtmlBodyView>().Single();
+                htmlView.IsVisible.Should().BeTrue();
+                htmlView.Document.Should().Contain("<p>rich</p>");
+                window.GetVisualDescendants().OfType<SelectableTextBlock>().Single().IsVisible.Should().BeFalse();
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Verifies every visible label of the main window follows a runtime language switch, without recreating the window.
     /// </summary>
     [Fact]
@@ -269,6 +296,131 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies a message with remote images shows the privacy banner with a working load button, in both languages.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    /// <param name="notice">The expected banner text.</param>
+    /// <param name="loadButton">The expected button caption.</param>
+    [Theory]
+    [InlineData("zh-Hans", "为保护隐私，已阻止加载远程图片。", "加载图片")]
+    [InlineData("en", "Remote images were blocked to protect your privacy.", "Load images")]
+    public async Task MainWindow_RemoteImagesBlocked_ShowsBannerUntilLoaded(string language, string notice, string loadButton)
+    {
+        await Session.Dispatch(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference(language);
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Localizer.SetPreference(language);
+                scenario.Messages[1] = TestData.Message(scenario.Account, scenario.Inbox, 2, "Hello 2", html: "<img src=\"https://x.example/a.png\">");
+                await scenario.StartAsync();
+                scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+                await scenario.ViewModel.WhenIdleAsync();
+
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, $"main-window-remote-images-{language}", language);
+
+                var banner = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == notice);
+                banner.IsEffectivelyVisible.Should().BeTrue();
+                var button = window.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == loadButton);
+                button.Command!.Execute(null);
+                Render(window, $"main-window-remote-images-loaded-{language}", language);
+
+                banner.IsEffectivelyVisible.Should().BeFalse();
+                scenario.ViewModel.SelectedMessage!.AllowRemoteImages.Should().BeTrue();
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the banner's load button is a split button whose drop-down offers the two "always allow" choices, in both languages.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    /// <param name="loadButton">The expected caption of the main button.</param>
+    /// <param name="senderText">The expected text of the "always allow this sender" choice.</param>
+    /// <param name="domainText">The expected text of the "always allow this domain" choice.</param>
+    [Theory]
+    [InlineData("zh-Hans", "加载图片", "总是加载 alice@example.com 的图片", "总是加载 example.com 域发件人的图片")]
+    [InlineData("en", "Load images", "Always load images from alice@example.com", "Always load images from senders at example.com")]
+    public async Task MainWindow_RemoteImagesBlocked_SplitButtonOffersAlwaysAllowChoices(
+        string language,
+        string loadButton,
+        string senderText,
+        string domainText)
+    {
+        await Session.Dispatch(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference(language);
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Localizer.SetPreference(language);
+                scenario.Messages[1] = TestData.Message(scenario.Account, scenario.Inbox, 2, "Hello 2", html: "<img src=\"https://x.example/a.png\">");
+                await scenario.StartAsync();
+                scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+                await scenario.ViewModel.WhenIdleAsync();
+
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, $"main-window-split-button-{language}", language);
+
+                var split = window.GetVisualDescendants().OfType<SplitButton>().Single();
+                split.IsEffectivelyVisible.Should().BeTrue();
+                split.Content.Should().Be(loadButton);
+                var menu = split.Flyout.Should().BeOfType<MenuFlyout>().Subject;
+                menu.Items.OfType<MenuItem>().Should().HaveCount(2);
+                var selected = scenario.ViewModel.SelectedMessage!;
+                selected.AlwaysAllowSenderText.Should().Be(senderText);
+                selected.AlwaysAllowDomainText.Should().Be(domainText);
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the settings window lists the saved remote image rules with the count and the editing controls, in both languages.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    /// <param name="heading">The expected section heading.</param>
+    /// <param name="count">The expected count text.</param>
+    /// <param name="add">The expected caption of the add button.</param>
+    /// <param name="remove">The expected caption of the remove button.</param>
+    [Theory]
+    [InlineData("zh-Hans", "远程图片", "显示 3 / 共 3 条", "添加", "删除所选")]
+    [InlineData("en", "Remote images", "Showing 3 of 3", "Add", "Remove selected")]
+    public async Task SettingsWindow_RemoteImageRules_ShowsListCountAndButtons(
+        string language,
+        string heading,
+        string count,
+        string add,
+        string remove)
+    {
+        await Session.Dispatch(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference(language);
+                var rules = new FakeRemoteImageRules();
+                foreach (var rule in (string[])["shop.com", "news@other.org", "promo.example.net"])
+                {
+                    await rules.AddAsync(rule, TestContext.Current.CancellationToken);
+                }
+
+                var viewModel = new SettingsViewModel(new FakeAppSettings(), LocalizationManager.Instance, rules);
+                var window = new SettingsWindow { DataContext = viewModel };
+                Render(window, $"settings-remote-images-{language}", language);
+
+                var list = window.GetVisualDescendants().OfType<ListBox>().Single();
+                list.ItemCount.Should().Be(3);
+                var texts = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
+                texts.Should().Contain(heading);
+                texts.Should().Contain(count);
+                var buttons = window.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).ToList();
+                buttons.Should().Contain([add, remove]);
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Verifies the label manager lists labels with their editing controls, in both languages.
     /// </summary>
     /// <param name="language">The UI language.</param>
@@ -323,7 +475,7 @@ public class UiSmokeTests
             () =>
             {
                 LocalizationManager.Instance.SetPreference(language);
-                var viewModel = new SettingsViewModel(new FakeAppSettings(), LocalizationManager.Instance);
+                var viewModel = new SettingsViewModel(new FakeAppSettings(), LocalizationManager.Instance, new FakeRemoteImageRules());
                 var window = new SettingsWindow { DataContext = viewModel };
                 Render(window, $"settings-{language}", language);
 

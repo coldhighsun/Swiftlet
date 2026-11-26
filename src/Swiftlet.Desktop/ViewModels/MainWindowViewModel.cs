@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Application.Labels;
 using Swiftlet.Application.Messages;
@@ -67,6 +69,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private Task _selectionTask = Task.CompletedTask;
 
     /// <summary>
+    /// The saved rules that allow remote images for senders.
+    /// </summary>
+    private readonly IRemoteImageRules _remoteImageRules;
+
+    /// <summary>
     /// The sync notifications.
     /// </summary>
     private readonly ISyncEvents _syncEvents;
@@ -97,6 +104,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private bool _disposed;
 
     /// <summary>
+    /// The logger.
+    /// </summary>
+    private readonly ILogger _logger;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="MainWindowViewModel"/> class.
     /// </summary>
     /// <param name="dispatcher">The request dispatcher.</param>
@@ -105,14 +117,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <param name="languageSelector">The language picker view model.</param>
     /// <param name="syncEvents">The sync notifications that trigger a refresh.</param>
     /// <param name="uiThread">The UI thread marshaller.</param>
+    /// <param name="remoteImageRules">The saved rules that allow remote images for senders.</param>
+    /// <param name="logger">The logger; optional.</param>
     public MainWindowViewModel(
         IRequestDispatcher dispatcher,
         IDialogService dialogs,
         ILocalizer localizer,
         LanguageSelectorViewModel languageSelector,
         ISyncEvents syncEvents,
-        IUiThread uiThread)
+        IUiThread uiThread,
+        IRemoteImageRules remoteImageRules,
+        ILogger<MainWindowViewModel>? logger = null)
     {
+        _logger = logger ?? NullLogger<MainWindowViewModel>.Instance;
+        _remoteImageRules = remoteImageRules;
         _syncEvents = syncEvents;
         _uiThread = uiThread;
         _dispatcher = dispatcher;
@@ -344,6 +362,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task SyncAsync()
     {
+        _logger.LogInformation("Manual sync requested");
         var scope = ScopeAccountId(SelectedNode);
         var targets = scope is { } id ? _accounts.Where(a => a.Id == id).ToList() : _accounts.ToList();
         await SyncAccountsAsync(targets);
@@ -379,6 +398,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
+        _logger.LogInformation("Searching ({Length} characters)", text.Length);
         var version = ++_loadVersion;
         await GuardedAsync("Error_Search", async () =>
         {
@@ -640,6 +660,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [RelayCommand(CanExecute = nameof(CanOpenHtml))]
     private void OpenHtml()
     {
+        _logger.LogInformation("Opening message {MessageId} in the browser", SelectedMessage!.Id);
         _dialogs.ShowHtmlInBrowser(SelectedMessage!.Message.BodyHtml!);
     }
 
@@ -659,6 +680,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <param name="value">The new selection.</param>
     partial void OnSelectedNodeChanged(object? value)
     {
+        _logger.LogInformation("Selected {Node}", value?.GetType().Name);
         SearchText = string.Empty;
         _loadTask = LoadMessagesAsync(value);
     }
@@ -686,10 +708,67 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <param name="value">The new selection.</param>
     partial void OnSelectedMessageChanged(MessageItemViewModel? value)
     {
+        _logger.LogDebug("Selected message {MessageId}", value?.Id);
         RebuildLabelChoices();
+        var sideEffects = new List<Task>();
         if (value is { IsRead: false })
         {
-            _selectionTask = MarkReadAsync(value);
+            sideEffects.Add(MarkReadAsync(value));
+        }
+
+        if (value is { AllowRemoteImages: false } && value.HasBlockedRemoteImages && _remoteImageRules.IsAllowed(value.Message.FromAddress))
+        {
+            value.AllowRemoteImages = true;
+        }
+
+        if (value is { HasHtml: true, InlineImagesRequested: false } && value.HasInlineImageReferences)
+        {
+            value.InlineImagesRequested = true;
+            sideEffects.Add(LoadInlineImagesAsync(value));
+        }
+
+        if (sideEffects.Count > 0)
+        {
+            _selectionTask = Task.WhenAll(sideEffects);
+        }
+    }
+
+    /// <summary>
+    /// Saves a rule that always allows remote images and reports a failure; the message that asked is already allowed.
+    /// </summary>
+    /// <param name="item">The message the user chose the rule for.</param>
+    /// <param name="rule">The sender address or domain.</param>
+    /// <returns>A task that completes when the rule is saved or the failure is reported.</returns>
+    private async Task RememberRemoteImagesAsync(MessageItemViewModel item, string rule)
+    {
+        try
+        {
+            await _remoteImageRules.AddAsync(rule);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The images are already shown for this message; only the saved rule is missing, so this is just reported.
+            StatusText = _localizer.Format("Error_Format", _localizer["Error_SaveImageRule"], ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Downloads the images embedded in a message from the server and shows them in the reading pane.
+    /// </summary>
+    /// <param name="item">The message.</param>
+    /// <returns>A task that completes when the images are shown or the failure is reported.</returns>
+    private async Task LoadInlineImagesAsync(MessageItemViewModel item)
+    {
+        try
+        {
+            var images = await _dispatcher.SendAsync(new GetInlineImagesQuery(item.Message.AccountId, item.Id));
+            item.SetInlineImages(images);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The text of the message is readable without the pictures, so this is only reported; selecting the message again retries.
+            item.InlineImagesRequested = false;
+            StatusText = _localizer.Format("Error_Format", _localizer["Error_InlineImages"], ex.Message);
         }
     }
 
@@ -742,6 +821,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             return;
         }
+
+        _logger.LogInformation("Saving attachment {Ordinal} of message {MessageId}", attachment.Attachment.Ordinal, attachment.Attachment.MessageId);
 
         await GuardedAsync("Error_SaveAttachment", async () =>
         {
@@ -947,17 +1028,58 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <param name="messages">The new messages.</param>
     private void ReplaceMessages(IReadOnlyList<MailMessage> messages)
     {
-        var selectedId = SelectedMessage?.Id;
-        SelectedMessage = null;
-        Messages.Clear();
-        foreach (var message in messages)
+        // Items of messages that are still listed are kept (and updated) rather than recreated: replacing the selected
+        // item would reload the web view, refetch inline images and drop per-message state on every periodic refresh.
+        var existing = new Dictionary<Guid, MessageItemViewModel>();
+        foreach (var item in Messages)
         {
-            Messages.Add(new MessageItemViewModel(message, SaveAttachmentAsync, _localizer));
+            existing[item.Id] = item;
         }
 
-        if (selectedId is { } id)
+        var target = new List<MessageItemViewModel>(messages.Count);
+        foreach (var message in messages)
         {
-            SelectedMessage = Messages.FirstOrDefault(m => m.Id == id);
+            if (existing.TryGetValue(message.Id, out var kept))
+            {
+                kept.Update(message);
+                target.Add(kept);
+            }
+            else
+            {
+                target.Add(new MessageItemViewModel(message, SaveAttachmentAsync, _localizer, RememberRemoteImagesAsync));
+            }
+        }
+
+        if (SelectedMessage is { } selected && !target.Contains(selected))
+        {
+            SelectedMessage = null;
+        }
+
+        var keep = target.ToHashSet();
+        for (var i = Messages.Count - 1; i >= 0; i--)
+        {
+            if (!keep.Contains(Messages[i]))
+            {
+                Messages.RemoveAt(i);
+            }
+        }
+
+        for (var i = 0; i < target.Count; i++)
+        {
+            if (i < Messages.Count && ReferenceEquals(Messages[i], target[i]))
+            {
+                continue;
+            }
+
+            var current = Messages.IndexOf(target[i]);
+            if (current >= 0)
+            {
+                Messages.Move(current, i);
+            }
+            else
+            {
+                Messages.Insert(i, target[i]);
+            }
         }
     }
 
@@ -991,6 +1113,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // This is the UI boundary: report the failure to the user rather than crashing the application.
+            _logger.LogError(ex, "{Operation} failed", failureKey);
             StatusText = _localizer.Format("Error_Format", _localizer[failureKey], ex.Message);
         }
     }

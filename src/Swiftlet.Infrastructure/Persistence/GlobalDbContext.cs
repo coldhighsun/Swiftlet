@@ -27,6 +27,11 @@ public sealed class GlobalDbContext(DbContextOptions<GlobalDbContext> options) :
     /// </summary>
     internal DbSet<MessageLabel> MessageLabels => Set<MessageLabel>();
 
+    /// <summary>
+    /// Gets the saved remote image rules.
+    /// </summary>
+    internal DbSet<RemoteImageRuleEntry> RemoteImageRules => Set<RemoteImageRuleEntry>();
+
     /// <inheritdoc />
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -41,5 +46,6 @@ public sealed class GlobalDbContext(DbContextOptions<GlobalDbContext> options) :
         modelBuilder.ApplyConfiguration(new MailAccountConfiguration());
         modelBuilder.ApplyConfiguration(new LabelConfiguration());
         modelBuilder.ApplyConfiguration(new MessageLabelConfiguration());
+        modelBuilder.ApplyConfiguration(new RemoteImageRuleConfiguration());
     }
 }

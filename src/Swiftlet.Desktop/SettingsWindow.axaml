@@ -9,6 +9,17 @@
   <StackPanel Margin="20" Spacing="12">
     <CheckBox Content="{loc:Loc Settings_RemoveServerDeleted}" IsChecked="{Binding RemoveServerDeletedMessages}" />
     <TextBlock Text="{loc:Loc Settings_RemoveServerDeletedHint}" TextWrapping="Wrap" Opacity="0.7" Margin="28,0,0,0" />
+    <Separator />
+    <TextBlock Text="{loc:Loc Settings_RemoteImages}" FontWeight="SemiBold" />
+    <TextBlock Text="{loc:Loc Settings_RemoteImagesHint}" TextWrapping="Wrap" Opacity="0.7" />
+    <TextBox Text="{Binding RemoteImageFilter}" PlaceholderText="{loc:Loc Settings_RemoteImagesFilter}" />
+    <ListBox ItemsSource="{Binding RemoteImageRules}" SelectedItem="{Binding SelectedRemoteImageRule}" MaxHeight="160" MinHeight="80" />
+    <TextBlock Text="{Binding RemoteImageRuleCountText}" Opacity="0.7" />
+    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+      <TextBox Text="{Binding NewRemoteImageRule}" PlaceholderText="{loc:Loc Settings_RemoteImagesPlaceholder}" />
+      <Button Grid.Column="1" Content="{loc:Loc Settings_RemoteImagesAdd}" Command="{Binding AddRemoteImageRuleCommand}" />
+      <Button Grid.Column="2" Content="{loc:Loc Settings_RemoteImagesRemove}" Command="{Binding RemoveRemoteImageRuleCommand}" />
+    </Grid>
     <TextBlock Text="{Binding ErrorText}" Foreground="IndianRed" TextWrapping="Wrap"
                IsVisible="{Binding ErrorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
     <Button HorizontalAlignment="Right" Content="{loc:Loc Common_Close}" Command="{Binding CloseCommand}" IsCancel="True" />

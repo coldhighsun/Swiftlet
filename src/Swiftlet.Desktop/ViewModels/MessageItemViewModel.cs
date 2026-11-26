@@ -1,5 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Queries;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
 using Swiftlet.Domain.Messages;
@@ -58,15 +60,26 @@ public sealed partial class MessageItemViewModel : ObservableObject
     private readonly ILocalizer _localizer;
 
     /// <summary>
+    /// The action that saves a remote image rule; <see langword="null"/> when rules cannot be saved.
+    /// </summary>
+    private readonly Func<MessageItemViewModel, string, Task>? _rememberRemoteImages;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="MessageItemViewModel"/> class.
     /// </summary>
     /// <param name="message">The cached message.</param>
     /// <param name="saveAttachment">The action invoked to save one of the attachments.</param>
     /// <param name="localizer">The localizer used for the placeholder subject.</param>
-    public MessageItemViewModel(MailMessage message, Func<AttachmentItemViewModel, Task> saveAttachment, ILocalizer localizer)
+    /// <param name="rememberRemoteImages">The action invoked to save a rule that always allows remote images (the rule is an address or a domain).</param>
+    public MessageItemViewModel(
+        MailMessage message,
+        Func<AttachmentItemViewModel, Task> saveAttachment,
+        ILocalizer localizer,
+        Func<MessageItemViewModel, string, Task>? rememberRemoteImages = null)
     {
         ArgumentNullException.ThrowIfNull(message);
         _localizer = localizer;
+        _rememberRemoteImages = rememberRemoteImages;
         Message = message;
         IsRead = message.IsRead;
         IsFlagged = message.IsFlagged;
@@ -102,6 +115,24 @@ public sealed partial class MessageItemViewModel : ObservableObject
         Labels = BuildChips(Message);
         OnPropertyChanged(nameof(Labels));
         OnPropertyChanged(nameof(HasLabels));
+    }
+
+    /// <summary>
+    /// Copies the state that can change after a sync (read, starred, labels) from a freshly loaded copy of the same message,
+    /// so a list refresh can keep this object (and the page shown for it) instead of replacing it.
+    /// </summary>
+    /// <param name="fresh">The freshly loaded message with the same identifier.</param>
+    public void Update(MailMessage fresh)
+    {
+        ArgumentNullException.ThrowIfNull(fresh);
+        IsRead = fresh.IsRead;
+        IsFlagged = fresh.IsFlagged;
+        if (!ReferenceEquals(fresh, Message))
+        {
+            Message.SetLabels([.. fresh.Labels]);
+        }
+
+        RefreshLabels();
     }
 
     /// <summary>
@@ -176,6 +207,118 @@ public sealed partial class MessageItemViewModel : ObservableObject
     /// Gets the plain-text body.
     /// </summary>
     public string BodyText => Message.BodyText;
+
+    /// <summary>
+    /// Gets the complete HTML document for the embedded web view, or <see langword="null"/> when the message has no HTML body.
+    /// </summary>
+    public string? HtmlDocument => HasHtml ? HtmlMailDocument.Build(Message.BodyHtml!, AllowRemoteImages, InlineImages) : null;
+
+    /// <summary>
+    /// Gets the images embedded in the message that were downloaded so far, keyed by normalized content identifier.
+    /// </summary>
+    public IReadOnlyDictionary<string, InlineImage> InlineImages { get; private set; } = new Dictionary<string, InlineImage>();
+
+    /// <summary>
+    /// Gets a value indicating whether the HTML body refers to images embedded in the message (<c>cid:</c>).
+    /// </summary>
+    public bool HasInlineImageReferences => InlineImageReferences.Find(Message.BodyHtml).Count > 0;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the embedded images were already requested, so they are fetched only once.
+    /// </summary>
+    public bool InlineImagesRequested { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the user allowed this message to load images from the web.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HtmlDocument))]
+    [NotifyPropertyChangedFor(nameof(HasBlockedRemoteImages))]
+    public partial bool AllowRemoteImages { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the message refers to images on the web that are currently blocked.
+    /// </summary>
+    public bool HasBlockedRemoteImages => !AllowRemoteImages && HtmlMailDocument.HasRemoteImages(Message.BodyHtml);
+
+    /// <summary>
+    /// Stores downloaded embedded images and refreshes the HTML document.
+    /// </summary>
+    /// <param name="images">The downloaded images.</param>
+    public void SetInlineImages(IReadOnlyDictionary<string, InlineImage> images)
+    {
+        ArgumentNullException.ThrowIfNull(images);
+        InlineImages = images;
+        OnPropertyChanged(nameof(HtmlDocument));
+    }
+
+    /// <summary>
+    /// Gets the rule that allows images for this sender's address, or <see langword="null"/> when the sender address is unusable.
+    /// </summary>
+    public string? SenderRule => RemoteImageRule.Candidates(Message.FromAddress) is [var address, ..] ? address : null;
+
+    /// <summary>
+    /// Gets the rule that allows images for every sender at this sender's domain, or <see langword="null"/> when the sender address is unusable.
+    /// </summary>
+    public string? DomainRule => RemoteImageRule.Candidates(Message.FromAddress) is [_, var domain, ..] ? domain : null;
+
+    /// <summary>
+    /// Gets a value indicating whether a rule for this sender can be saved.
+    /// </summary>
+    public bool CanRememberSender => SenderRule is not null && _rememberRemoteImages is not null;
+
+    /// <summary>
+    /// Gets the menu text of the "always allow this sender" choice.
+    /// </summary>
+    public string AlwaysAllowSenderText => _localizer.Format("Reader_AlwaysAllowSender", SenderRule ?? string.Empty);
+
+    /// <summary>
+    /// Gets the menu text of the "always allow this sender's domain" choice.
+    /// </summary>
+    public string AlwaysAllowDomainText => _localizer.Format("Reader_AlwaysAllowDomain", DomainRule ?? string.Empty);
+
+    /// <summary>
+    /// Allows this message to load images from the web.
+    /// </summary>
+    [RelayCommand]
+    private void LoadRemoteImages()
+    {
+        AllowRemoteImages = true;
+    }
+
+    /// <summary>
+    /// Allows images in this message and saves a rule that always allows them for this sender's address.
+    /// </summary>
+    /// <returns>A task that completes when the rule is saved.</returns>
+    [RelayCommand]
+    private Task AlwaysAllowSenderAsync()
+    {
+        return RememberAsync(SenderRule);
+    }
+
+    /// <summary>
+    /// Allows images in this message and saves a rule that always allows them for this sender's domain.
+    /// </summary>
+    /// <returns>A task that completes when the rule is saved.</returns>
+    [RelayCommand]
+    private Task AlwaysAllowDomainAsync()
+    {
+        return RememberAsync(DomainRule);
+    }
+
+    /// <summary>
+    /// Allows images in this message right away, then saves the rule.
+    /// </summary>
+    /// <param name="rule">The rule to save, or <see langword="null"/> when there is none.</param>
+    /// <returns>A task that completes when the rule is saved.</returns>
+    private async Task RememberAsync(string? rule)
+    {
+        AllowRemoteImages = true;
+        if (rule is not null && _rememberRemoteImages is not null)
+        {
+            await _rememberRemoteImages(this, rule);
+        }
+    }
 
     /// <summary>
     /// Gets a value indicating whether the message has an HTML body.

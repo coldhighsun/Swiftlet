@@ -40,6 +40,12 @@ public static class SqliteSchemaInitializer
     ];
 
     /// <summary>
+    /// SQL creating the remote image rules table in a global store that predates it.
+    /// </summary>
+    private const string RemoteImageRulesTable =
+        "CREATE TABLE IF NOT EXISTS RemoteImageRules (Rule TEXT NOT NULL PRIMARY KEY, AddedAt INTEGER NOT NULL);";
+
+    /// <summary>
     /// Ensures the global store (accounts, labels, label links) exists.
     /// </summary>
     /// <param name="context">The global database context.</param>
@@ -52,6 +58,9 @@ public static class SqliteSchemaInitializer
         // WAL lets the UI read while the background worker writes; it is a no-op for in-memory databases.
         await context.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", cancellationToken);
         await context.Database.EnsureCreatedAsync(cancellationToken);
+
+        // EnsureCreated leaves an existing database untouched, so tables added later are created here (idempotent).
+        await context.Database.ExecuteSqlRawAsync(RemoteImageRulesTable, cancellationToken);
     }
 
     /// <summary>

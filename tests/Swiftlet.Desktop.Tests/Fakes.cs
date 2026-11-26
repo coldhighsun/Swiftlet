@@ -241,6 +241,78 @@ internal sealed class FakeLanguageStore : ILanguagePreferenceStore
 }
 
 /// <summary>
+/// In-memory remote image rules that record their calls.
+/// </summary>
+internal sealed class FakeRemoteImageRules : Swiftlet.Application.Abstractions.IRemoteImageRules
+{
+    /// <summary>
+    /// The saved rules.
+    /// </summary>
+    private readonly SortedSet<string> _rules = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Gets the rules passed to <see cref="AddAsync"/>, including duplicates.
+    /// </summary>
+    public List<string> AddCalls { get; } = [];
+
+    /// <summary>
+    /// Gets the rules passed to <see cref="RemoveAsync"/>.
+    /// </summary>
+    public List<string> RemoveCalls { get; } = [];
+
+    /// <summary>
+    /// Gets or sets an exception thrown by <see cref="AddAsync"/>.
+    /// </summary>
+    public Exception? AddFailure { get; set; }
+
+    /// <summary>
+    /// Gets the saved rules in order.
+    /// </summary>
+    public IReadOnlyCollection<string> Rules => _rules;
+
+    /// <inheritdoc />
+    public Task LoadAsync(CancellationToken cancellationToken = default)
+    {
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public bool IsAllowed(string? fromAddress)
+    {
+        return Swiftlet.Application.Abstractions.RemoteImageRule.Candidates(fromAddress).Any(_rules.Contains);
+    }
+
+    /// <inheritdoc />
+    public Task<bool> AddAsync(string rule, CancellationToken cancellationToken = default)
+    {
+        AddCalls.Add(rule);
+        if (AddFailure is not null)
+        {
+            throw AddFailure;
+        }
+
+        return Task.FromResult(_rules.Add(rule));
+    }
+
+    /// <inheritdoc />
+    public Task<bool> RemoveAsync(string rule, CancellationToken cancellationToken = default)
+    {
+        RemoveCalls.Add(rule);
+        return Task.FromResult(_rules.Remove(rule));
+    }
+
+    /// <inheritdoc />
+    public (IReadOnlyList<string> Rules, int TotalMatches) Search(string? filter, int take)
+    {
+        var text = filter?.Trim();
+        var matches = string.IsNullOrEmpty(text)
+            ? _rules.ToList()
+            : _rules.Where(r => r.Contains(text, StringComparison.OrdinalIgnoreCase)).ToList();
+        return (matches.Take(take).ToList(), matches.Count);
+    }
+}
+
+/// <summary>
 /// In-memory application settings.
 /// </summary>
 internal sealed class FakeAppSettings : IAppSettings
@@ -361,7 +433,8 @@ internal static class TestData
         uint uid,
         string subject = "Hello",
         bool isRead = false,
-        string? html = null)
+        string? html = null,
+        string fromAddress = "alice@example.com")
     {
         return MailMessage.Create(
             account.Id,
@@ -369,7 +442,7 @@ internal static class TestData
             uid,
             subject,
             "Alice",
-            "alice@example.com",
+            fromAddress,
             "me@example.com",
             new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero).AddMinutes(uid),
             "line one\nline two",

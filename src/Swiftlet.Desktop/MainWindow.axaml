@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Swiftlet.Desktop.ViewModels"
         xmlns:loc="using:Swiftlet.Desktop.Localization"
+        xmlns:ctl="using:Swiftlet.Desktop.Controls"
         x:Class="Swiftlet.Desktop.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="Swiftlet" Width="1200" Height="760" MinWidth="800" MinHeight="480">
@@ -186,9 +187,28 @@
                   </ItemsControl>
                   <Separator Margin="0,8" />
                 </StackPanel>
-                <ScrollViewer>
-                  <SelectableTextBlock Text="{Binding BodyText}" TextWrapping="Wrap" />
-                </ScrollViewer>
+                <Border DockPanel.Dock="Top" IsVisible="{Binding HasBlockedRemoteImages}" Padding="8,6" Margin="0,0,0,6"
+                        Background="{DynamicResource SystemFillColorCautionBackgroundBrush}" CornerRadius="4">
+                  <DockPanel>
+                    <SplitButton DockPanel.Dock="Right" Content="{loc:Loc Reader_LoadImages}" Command="{Binding LoadRemoteImagesCommand}">
+                      <SplitButton.Flyout>
+                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                          <MenuItem Header="{Binding AlwaysAllowSenderText}" Command="{Binding AlwaysAllowSenderCommand}"
+                                    IsVisible="{Binding CanRememberSender}" />
+                          <MenuItem Header="{Binding AlwaysAllowDomainText}" Command="{Binding AlwaysAllowDomainCommand}"
+                                    IsVisible="{Binding CanRememberSender}" />
+                        </MenuFlyout>
+                      </SplitButton.Flyout>
+                    </SplitButton>
+                    <TextBlock Text="{loc:Loc Reader_RemoteImagesBlocked}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                  </DockPanel>
+                </Border>
+                <Grid>
+                  <ctl:HtmlBodyView Document="{Binding HtmlDocument}" IsVisible="{Binding HasHtml}" />
+                  <ScrollViewer IsVisible="{Binding !HasHtml}">
+                    <SelectableTextBlock Text="{Binding BodyText}" TextWrapping="Wrap" />
+                  </ScrollViewer>
+                </Grid>
               </DockPanel>
             </DataTemplate>
           </ContentControl.DataTemplates>

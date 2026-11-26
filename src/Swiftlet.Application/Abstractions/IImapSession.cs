@@ -52,6 +52,20 @@ public interface IImapSession : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Downloads the images embedded in a message (parts with a Content-ID that HTML refers to as <c>cid:</c>).
+    /// </summary>
+    /// <param name="folderFullName">The full server-side path of the folder.</param>
+    /// <param name="uid">The IMAP UID of the message.</param>
+    /// <param name="contentIds">The normalized content identifiers wanted (see <c>InlineImageReferences.Normalize</c>).</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The images found, keyed by normalized content identifier; <see langword="null"/> if the message no longer exists.</returns>
+    Task<IReadOnlyDictionary<string, InlineImage>?> DownloadInlineImagesAsync(
+        string folderFullName,
+        uint uid,
+        IReadOnlyCollection<string> contentIds,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Deletes a message on the server.
     /// A message that is already gone counts as deleted; every other failure is thrown.
     /// </summary>

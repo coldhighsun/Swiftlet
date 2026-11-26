@@ -26,6 +26,10 @@
   <data name="Reader_From" xml:space="preserve"><value>发件人：</value></data>
   <data name="Reader_To" xml:space="preserve"><value>收件人：</value></data>
   <data name="Reader_Time" xml:space="preserve"><value>时间：</value></data>
+  <data name="Reader_RemoteImagesBlocked" xml:space="preserve"><value>为保护隐私，已阻止加载远程图片。</value></data>
+  <data name="Reader_LoadImages" xml:space="preserve"><value>加载图片</value></data>
+  <data name="Reader_AlwaysAllowSender" xml:space="preserve"><value>总是加载 {0} 的图片</value></data>
+  <data name="Reader_AlwaysAllowDomain" xml:space="preserve"><value>总是加载 {0} 域发件人的图片</value></data>
 
   <data name="Folder_Inbox" xml:space="preserve"><value>收件箱</value></data>
   <data name="Folder_Sent" xml:space="preserve"><value>已发送</value></data>
@@ -44,6 +48,8 @@
   <data name="Error_SaveAttachment" xml:space="preserve"><value>保存附件失败</value></data>
   <data name="Error_Flag" xml:space="preserve"><value>标记失败</value></data>
   <data name="Error_MarkRead" xml:space="preserve"><value>标记已读失败</value></data>
+  <data name="Error_InlineImages" xml:space="preserve"><value>加载邮件内嵌图片失败</value></data>
+  <data name="Error_SaveImageRule" xml:space="preserve"><value>保存图片规则失败</value></data>
   <data name="Error_DeleteMessage" xml:space="preserve"><value>删除邮件失败</value></data>
   <data name="Error_DeleteAccount" xml:space="preserve"><value>移除账号失败</value></data>
   <data name="Error_Reauthenticate" xml:space="preserve"><value>重新登录失败</value></data>
@@ -123,4 +129,12 @@
   <data name="Settings_RemoveServerDeleted" xml:space="preserve"><value>删除服务器上已删除的邮件的本地副本</value></data>
   <data name="Settings_RemoveServerDeletedHint" xml:space="preserve"><value>只会删除本地副本，不会改动服务器上的邮件。在其他应用或网页端删除的邮件，也会从 Swiftlet 中消失。默认关闭。</value></data>
   <data name="Settings_SaveFailed" xml:space="preserve"><value>保存设置失败</value></data>
+  <data name="Settings_RemoteImages" xml:space="preserve"><value>远程图片</value></data>
+  <data name="Settings_RemoteImagesHint" xml:space="preserve"><value>来自下列发件人（地址）或发件人域（含子域）的邮件会自动加载图片。加载远程图片会让发件人知道你打开了邮件。</value></data>
+  <data name="Settings_RemoteImagesFilter" xml:space="preserve"><value>搜索规则</value></data>
+  <data name="Settings_RemoteImagesCount" xml:space="preserve"><value>显示 {0} / 共 {1} 条</value></data>
+  <data name="Settings_RemoteImagesPlaceholder" xml:space="preserve"><value>地址或域名，例如 news@shop.com 或 shop.com</value></data>
+  <data name="Settings_RemoteImagesAdd" xml:space="preserve"><value>添加</value></data>
+  <data name="Settings_RemoteImagesRemove" xml:space="preserve"><value>删除所选</value></data>
+  <data name="Settings_RemoteImagesInvalid" xml:space="preserve"><value>请输入有效的发件人地址或域名，例如 news@shop.com 或 shop.com。</value></data>
 </root>

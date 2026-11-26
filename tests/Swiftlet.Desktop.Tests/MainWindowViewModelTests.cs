@@ -59,7 +59,9 @@ public class MainWindowViewModelTests
                 Localizer,
                 new LanguageSelectorViewModel(Localizer, LanguageStore, NullLogger<LanguageSelectorViewModel>.Instance),
                 SyncEvents,
-                UiThread);
+                UiThread,
+                RemoteImageRules,
+                Logger);
         }
 
         /// <summary>
@@ -91,6 +93,16 @@ public class MainWindowViewModelTests
         /// Gets the UI-thread marshaller.
         /// </summary>
         public FakeUiThread UiThread { get; } = new();
+
+        /// <summary>
+        /// Gets the logger of the view model.
+        /// </summary>
+        public ListLogger<MainWindowViewModel> Logger { get; } = new();
+
+        /// <summary>
+        /// Gets the saved remote image rules.
+        /// </summary>
+        public FakeRemoteImageRules RemoteImageRules { get; } = new();
 
         /// <summary>
         /// Gets the dialogs.
@@ -494,6 +506,251 @@ public class MainWindowViewModelTests
     }
 
     /// <summary>
+    /// Verifies the reading pane gets an HTML document only for messages that have an HTML body.
+    /// </summary>
+    [Fact]
+    public async Task HtmlDocument_MessageWithAndWithoutHtml_IsBuiltOnlyWhenPresent()
+    {
+        var scenario = new Scenario();
+        scenario.Messages[1] = TestData.Message(scenario.Account, scenario.Inbox, 2, "Hello 2", html: "<p>rich</p>");
+        await scenario.StartAsync();
+
+        scenario.ViewModel.Messages[0].HtmlDocument.Should().Contain("<p>rich</p>").And.Contain("Content-Security-Policy");
+        scenario.ViewModel.Messages[1].HtmlDocument.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Verifies selecting a message with embedded images downloads them once and shows them as data URIs.
+    /// </summary>
+    [Fact]
+    public async Task SelectedMessage_HtmlWithCid_LoadsInlineImagesOnce()
+    {
+        var scenario = new Scenario();
+        scenario.Messages[1] = TestData.Message(scenario.Account, scenario.Inbox, 2, "Hello 2", html: "<img src=\"cid:Logo\">");
+        scenario.Dispatcher.On<GetInlineImagesQuery>(_ => new Dictionary<string, InlineImage> { ["logo"] = new("image/png", new byte[] { 1, 2, 3 }) });
+        await scenario.StartAsync();
+        var item = scenario.ViewModel.Messages[0];
+
+        scenario.ViewModel.SelectedMessage = item;
+        await scenario.ViewModel.WhenIdleAsync();
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[1];
+        scenario.ViewModel.SelectedMessage = item;
+        await scenario.ViewModel.WhenIdleAsync();
+
+        var queries = scenario.Dispatcher.Sent<GetInlineImagesQuery>();
+        queries.Should().ContainSingle().Which.Should().Be(new GetInlineImagesQuery(scenario.Account.Id, item.Id));
+        item.InlineImages.Should().ContainKey("logo");
+        item.HtmlDocument.Should().Contain("data:image/png;base64,AQID").And.NotContain("cid:Logo");
+    }
+
+    /// <summary>
+    /// Verifies messages without embedded-image references never contact the server for images.
+    /// </summary>
+    [Fact]
+    public async Task SelectedMessage_NoCidReferences_SendsNoInlineImageQuery()
+    {
+        var scenario = new Scenario();
+        scenario.Messages[1] = TestData.Message(scenario.Account, scenario.Inbox, 2, "Hello 2", html: "<p>plain html</p>");
+        await scenario.StartAsync();
+
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[1];
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.Dispatcher.Sent<GetInlineImagesQuery>().Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies a failed image download is reported in the status bar, keeps the message readable and is retried on the next selection.
+    /// </summary>
+    [Fact]
+    public async Task SelectedMessage_InlineImageQueryFails_ReportsErrorAndRetriesLater()
+    {
+        var scenario = new Scenario();
+        scenario.Messages[1] = TestData.Message(scenario.Account, scenario.Inbox, 2, "Hello 2", html: "<img src=\"cid:logo\">");
+        var attempts = 0;
+        scenario.Dispatcher.On<GetInlineImagesQuery>(_ =>
+        {
+            attempts++;
+            return attempts == 1
+                ? throw new IOException("offline")
+                : new Dictionary<string, InlineImage> { ["logo"] = new("image/gif", new byte[] { 7 }) };
+        });
+        await scenario.StartAsync();
+        var item = scenario.ViewModel.Messages[0];
+
+        scenario.ViewModel.SelectedMessage = item;
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.ViewModel.StatusText.Should().Contain(scenario.Localizer["Error_InlineImages"]).And.Contain("offline");
+        item.InlineImages.Should().BeEmpty();
+        item.HtmlDocument.Should().Contain("cid:logo");
+
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[1];
+        scenario.ViewModel.SelectedMessage = item;
+        await scenario.ViewModel.WhenIdleAsync();
+
+        attempts.Should().Be(2);
+        item.HtmlDocument.Should().Contain("data:image/gif;base64,Bw==");
+    }
+
+    /// <summary>
+    /// Verifies remote images are reported as blocked until the user allows them for the message.
+    /// </summary>
+    [Fact]
+    public async Task LoadRemoteImagesCommand_BlockedRemoteImages_AllowsThemForThatMessageOnly()
+    {
+        var scenario = new Scenario();
+        scenario.Messages[1] = TestData.Message(scenario.Account, scenario.Inbox, 2, "Hello 2", html: "<img src=\"https://x.example/a.png\">");
+        await scenario.StartAsync();
+        var remote = scenario.ViewModel.Messages[0];
+        var plain = scenario.ViewModel.Messages[1];
+
+        remote.HasBlockedRemoteImages.Should().BeTrue();
+        remote.HtmlDocument.Should().NotContain("img-src data: https: http:");
+        plain.HasBlockedRemoteImages.Should().BeFalse();
+
+        var raised = new List<string?>();
+        remote.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        remote.LoadRemoteImagesCommand.Execute(null);
+
+        remote.AllowRemoteImages.Should().BeTrue();
+        remote.HasBlockedRemoteImages.Should().BeFalse();
+        remote.HtmlDocument.Should().Contain("img-src data: https: http:");
+        raised.Should().Contain(["HtmlDocument", "HasBlockedRemoteImages"]);
+        plain.AllowRemoteImages.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Creates a scenario whose two messages come from the given senders and both load remote images.
+    /// </summary>
+    /// <param name="newestSender">The sender of the newest message (listed first).</param>
+    /// <param name="olderSender">The sender of the older message.</param>
+    /// <returns>The started scenario.</returns>
+    private static async Task<Scenario> StartRemoteImageScenarioAsync(string newestSender, string olderSender)
+    {
+        const string Html = "<img src=\"https://x.example/a.png\">";
+        var scenario = new Scenario();
+        scenario.Messages[0] = TestData.Message(scenario.Account, scenario.Inbox, 1, "Hello 1", html: Html, fromAddress: olderSender);
+        scenario.Messages[1] = TestData.Message(scenario.Account, scenario.Inbox, 2, "Hello 2", html: Html, fromAddress: newestSender);
+        await scenario.StartAsync();
+        return scenario;
+    }
+
+    /// <summary>
+    /// Verifies a message from a sender with a saved address rule shows its images at once, without the banner.
+    /// </summary>
+    /// <param name="rule">The saved rule.</param>
+    [Theory]
+    [InlineData("alice@example.com")]
+    [InlineData("example.com")]
+    public async Task SelectedMessage_SenderMatchesSavedRule_LoadsImagesWithoutBanner(string rule)
+    {
+        var scenario = await StartRemoteImageScenarioAsync("alice@example.com", "bob@other.org");
+        await scenario.RemoteImageRules.AddAsync(rule, TestContext.Current.CancellationToken);
+
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+        await scenario.ViewModel.WhenIdleAsync();
+
+        var selected = scenario.ViewModel.SelectedMessage!;
+        selected.AllowRemoteImages.Should().BeTrue();
+        selected.HasBlockedRemoteImages.Should().BeFalse();
+        selected.HtmlDocument.Should().Contain("img-src data: https: http:");
+    }
+
+    /// <summary>
+    /// Verifies a sender without a rule keeps the images blocked.
+    /// </summary>
+    [Fact]
+    public async Task SelectedMessage_NoMatchingRule_StaysBlocked()
+    {
+        var scenario = await StartRemoteImageScenarioAsync("alice@example.com", "bob@other.org");
+        await scenario.RemoteImageRules.AddAsync("other.org", TestContext.Current.CancellationToken);
+
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.ViewModel.SelectedMessage!.HasBlockedRemoteImages.Should().BeTrue();
+        scenario.ViewModel.SelectedMessage.AllowRemoteImages.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies "always allow this sender" saves the address, allows the message now and auto-allows the sender's other mail.
+    /// </summary>
+    [Fact]
+    public async Task AlwaysAllowSenderCommand_Executed_SavesAddressAndAllowsSenderMessages()
+    {
+        var scenario = await StartRemoteImageScenarioAsync("alice@example.com", "alice@example.com");
+        var first = scenario.ViewModel.Messages[0];
+
+        first.CanRememberSender.Should().BeTrue();
+        first.AlwaysAllowSenderText.Should().Be("总是加载 alice@example.com 的图片");
+        await first.AlwaysAllowSenderCommand.ExecuteAsync(null);
+
+        scenario.RemoteImageRules.AddCalls.Should().Equal("alice@example.com");
+        first.AllowRemoteImages.Should().BeTrue();
+
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[1];
+        await scenario.ViewModel.WhenIdleAsync();
+        scenario.ViewModel.SelectedMessage!.AllowRemoteImages.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies "always allow this domain" saves the domain, which then covers other senders of that domain.
+    /// </summary>
+    [Fact]
+    public async Task AlwaysAllowDomainCommand_Executed_SavesDomainAndAllowsOtherSendersThere()
+    {
+        var scenario = await StartRemoteImageScenarioAsync("alice@example.com", "carol@mail.example.com");
+        var first = scenario.ViewModel.Messages[0];
+
+        first.AlwaysAllowDomainText.Should().Be("总是加载 example.com 域发件人的图片");
+        await first.AlwaysAllowDomainCommand.ExecuteAsync(null);
+
+        scenario.RemoteImageRules.AddCalls.Should().Equal("example.com");
+        first.AllowRemoteImages.Should().BeTrue();
+
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[1];
+        await scenario.ViewModel.WhenIdleAsync();
+        scenario.ViewModel.SelectedMessage!.AllowRemoteImages.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies a failed rule save still shows the images of the message and reports the failure.
+    /// </summary>
+    [Fact]
+    public async Task AlwaysAllowSenderCommand_SaveFails_StillAllowsMessageAndReportsError()
+    {
+        var scenario = await StartRemoteImageScenarioAsync("alice@example.com", "bob@other.org");
+        scenario.RemoteImageRules.AddFailure = new IOException("disk full");
+        var first = scenario.ViewModel.Messages[0];
+
+        await first.AlwaysAllowSenderCommand.ExecuteAsync(null);
+
+        first.AllowRemoteImages.Should().BeTrue();
+        scenario.ViewModel.StatusText.Should().Contain("保存图片规则失败").And.Contain("disk full");
+        scenario.RemoteImageRules.Rules.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies a sender address that cannot be turned into a rule offers no "always allow" choice.
+    /// </summary>
+    [Fact]
+    public async Task CanRememberSender_UnknownSender_IsFalseAndSavesNothing()
+    {
+        var scenario = await StartRemoteImageScenarioAsync("unknown@invalid", "bob@other.org");
+        var first = scenario.ViewModel.Messages[0];
+
+        first.CanRememberSender.Should().BeFalse();
+        first.SenderRule.Should().BeNull();
+        first.DomainRule.Should().BeNull();
+        await first.AlwaysAllowSenderCommand.ExecuteAsync(null);
+
+        scenario.RemoteImageRules.AddCalls.Should().BeEmpty();
+        first.AllowRemoteImages.Should().BeTrue();
+    }
+
+    /// <summary>
     /// Verifies an attachment is downloaded on demand and written to the chosen path.
     /// </summary>
     [Fact]
@@ -570,6 +827,105 @@ public class MainWindowViewModelTests
 
         scenario.ViewModel.Accounts[0].Folders.Select(f => f.Name).Should().Equal("收件箱", "草稿", "已发送");
         scenario.ViewModel.SelectedNode.Should().BeOfType<FolderNodeViewModel>().Which.Folder.Id.Should().Be(scenario.Inbox.Id);
+    }
+
+    /// <summary>
+    /// Verifies a refresh keeps the selected item object (and never clears the selection), so the open page is not reloaded.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task RefreshAsync_SelectedMessageStillListed_KeepsSameItemAndNeverClearsSelection()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        var item = scenario.ViewModel.Messages[0];
+        scenario.ViewModel.SelectedMessage = item;
+        await scenario.ViewModel.WhenIdleAsync();
+        var readCommands = scenario.Dispatcher.Sent<SetMessageReadCommand>().Count;
+        var selections = new List<MessageItemViewModel?>();
+        scenario.ViewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainWindowViewModel.SelectedMessage))
+            {
+                selections.Add(scenario.ViewModel.SelectedMessage);
+            }
+        };
+
+        await scenario.ViewModel.RefreshAsync();
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.ViewModel.SelectedMessage.Should().BeSameAs(item);
+        scenario.ViewModel.Messages.Should().Contain(item);
+        selections.Should().BeEmpty();
+        scenario.Dispatcher.Sent<SetMessageReadCommand>().Count.Should().Be(readCommands);
+    }
+
+    /// <summary>
+    /// Verifies a refresh keeps per-message state and applies changed read state, flags and labels from the fresh data.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task RefreshAsync_FreshCopyChanged_UpdatesKeptItem()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        var item = scenario.ViewModel.Messages.Single(m => m.Id == scenario.Messages[0].Id);
+        item.AllowRemoteImages = true;
+        var fresh = TestData.Message(scenario.Account, scenario.Inbox, 1, "Hello 1");
+        typeof(MailMessage).GetProperty(nameof(MailMessage.Id))!.SetValue(fresh, scenario.Messages[0].Id);
+        fresh.AddLabel(scenario.Work);
+        fresh.SetFlagged(true);
+        scenario.Messages[0] = fresh;
+
+        await scenario.ViewModel.RefreshAsync();
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.ViewModel.Messages.Should().Contain(item);
+        item.AllowRemoteImages.Should().BeTrue();
+        item.IsFlagged.Should().BeTrue();
+        item.Labels.Should().ContainSingle().Which.Name.Should().Be("Work");
+    }
+
+    /// <summary>
+    /// Verifies a refresh adds new messages in order, drops vanished ones and clears the selection only when its message is gone.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task RefreshAsync_ListChanged_ReordersAndClearsSelectionOnlyWhenGone()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        var kept = scenario.ViewModel.Messages.Single(m => m.Subject == "Hello 2");
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages.Single(m => m.Subject == "Hello 1");
+        var newest = TestData.Message(scenario.Account, scenario.Inbox, 3, "Hello 3");
+        scenario.Messages.RemoveAt(0);
+        scenario.Messages.Add(newest);
+
+        await scenario.ViewModel.RefreshAsync();
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.ViewModel.Messages.Select(m => m.Subject).Should().Equal(
+            scenario.Messages.OrderByDescending(m => m.SentAt).Select(m => m.Subject));
+        scenario.ViewModel.Messages.Should().Contain(kept);
+        scenario.ViewModel.SelectedMessage.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Verifies a failure that is only shown in the status line is also written to the log as an error.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task RefreshAsync_QueryFails_LogsErrorAndShowsStatus()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        scenario.Dispatcher.On<GetFoldersQuery>(_ => throw new InvalidOperationException("db is gone"));
+
+        await scenario.ViewModel.RefreshAsync();
+
+        scenario.ViewModel.StatusText.Should().Contain("db is gone");
+        var entry = scenario.Logger.Entries.Should().ContainSingle(e => e.Level == Microsoft.Extensions.Logging.LogLevel.Error).Which;
+        entry.Exception.Should().BeOfType<InvalidOperationException>();
     }
 
     /// <summary>

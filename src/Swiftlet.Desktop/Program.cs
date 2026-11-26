@@ -2,12 +2,15 @@ using Avalonia;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Serilog;
 using Swiftlet.Application;
+using Swiftlet.Application.Abstractions;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
 using Swiftlet.Desktop.Settings;
 using Swiftlet.Desktop.ViewModels;
 using Swiftlet.Infrastructure;
+using Swiftlet.Infrastructure.Mail;
 using Swiftlet.Infrastructure.Persistence;
 
 namespace Swiftlet.Desktop;
@@ -24,8 +27,17 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        MailEncodings.Register();
         var builder = Host.CreateApplicationBuilder(args);
         var dataDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Swiftlet");
+        var logger = LogSetup.Create(Path.Combine(dataDirectory, "logs"));
+        builder.Services.AddSerilog(logger, dispose: true);
+        LogProcessWideFailures(logger);
+        logger.Information(
+            "Swiftlet starting: version {Version}, {OS}, data directory {DataDirectory}",
+            typeof(Program).Assembly.GetName().Version,
+            System.Runtime.InteropServices.RuntimeInformation.OSDescription,
+            dataDirectory);
         builder.Services.AddApplication();
         builder.Services.AddInfrastructure(dataDirectory);
         var settings = builder.Services.AddAppSettings(Path.Combine(dataDirectory, "settings.json"));
@@ -50,7 +62,22 @@ internal static class Program
         finally
         {
             host.StopAsync().GetAwaiter().GetResult();
+            logger.Information("Swiftlet stopped");
         }
+    }
+
+    /// <summary>
+    /// Records failures nobody handled (any thread, unobserved tasks, the UI thread) so they are not lost; they are not swallowed.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    private static void LogProcessWideFailures(Serilog.ILogger logger)
+    {
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            logger.Fatal(e.ExceptionObject as Exception, "Unhandled exception (terminating: {Terminating})", e.IsTerminating);
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+            logger.Error(e.Exception, "Unobserved task exception");
+        Avalonia.Threading.Dispatcher.UIThread.UnhandledException += (_, e) =>
+            logger.Error(e.Exception, "Unhandled exception on the UI thread");
     }
 
     /// <summary>
@@ -76,6 +103,8 @@ internal static class Program
         await using var scope = services.CreateAsyncScope();
         var global = scope.ServiceProvider.GetRequiredService<GlobalDbContext>();
         await SqliteSchemaInitializer.InitializeGlobalAsync(global);
+
+        await services.GetRequiredService<IRemoteImageRules>().LoadAsync();
 
         // Existing account databases are opened once so their schema upgrades run before the UI reads them.
         var factory = scope.ServiceProvider.GetRequiredService<IAccountDbContextFactory>();

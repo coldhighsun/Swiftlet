@@ -112,6 +112,48 @@ public class SchemaInitializerTests
     }
 
     /// <summary>
+    /// Verifies a new global store contains the remote image rules table.
+    /// </summary>
+    [Fact]
+    public async Task InitializeGlobal_NewDatabase_HasRemoteImageRulesTable()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+
+        (await CountTablesAsync(db.Context, "RemoteImageRules", ct)).Should().Be(1);
+    }
+
+    /// <summary>
+    /// Verifies a global store created before the rules existed gains the table, and a second run keeps its rows.
+    /// </summary>
+    [Fact]
+    public async Task InitializeGlobal_ExistingDatabaseWithoutTable_AddsTableIdempotently()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var connection = new SqliteConnection("DataSource=:memory:");
+        await connection.OpenAsync(ct);
+        await using (var setup = connection.CreateCommand())
+        {
+            setup.CommandText = "CREATE TABLE Accounts (Id TEXT NOT NULL PRIMARY KEY);";
+            await setup.ExecuteNonQueryAsync(ct);
+        }
+
+        var options = new DbContextOptionsBuilder<GlobalDbContext>().UseSqlite(connection).Options;
+        await using var context = new GlobalDbContext(options);
+        (await CountTablesAsync(context, "RemoteImageRules", ct)).Should().Be(0);
+
+        await SqliteSchemaInitializer.InitializeGlobalAsync(context, ct);
+
+        (await CountTablesAsync(context, "RemoteImageRules", ct)).Should().Be(1);
+        await context.Database.ExecuteSqlRawAsync("INSERT INTO RemoteImageRules (Rule, AddedAt) VALUES ('shop.com', 1)", ct);
+
+        await SqliteSchemaInitializer.InitializeGlobalAsync(context, ct);
+
+        var rows = await context.Database.SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM RemoteImageRules").SingleAsync(ct);
+        rows.Should().Be(1);
+    }
+
+    /// <summary>
     /// Verifies an account database holds the mail tables and the full-text index, but no global tables.
     /// </summary>
     [Fact]
@@ -128,5 +170,6 @@ public class SchemaInitializerTests
         (await CountTablesAsync(context, "Accounts", ct)).Should().Be(0);
         (await CountTablesAsync(context, "Labels", ct)).Should().Be(0);
         (await CountTablesAsync(context, "MessageLabels", ct)).Should().Be(0);
+        (await CountTablesAsync(context, "RemoteImageRules", ct)).Should().Be(0);
     }
 }

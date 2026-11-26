@@ -31,17 +31,16 @@ internal static class MimeMessageMapper
             .Select(m => m.Address)
             .Where(a => !string.IsNullOrWhiteSpace(a));
 
-        var htmlBody = message.HtmlBody;
-        var textBody = message.TextBody;
+        var htmlBody = MimeTextDecoder.Decode(message.BodyParts.OfType<TextPart>().FirstOrDefault(p => p.IsHtml && !p.IsAttachment));
+        var textBody = MimeTextDecoder.Decode(message.BodyParts.OfType<TextPart>().FirstOrDefault(p => p.IsPlain && !p.IsAttachment));
         if (string.IsNullOrWhiteSpace(textBody))
         {
             textBody = HtmlToText.Convert(htmlBody);
         }
 
-        var attachments = message.Attachments
-            .OfType<MimePart>()
+        var attachments = MimeAttachments.Enumerate(message)
             .Select(p => new RemoteAttachment(
-                p.FileName ?? "attachment",
+                p.FileName ?? p.ContentType.Name ?? "attachment",
                 p.ContentType.MimeType,
                 p.Content?.Stream is { CanSeek: true } stream ? stream.Length : 0))
             .ToList();
@@ -49,8 +48,8 @@ internal static class MimeMessageMapper
         return new RemoteMessage(
             uid,
             message.MessageId,
-            message.Subject ?? string.Empty,
-            from?.Name ?? string.Empty,
+            DecodeSubject(message),
+            DecodeSenderName(message, from),
             string.IsNullOrWhiteSpace(from?.Address) ? UnknownSender : from.Address,
             string.Join(", ", recipients),
             message.Date == DateTimeOffset.MinValue ? fallbackDate : message.Date,
@@ -58,5 +57,47 @@ internal static class MimeMessageMapper
             htmlBody,
             isRead,
             attachments);
+    }
+
+    /// <summary>
+    /// Gets the subject, re-decoding a header that carries raw 8-bit text (no RFC 2047 encoding) with charset guessing.
+    /// </summary>
+    /// <param name="message">The parsed message.</param>
+    /// <returns>The subject text.</returns>
+    private static string DecodeSubject(MimeMessage message)
+    {
+        var raw = FindRaw8BitValue(message, HeaderId.Subject);
+        return raw is null ? message.Subject ?? string.Empty : MimeTextDecoder.Decode(raw).Trim();
+    }
+
+    /// <summary>
+    /// Gets the sender's display name, re-decoding a From header that carries raw 8-bit text with charset guessing.
+    /// </summary>
+    /// <param name="message">The parsed message.</param>
+    /// <param name="from">The first sender mailbox as parsed by MimeKit.</param>
+    /// <returns>The display name, possibly empty.</returns>
+    private static string DecodeSenderName(MimeMessage message, MailboxAddress? from)
+    {
+        var raw = FindRaw8BitValue(message, HeaderId.From);
+        if (raw is not null
+            && InternetAddressList.TryParse(MimeTextDecoder.Decode(raw), out var addresses)
+            && addresses.Mailboxes.FirstOrDefault() is { } mailbox)
+        {
+            return mailbox.Name ?? string.Empty;
+        }
+
+        return from?.Name ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Returns the raw bytes of a header when they contain 8-bit data, which MimeKit can only decode by assuming a charset.
+    /// </summary>
+    /// <param name="message">The parsed message.</param>
+    /// <param name="id">The header.</param>
+    /// <returns>The raw value, or <see langword="null"/> when the header is missing or 7-bit.</returns>
+    private static byte[]? FindRaw8BitValue(MimeMessage message, HeaderId id)
+    {
+        var raw = message.Headers.FirstOrDefault(h => h.Id == id)?.RawValue;
+        return raw is not null && raw.Any(b => b >= 0x80) ? raw : null;
     }
 }

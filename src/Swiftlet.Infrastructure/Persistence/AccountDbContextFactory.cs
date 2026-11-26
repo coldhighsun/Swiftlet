@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Swiftlet.Infrastructure.Persistence;
 
@@ -8,7 +9,8 @@ namespace Swiftlet.Infrastructure.Persistence;
 /// Stores each account's mail in its own SQLite file named after the account identifier inside one directory.
 /// </summary>
 /// <param name="directory">The directory holding the account databases.</param>
-public sealed class AccountDbContextFactory(string directory) : IAccountDbContextFactory, IDisposable
+/// <param name="logger">The logger; optional.</param>
+public sealed class AccountDbContextFactory(string directory, ILogger<AccountDbContextFactory>? logger = null) : IAccountDbContextFactory, IDisposable
 {
     /// <summary>
     /// The accounts whose database schema has already been ensured in this process.
@@ -34,6 +36,7 @@ public sealed class AccountDbContextFactory(string directory) : IAccountDbContex
                     if (!_initialized.ContainsKey(accountId))
                     {
                         Directory.CreateDirectory(directory);
+                        logger?.LogInformation("Opening the database of account {AccountId} for the first time in this run", accountId);
                         await SqliteSchemaInitializer.InitializeAccountAsync(context, cancellationToken);
                         _initialized[accountId] = true;
                     }
@@ -71,6 +74,7 @@ public sealed class AccountDbContextFactory(string directory) : IAccountDbContex
             }
 
             var path = GetDatabasePath(accountId);
+            logger?.LogInformation("Deleting the database files of account {AccountId}", accountId);
             foreach (var file in new[] { path, $"{path}-wal", $"{path}-shm" })
             {
                 File.Delete(file);

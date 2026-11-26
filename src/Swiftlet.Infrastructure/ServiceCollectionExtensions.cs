@@ -36,12 +36,13 @@ public static class ServiceCollectionExtensions
         var oauthSettingsPath = Path.Combine(dataDirectory, "oauth.json");
 
         services.AddDbContext<GlobalDbContext>(options => options.UseSqlite($"Data Source={databasePath};Default Timeout=30"));
-        services.AddSingleton<IAccountDbContextFactory>(_ => new AccountDbContextFactory(Path.Combine(dataDirectory, "accounts")));
+        services.AddSingleton<IAccountDbContextFactory>(sp => new AccountDbContextFactory(Path.Combine(dataDirectory, "accounts"), sp.GetService<ILogger<AccountDbContextFactory>>()));
         services.AddScoped<AccountContextProvider>();
         services.AddScoped<IAccountRepository, AccountRepository>();
         services.AddScoped<IFolderRepository, FolderRepository>();
         services.AddScoped<IMessageRepository, MessageRepository>();
         services.AddScoped<ILabelRepository, LabelRepository>();
+        services.AddSingleton<IRemoteImageRules, RemoteImageRuleStore>();
 
         services.AddSingleton<ISecretStore>(sp => PlatformSecretStore.Create(dataDirectory, sp.GetRequiredService<ILoggerFactory>().CreateLogger("Swiftlet.Secrets")));
 

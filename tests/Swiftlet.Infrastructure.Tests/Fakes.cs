@@ -134,6 +134,27 @@ internal sealed class FakeImapSession : IImapSession
     }
 
     /// <summary>
+    /// Gets the embedded images the fake server returns, keyed by folder and UID; a missing entry means the message is gone.
+    /// </summary>
+    public Dictionary<(string Folder, uint Uid), IReadOnlyDictionary<string, InlineImage>> InlineImages { get; } = [];
+
+    /// <summary>
+    /// Gets the recorded embedded-image requests with the content identifiers that were asked for.
+    /// </summary>
+    public List<(string Folder, uint Uid, string[] ContentIds)> InlineImageCalls { get; } = [];
+
+    /// <inheritdoc />
+    public Task<IReadOnlyDictionary<string, InlineImage>?> DownloadInlineImagesAsync(
+        string folderFullName,
+        uint uid,
+        IReadOnlyCollection<string> contentIds,
+        CancellationToken cancellationToken = default)
+    {
+        InlineImageCalls.Add((folderFullName, uid, [.. contentIds]));
+        return Task.FromResult(InlineImages.TryGetValue((folderFullName, uid), out var images) ? images : null);
+    }
+
+    /// <summary>
     /// Gets the recorded delete calls.
     /// </summary>
     public List<(string Folder, uint Uid, string? TrashFolder)> DeleteCalls { get; } = [];

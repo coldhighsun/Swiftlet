@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using MailKit;
 using MailKit.Net.Imap;
 using MailKit.Search;
+using Microsoft.Extensions.Logging;
 using MimeKit;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Domain.Folders;
@@ -12,7 +13,8 @@ namespace Swiftlet.Infrastructure.Mail;
 /// An <see cref="IImapSession"/> backed by a MailKit <see cref="ImapClient"/>.
 /// </summary>
 /// <param name="client">The connected and authenticated client; owned by the session.</param>
-internal sealed class MailKitImapSession(ImapClient client) : IImapSession
+/// <param name="logger">The logger.</param>
+internal sealed class MailKitImapSession(ImapClient client, ILogger<MailKitImapSession> logger) : IImapSession
 {
     /// <summary>
     /// The last observed state of each waited-on folder.
@@ -51,6 +53,7 @@ internal sealed class MailKitImapSession(ImapClient client) : IImapSession
         CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(maxCount, 1);
+        logger.LogDebug("Fetching up to {Max} messages after UID {Uid} in {Folder}", maxCount, afterUid, folderFullName);
 
         var folder = await client.GetFolderAsync(folderFullName, cancellationToken);
         await folder.OpenAsync(FolderAccess.ReadOnly, cancellationToken);
@@ -101,6 +104,7 @@ internal sealed class MailKitImapSession(ImapClient client) : IImapSession
         int ordinal,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Downloading attachment {Ordinal} of UID {Uid} in {Folder}", ordinal, uid, folderFullName);
         var folder = await client.GetFolderAsync(folderFullName, cancellationToken);
         await folder.OpenAsync(FolderAccess.ReadOnly, cancellationToken);
 
@@ -115,7 +119,7 @@ internal sealed class MailKitImapSession(ImapClient client) : IImapSession
             return null;
         }
 
-        var part = message.Attachments.OfType<MimePart>().ElementAtOrDefault(ordinal);
+        var part = MimeAttachments.Enumerate(message).ElementAtOrDefault(ordinal);
         if (part?.Content is null)
         {
             return null;
@@ -127,12 +131,42 @@ internal sealed class MailKitImapSession(ImapClient client) : IImapSession
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyDictionary<string, InlineImage>?> DownloadInlineImagesAsync(
+        string folderFullName,
+        uint uid,
+        IReadOnlyCollection<string> contentIds,
+        CancellationToken cancellationToken = default)
+    {
+        logger.LogInformation("Downloading inline images of UID {Uid} in {Folder}: {Count} wanted", uid, folderFullName, contentIds.Count);
+        var folder = await client.GetFolderAsync(folderFullName, cancellationToken);
+        await folder.OpenAsync(FolderAccess.ReadOnly, cancellationToken);
+
+        MimeMessage message;
+        try
+        {
+            message = await folder.GetMessageAsync(new UniqueId(uid), cancellationToken);
+        }
+        catch (MessageNotFoundException)
+        {
+            // The message was deleted on the server since it was synchronized.
+            return null;
+        }
+
+        return InlineImageExtractor.Extract(message, contentIds, logger);
+    }
+
+    /// <inheritdoc />
     public async Task DeleteMessageAsync(
         string folderFullName,
         uint uid,
         string? trashFolderFullName,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation(
+            "Deleting UID {Uid} in {Folder} ({Mode})",
+            uid,
+            folderFullName,
+            trashFolderFullName is null ? "permanent" : "move to trash");
         if (trashFolderFullName is null && !client.Capabilities.Contains(ImapCapability.UidPlus))
         {
             // Checked before any mutation: without UIDPLUS only a plain EXPUNGE exists, which would purge unrelated
@@ -214,6 +248,7 @@ internal sealed class MailKitImapSession(ImapClient client) : IImapSession
             return;
         }
 
+        logger.LogDebug("Setting flags of {Count} messages in {Folder}", updates.Count, folderFullName);
         var folder = await client.GetFolderAsync(folderFullName, cancellationToken);
         await folder.OpenAsync(FolderAccess.ReadWrite, cancellationToken);
 
@@ -264,6 +299,7 @@ internal sealed class MailKitImapSession(ImapClient client) : IImapSession
         uint minUid,
         CancellationToken cancellationToken = default)
     {
+        logger.LogDebug("Fetching flags from UID {Uid} in {Folder}", minUid, folderFullName);
         var folder = await client.GetFolderAsync(folderFullName, cancellationToken);
         await folder.OpenAsync(FolderAccess.ReadOnly, cancellationToken);
 
@@ -365,6 +401,7 @@ internal sealed class MailKitImapSession(ImapClient client) : IImapSession
     /// <inheritdoc />
     public async Task<bool> AppendToSentAsync(ReadOnlyMemory<byte> rfc822, CancellationToken cancellationToken = default)
     {
+        logger.LogDebug("Appending a {Size} byte copy to the Sent folder", rfc822.Length);
         IMailFolder? sent;
         try
         {
