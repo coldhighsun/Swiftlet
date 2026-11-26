@@ -76,6 +76,11 @@ public static class SqliteSchemaInitializer
         await context.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", cancellationToken);
         await context.Database.EnsureCreatedAsync(cancellationToken);
         await EnsureFlagSyncColumnAsync(context, cancellationToken);
+
+        // Same name EF gives the index, so a new database (created by EnsureCreated above) is unaffected.
+        await context.Database.ExecuteSqlRawAsync(
+            "CREATE INDEX IF NOT EXISTS IX_Messages_MessageIdHeader ON Messages (MessageIdHeader);",
+            cancellationToken);
         foreach (var statement in FullTextStatements)
         {
             await context.Database.ExecuteSqlRawAsync(statement, cancellationToken);

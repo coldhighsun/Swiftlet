@@ -33,6 +33,7 @@ public static class DependencyInjection
         services.AddSingleton<SyncEvents>();
         services.AddSingleton<ISyncEvents>(static sp => sp.GetRequiredService<SyncEvents>());
         services.AddScoped<MailSyncService>();
+        services.AddScoped<MailBackfillService>();
         return services;
     }
 }

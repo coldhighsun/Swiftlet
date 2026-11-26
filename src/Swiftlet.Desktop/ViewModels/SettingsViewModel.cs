@@ -39,6 +39,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         _localizer = localizer;
         _remoteImageRules = remoteImageRules;
         RemoveServerDeletedMessages = settings.RemoveServerDeletedMessages;
+        DownloadFullHistory = settings.DownloadFullHistory;
+        DownloadAllMail = settings.DownloadAllMail;
         RefreshRemoteImageRules();
     }
 
@@ -57,6 +59,18 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     public partial bool RemoveServerDeletedMessages { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the full message history is downloaded in the background.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool DownloadFullHistory { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the "All Mail" folder is downloaded too.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool DownloadAllMail { get; set; }
 
     /// <summary>
     /// Gets or sets the localized error of the last failed save, or <see langword="null"/>.
@@ -85,6 +99,54 @@ public sealed partial class SettingsViewModel : ObservableObject
             // The file could not be written; show it and put the checkbox back so it matches what is stored.
             ErrorText = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
             RemoveServerDeletedMessages = _settings.RemoveServerDeletedMessages;
+        }
+    }
+
+    /// <summary>
+    /// Saves the new value as soon as the checkbox changes.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    partial void OnDownloadFullHistoryChanged(bool value)
+    {
+        if (value == _settings.DownloadFullHistory)
+        {
+            return;
+        }
+
+        ErrorText = null;
+        try
+        {
+            _settings.SetDownloadFullHistory(value);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The file could not be written; show it and put the checkbox back so it matches what is stored.
+            ErrorText = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
+            DownloadFullHistory = _settings.DownloadFullHistory;
+        }
+    }
+
+    /// <summary>
+    /// Saves the new value as soon as the checkbox changes.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    partial void OnDownloadAllMailChanged(bool value)
+    {
+        if (value == _settings.DownloadAllMail)
+        {
+            return;
+        }
+
+        ErrorText = null;
+        try
+        {
+            _settings.SetDownloadAllMail(value);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The file could not be written; show it and put the checkbox back so it matches what is stored.
+            ErrorText = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
+            DownloadAllMail = _settings.DownloadAllMail;
         }
     }
 

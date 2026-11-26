@@ -480,9 +480,11 @@ public class UiSmokeTests
                 Render(window, $"settings-{language}", language);
 
                 window.Title.Should().Be(title);
-                var box = window.GetVisualDescendants().OfType<CheckBox>().Single();
+                var boxes = window.GetVisualDescendants().OfType<CheckBox>().ToList();
+                boxes.Should().HaveCount(3);
+                var box = boxes.Single(b => b.Content as string == checkbox);
                 box.IsChecked.Should().BeFalse();
-                (box.Content as string).Should().Be(checkbox);
+                boxes.Where(b => b != box).Should().OnlyContain(b => b.IsChecked == true, "the history downloads are on by default");
                 window.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).Should().Contain(close);
                 window.GetVisualDescendants().OfType<TextBlock>().Count(t => !string.IsNullOrEmpty(t.Text) && t.Text.Length > 40).Should().BeGreaterThan(0);
                 window.Close();

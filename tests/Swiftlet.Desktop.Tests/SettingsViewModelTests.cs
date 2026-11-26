@@ -249,4 +249,66 @@ public class SettingsViewModelTests
 
         raised.Should().Be(1);
     }
+
+    /// <summary>
+    /// Verifies toggling the history download saves the choice and starts from the stored value.
+    /// </summary>
+    [Fact]
+    public void DownloadFullHistory_Toggle_SavesValue()
+    {
+        var settings = new FakeAppSettings();
+        var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules());
+        viewModel.DownloadFullHistory.Should().BeTrue();
+
+        viewModel.DownloadFullHistory = false;
+
+        settings.HistoryCalls.Should().Equal(false);
+        settings.DownloadFullHistory.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies a failed save is reported and the checkbox returns to the stored value.
+    /// </summary>
+    [Fact]
+    public void DownloadFullHistory_SaveFails_ShowsErrorAndRevertsValue()
+    {
+        var settings = new FakeAppSettings { Failure = new IOException("disk full") };
+        var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules());
+
+        viewModel.DownloadFullHistory = false;
+
+        viewModel.DownloadFullHistory.Should().BeTrue();
+        viewModel.ErrorText.Should().Contain("disk full");
+    }
+
+    /// <summary>
+    /// Verifies toggling the All Mail download saves the choice and starts from the stored value.
+    /// </summary>
+    [Fact]
+    public void DownloadAllMail_Toggle_SavesValue()
+    {
+        var settings = new FakeAppSettings();
+        var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules());
+        viewModel.DownloadAllMail.Should().BeTrue();
+
+        viewModel.DownloadAllMail = false;
+
+        settings.AllMailCalls.Should().Equal(false);
+        settings.DownloadAllMail.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies a failed save is reported and the checkbox returns to the stored value.
+    /// </summary>
+    [Fact]
+    public void DownloadAllMail_SaveFails_ShowsErrorAndRevertsValue()
+    {
+        var settings = new FakeAppSettings { Failure = new IOException("disk full") };
+        var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules());
+
+        viewModel.DownloadAllMail = false;
+
+        viewModel.DownloadAllMail.Should().BeTrue();
+        viewModel.ErrorText.Should().Contain("disk full");
+    }
 }

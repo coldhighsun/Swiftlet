@@ -227,4 +227,38 @@ public class MailMessageAndFolderTests
         folder.UpdateUidValidity(1).Should().BeFalse();
         folder.UpdateUidValidity(2).Should().BeTrue();
     }
+
+    /// <summary>
+    /// Verifies a copy keeps the content and attachment order but gets its own identity, folder, UID and read state.
+    /// </summary>
+    [Fact]
+    public void CopyToFolder_MessageWithAttachments_CopiesContentAndAttachmentsInOrder()
+    {
+        var accountId = Guid.NewGuid();
+        var original = MailMessage.Create(
+            accountId, Guid.NewGuid(), 5, "Subject", "Alice", "alice@example.com", "me@example.com",
+            new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero), "text body", "<p>html</p>", "id-1@example.com", isRead: false);
+        original.AddAttachment("a.pdf", "application/pdf", 10);
+        original.AddAttachment("b.png", "image/png", 20);
+        var folderId = Guid.NewGuid();
+
+        var copy = original.CopyToFolder(folderId, 99, isRead: true);
+
+        copy.Id.Should().NotBe(original.Id);
+        copy.AccountId.Should().Be(accountId);
+        copy.FolderId.Should().Be(folderId);
+        copy.Uid.Should().Be(99u);
+        copy.IsRead.Should().BeTrue();
+        copy.IsFlagged.Should().BeFalse();
+        copy.IsFlagSyncPending.Should().BeFalse();
+        copy.Subject.Should().Be("Subject");
+        copy.BodyText.Should().Be("text body");
+        copy.BodyHtml.Should().Be("<p>html</p>");
+        copy.MessageIdHeader.Should().Be("id-1@example.com");
+        copy.SentAt.Should().Be(original.SentAt);
+        copy.Preview.Should().Be(original.Preview);
+        copy.Attachments.Select(a => (a.Ordinal, a.FileName, a.Size)).Should().Equal((0, "a.pdf", 10L), (1, "b.png", 20L));
+        copy.Attachments.Select(a => a.MessageId).Should().OnlyContain(id => id == copy.Id);
+        original.Attachments.Should().HaveCount(2);
+    }
 }

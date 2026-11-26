@@ -119,6 +119,67 @@ internal sealed class FakeImapSession : IImapSession
     }
 
     /// <summary>
+    /// Gets the recorded older-message fetch calls.
+    /// </summary>
+    public List<(string Folder, uint BeforeUid, int MaxCount)> FetchOlderCalls { get; } = [];
+
+    /// <summary>
+    /// Gets the UIDs that vanish between the search and the download, so a batch can come back without messages.
+    /// </summary>
+    public HashSet<uint> VanishingUids { get; } = [];
+
+    /// <summary>
+    /// Gets or sets a callback run inside <see cref="FetchOlderMessagesAsync"/>, to simulate concurrent activity.
+    /// </summary>
+    public Action<string>? OnFetchOlder { get; set; }
+
+    /// <summary>
+    /// Gets the recorded <see cref="FetchMessagesAsync"/> calls.
+    /// </summary>
+    public List<(string Folder, uint[] Uids)> FetchMessagesCalls { get; } = [];
+
+    /// <inheritdoc />
+    public Task<OlderHeadersPage> ListOlderAsync(
+        string folderFullName,
+        uint beforeUid,
+        int maxCount,
+        CancellationToken cancellationToken = default)
+    {
+        FetchOlderCalls.Add((folderFullName, beforeUid, maxCount));
+        OnFetchOlder?.Invoke(folderFullName);
+        if (FailingFolders.Contains(folderFullName))
+        {
+            throw new IOException($"Simulated failure in {folderFullName}.");
+        }
+
+        var older = (Messages.GetValueOrDefault(folderFullName) ?? [])
+            .Where(m => m.Uid < beforeUid)
+            .OrderBy(m => m.Uid)
+            .ToList();
+        var selected = older.TakeLast(maxCount).ToList();
+        var headers = selected.Select(m => new RemoteHeader(m.Uid, m.MessageId, m.IsRead, m.SentAt)).ToList();
+        return Task.FromResult(new OlderHeadersPage(headers, older.Count - selected.Count, selected.Count == 0 ? 0 : selected[0].Uid));
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<RemoteMessage>> FetchMessagesAsync(
+        string folderFullName,
+        IReadOnlyList<RemoteHeader> headers,
+        CancellationToken cancellationToken = default)
+    {
+        FetchMessagesCalls.Add((folderFullName, [.. headers.Select(h => h.Uid)]));
+        var all = Messages.GetValueOrDefault(folderFullName) ?? [];
+        IReadOnlyList<RemoteMessage> result =
+        [
+            .. headers
+                .Where(h => !VanishingUids.Contains(h.Uid))
+                .Select(h => all.FirstOrDefault(m => m.Uid == h.Uid))
+                .OfType<RemoteMessage>(),
+        ];
+        return Task.FromResult(result);
+    }
+
+    /// <summary>
     /// Gets the attachment contents keyed by folder, UID and ordinal.
     /// </summary>
     public Dictionary<(string Folder, uint Uid, int Ordinal), byte[]> AttachmentContents { get; } = [];
@@ -165,7 +226,7 @@ internal sealed class FakeImapSession : IImapSession
     public Exception? DeleteFailure { get; set; }
 
     /// <inheritdoc />
-    public Task DeleteMessageAsync(
+    public Task<uint?> DeleteMessageAsync(
         string folderFullName,
         uint uid,
         string? trashFolderFullName,
@@ -174,13 +235,69 @@ internal sealed class FakeImapSession : IImapSession
         DeleteCalls.Add((folderFullName, uid, trashFolderFullName));
         if (DeleteFailure is not null)
         {
-            return Task.FromException(DeleteFailure);
+            return Task.FromException<uint?>(DeleteFailure);
         }
 
-        // Mimic the server: the message leaves the source folder (a move would also add it to Trash, which no test needs).
-        Messages.GetValueOrDefault(folderFullName)?.RemoveAll(m => m.Uid == uid);
-        return Task.CompletedTask;
+        // Mimic the server: the message leaves the source folder and, for a move, appears in Trash under the next free UID.
+        var source = Messages.GetValueOrDefault(folderFullName);
+        var original = source?.FirstOrDefault(m => m.Uid == uid);
+        source?.RemoveAll(m => m.Uid == uid);
+        if (trashFolderFullName is null)
+        {
+            return Task.FromResult<uint?>(null);
+        }
+
+        if (!Messages.TryGetValue(trashFolderFullName, out var trash))
+        {
+            trash = [];
+            Messages[trashFolderFullName] = trash;
+        }
+
+        var newUid = Math.Max(trash.Count == 0 ? 0u : trash.Max(m => m.Uid), TrashNextUidFloor) + 1;
+        if (original is not null)
+        {
+            trash.Add(original with { Uid = newUid });
+        }
+
+        return Task.FromResult<uint?>(MoveReportsNewUid ? newUid : null);
     }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether a move reports the new UID (a server with UIDPLUS); when <see langword="false"/> it reports none.
+    /// </summary>
+    public bool MoveReportsNewUid { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the UID the next message moved to Trash must exceed, to simulate Trash UIDs consumed by other clients.
+    /// </summary>
+    public uint TrashNextUidFloor { get; set; }
+
+    /// <summary>
+    /// Gets the recorded <see cref="HasMessagesBetweenAsync"/> calls.
+    /// </summary>
+    public List<(string Folder, uint After, uint Before)> RangeCalls { get; } = [];
+
+    /// <inheritdoc />
+    public async Task<bool> HasMessagesBetweenAsync(
+        string folderFullName,
+        uint afterUid,
+        uint beforeUid,
+        CancellationToken cancellationToken = default)
+    {
+        RangeCalls.Add((folderFullName, afterUid, beforeUid));
+        if (OnRangeCheckAsync is not null)
+        {
+            await OnRangeCheckAsync();
+        }
+
+        var any = (Messages.GetValueOrDefault(folderFullName) ?? []).Any(m => m.Uid > afterUid && m.Uid < beforeUid);
+        return any;
+    }
+
+    /// <summary>
+    /// Gets or sets a callback run inside <see cref="HasMessagesBetweenAsync"/>, to simulate a sync caching messages meanwhile.
+    /// </summary>
+    public Func<Task>? OnRangeCheckAsync { get; set; }
 
     /// <summary>
     /// Gets the simulated server-side flags per folder and UID, seeded lazily from <see cref="Messages"/>.
@@ -458,6 +575,12 @@ internal sealed class FakeSyncSettings : ISyncSettings
 {
     /// <inheritdoc />
     public bool RemoveServerDeletedMessages { get; set; }
+
+    /// <inheritdoc />
+    public bool DownloadFullHistory { get; set; } = true;
+
+    /// <inheritdoc />
+    public bool DownloadAllMail { get; set; } = true;
 }
 
 /// <summary>
@@ -489,11 +612,11 @@ internal static class TestData
     /// <param name="subject">The subject.</param>
     /// <param name="body">The body.</param>
     /// <returns>The message.</returns>
-    public static RemoteMessage Remote(uint uid, string subject = "Hello", string body = "body text")
+    public static RemoteMessage Remote(uint uid, string subject = "Hello", string body = "body text", string? messageId = null)
     {
         return new RemoteMessage(
             uid,
-            $"<{uid}@example.com>",
+            messageId ?? $"<{uid}@example.com>",
             subject,
             "Alice",
             "alice@example.com",

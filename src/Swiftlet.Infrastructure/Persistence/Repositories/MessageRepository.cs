@@ -95,6 +95,48 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyDictionary<string, MailMessage>> FindByMessageIdsAsync(
+        Guid accountId,
+        IReadOnlyCollection<string> messageIds,
+        Guid excludedFolderId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(messageIds);
+        var found = new Dictionary<string, MailMessage>(StringComparer.Ordinal);
+        if (messageIds.Count == 0)
+        {
+            return found;
+        }
+
+        // Untracked: the results only serve as templates for copies, and nothing may stay in the change tracker.
+        var context = await contexts.GetAsync(accountId, cancellationToken);
+        foreach (var batch in messageIds.Distinct(StringComparer.Ordinal).Chunk(BatchSize))
+        {
+            var matches = await context.Messages
+                .AsNoTracking()
+                .Include(m => m.Attachments)
+                .Where(m => m.FolderId != excludedFolderId && m.MessageIdHeader != null && batch.Contains(m.MessageIdHeader))
+                .ToListAsync(cancellationToken);
+            foreach (var match in matches)
+            {
+                found.TryAdd(match.MessageIdHeader!, match);
+            }
+        }
+
+        return found;
+    }
+
+    /// <inheritdoc />
+    public async Task<uint> GetMinUidAsync(Guid accountId, Guid folderId, CancellationToken cancellationToken = default)
+    {
+        var context = await contexts.GetAsync(accountId, cancellationToken);
+        var min = await context.Messages
+            .Where(m => m.FolderId == folderId)
+            .MinAsync(m => (uint?)m.Uid, cancellationToken);
+        return min ?? 0;
+    }
+
+    /// <inheritdoc />
     public async Task DeleteByFolderAsync(Guid accountId, Guid folderId, CancellationToken cancellationToken = default)
     {
         var context = await contexts.GetAsync(accountId, cancellationToken);
@@ -361,6 +403,13 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
                     || EF.Functions.Like(m.BodyText, pattern, "\\"));
             }
         }
+
+        // The "All Mail" copy of a message that also lives in another folder would show up twice; keep only the other copy.
+        // Messages without a Message-ID cannot be matched and stay visible.
+        source = source.Where(m =>
+            m.MessageIdHeader == null
+            || !context.Folders.Any(f => f.Id == m.FolderId && f.Role == FolderRole.AllMail)
+            || !context.Messages.Any(n => n.FolderId != m.FolderId && n.MessageIdHeader == m.MessageIdHeader));
 
         return await source
             .Include(m => m.Attachments)

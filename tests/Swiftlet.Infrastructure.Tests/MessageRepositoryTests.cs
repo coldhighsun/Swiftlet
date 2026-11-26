@@ -704,4 +704,129 @@ public class MessageRepositoryTests
         (await verify.AccountAsync(account2.Id, ct)).Messages.Select(m => m.Subject).Should().Equal("two");
         db.Factory.OpenAccounts.Should().BeEquivalentTo([account1.Id, account2.Id]);
     }
+
+    /// <summary>
+    /// Builds a message that carries a Message-ID header.
+    /// </summary>
+    /// <param name="account">The owning account.</param>
+    /// <param name="folder">The containing folder.</param>
+    /// <param name="uid">The IMAP UID.</param>
+    /// <param name="subject">The subject.</param>
+    /// <param name="messageId">The Message-ID header value.</param>
+    /// <returns>The message.</returns>
+    private static MailMessage BuildWithId(MailAccount account, MailFolder folder, uint uid, string subject, string? messageId)
+    {
+        return MailMessage.Create(
+            account.Id, folder.Id, uid, subject, "Alice", "alice@example.com", "me@example.com",
+            DateTimeOffset.UtcNow.AddMinutes(uid), "quarterly figures", null, messageId);
+    }
+
+    /// <summary>
+    /// Verifies messages of other folders are found by Message-ID with their attachments, and the excluded folder is ignored.
+    /// </summary>
+    [Fact]
+    public async Task FindByMessageIdsAsync_KnownAndUnknownIds_ReturnsOnlyOtherFoldersMatches()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, inbox) = await db.SeedAccountAsync(ct);
+        var allMail = MailFolder.Create(account.Id, "All Mail", "All Mail", FolderRole.AllMail);
+        await db.CreateFolderRepository().AddAsync(allMail, ct);
+        var repository = db.CreateMessageRepository();
+        var withAttachment = BuildWithId(account, inbox, 1, "one", "a@x");
+        withAttachment.AddAttachment("a.pdf", "application/pdf", 7);
+        await repository.AddRangeAsync([withAttachment, BuildWithId(account, inbox, 2, "two", "b@x"), BuildWithId(account, allMail, 9, "mirror", "a@x")], ct);
+
+        await using var verifier = db.CreateVerifier();
+        var found = await verifier.Messages().FindByMessageIdsAsync(account.Id, ["a@x", "b@x", "missing@x"], allMail.Id, ct);
+
+        found.Keys.Should().BeEquivalentTo(["a@x", "b@x"]);
+        found["a@x"].FolderId.Should().Be(inbox.Id);
+        found["a@x"].Attachments.Should().ContainSingle().Which.FileName.Should().Be("a.pdf");
+    }
+
+    /// <summary>
+    /// Verifies an empty id list is answered without touching the database.
+    /// </summary>
+    [Fact]
+    public async Task FindByMessageIdsAsync_NoIds_ReturnsEmpty()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+
+        var found = await db.CreateMessageRepository().FindByMessageIdsAsync(account.Id, [], folder.Id, ct);
+
+        found.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies search hides the All Mail copy of a message that also lives elsewhere, but keeps archived-only mail.
+    /// </summary>
+    [Fact]
+    public async Task SearchAsync_MessageInInboxAndAllMail_ReturnsItOnce()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, inbox) = await db.SeedAccountAsync(ct);
+        var allMail = MailFolder.Create(account.Id, "All Mail", "All Mail", FolderRole.AllMail);
+        await db.CreateFolderRepository().AddAsync(allMail, ct);
+        var repository = db.CreateMessageRepository();
+        await repository.AddRangeAsync(
+            [
+                BuildWithId(account, inbox, 1, "budget shared", "shared@x"),
+                BuildWithId(account, allMail, 1, "budget shared", "shared@x"),
+                BuildWithId(account, allMail, 2, "budget archived", "archived@x"),
+                BuildWithId(account, allMail, 3, "budget no id", null),
+            ],
+            ct);
+
+        var result = await repository.SearchAsync("budget", null, 10, ct);
+
+        result.Select(m => (m.Subject, m.FolderId)).Should().BeEquivalentTo(
+            new[]
+            {
+                ("budget shared", inbox.Id),
+                ("budget archived", allMail.Id),
+                ("budget no id", allMail.Id),
+            });
+    }
+
+    /// <summary>
+    /// Verifies the same hiding applies to the short-term LIKE fallback.
+    /// </summary>
+    [Fact]
+    public async Task SearchAsync_ShortTermDuplicateInAllMail_ReturnsItOnce()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, inbox) = await db.SeedAccountAsync(ct);
+        var allMail = MailFolder.Create(account.Id, "All Mail", "All Mail", FolderRole.AllMail);
+        await db.CreateFolderRepository().AddAsync(allMail, ct);
+        var repository = db.CreateMessageRepository();
+        await repository.AddRangeAsync([BuildWithId(account, inbox, 1, "zz", "d@x"), BuildWithId(account, allMail, 4, "zz", "d@x")], ct);
+
+        var result = await repository.SearchAsync("zz", null, 10, ct);
+
+        result.Should().ContainSingle().Which.FolderId.Should().Be(inbox.Id);
+    }
+
+    /// <summary>
+    /// Verifies the folder view of All Mail itself still lists every message, duplicates included.
+    /// </summary>
+    [Fact]
+    public async Task GetByFolderAsync_AllMailFolder_ListsDuplicatesToo()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, inbox) = await db.SeedAccountAsync(ct);
+        var allMail = MailFolder.Create(account.Id, "All Mail", "All Mail", FolderRole.AllMail);
+        await db.CreateFolderRepository().AddAsync(allMail, ct);
+        var repository = db.CreateMessageRepository();
+        await repository.AddRangeAsync([BuildWithId(account, inbox, 1, "same", "s@x"), BuildWithId(account, allMail, 1, "same", "s@x")], ct);
+
+        var result = await repository.GetByFolderAsync(account.Id, allMail.Id, 0, 10, ct);
+
+        result.Should().ContainSingle();
+    }
 }

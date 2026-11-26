@@ -1599,4 +1599,42 @@ public class MainWindowViewModelTests
         new AccountNodeViewModel(TestData.Account()).CanReauthenticate.Should().BeFalse();
         new AccountNodeViewModel(TestData.OAuthAccount()).CanReauthenticate.Should().BeTrue();
     }
+
+    /// <summary>
+    /// Background history progress is shown in the status line, and the final report replaces it.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task BackfillProgressed_RaisedOnBackgroundThread_ShowsCountInStatusLine()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+
+        await Task.Run(() => scenario.SyncEvents.RaiseProgress(scenario.Account.Id, 250, finished: false), TestContext.Current.CancellationToken);
+        await Task.WhenAll(scenario.UiThread.Invocations);
+        var during = scenario.ViewModel.StatusText;
+        await Task.Run(() => scenario.SyncEvents.RaiseProgress(scenario.Account.Id, 900, finished: true), TestContext.Current.CancellationToken);
+        await Task.WhenAll(scenario.UiThread.Invocations);
+
+        during.Should().Contain("250");
+        scenario.ViewModel.StatusText.Should().Contain("900").And.NotBe(during);
+    }
+
+    /// <summary>
+    /// After dispose a progress notification no longer touches the status line.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task BackfillProgressed_AfterDispose_DoesNothing()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        var before = scenario.ViewModel.StatusText;
+
+        scenario.ViewModel.Dispose();
+        scenario.SyncEvents.RaiseProgress(scenario.Account.Id, 5, finished: false);
+
+        scenario.ViewModel.StatusText.Should().Be(before);
+        scenario.SyncEvents.HasSubscribers.Should().BeFalse();
+    }
 }

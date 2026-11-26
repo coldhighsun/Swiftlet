@@ -181,6 +181,54 @@ public sealed class MailMessage
     }
 
     /// <summary>
+    /// Re-homes the cached message after the server moved it to another folder of the same account, so its content
+    /// need not be downloaded again. Labels, flags and attachments stay as they are.
+    /// </summary>
+    /// <param name="folderId">The folder the message now belongs to.</param>
+    /// <param name="uid">The IMAP UID the message has in that folder.</param>
+    public void MoveToFolder(Guid folderId, uint uid)
+    {
+        if (folderId == Guid.Empty)
+        {
+            throw new ArgumentException("Folder id is required.", nameof(folderId));
+        }
+
+        FolderId = folderId;
+        Uid = uid;
+    }
+
+    /// <summary>
+    /// Creates a copy of this message for another folder of the same account, used when the server holds the same message
+    /// in two folders (Gmail's All Mail) so its content need not be downloaded twice. Labels and the starred state are not copied.
+    /// </summary>
+    /// <param name="folderId">The folder the copy belongs to.</param>
+    /// <param name="uid">The IMAP UID of the message in that folder.</param>
+    /// <param name="isRead">Whether the message is read on the server.</param>
+    /// <returns>The copy, including its attachment metadata.</returns>
+    public MailMessage CopyToFolder(Guid folderId, uint uid, bool isRead)
+    {
+        var copy = Create(
+            AccountId,
+            folderId,
+            uid,
+            Subject,
+            FromName,
+            FromAddress,
+            Recipients,
+            SentAt,
+            BodyText,
+            BodyHtml,
+            MessageIdHeader,
+            isRead);
+        foreach (var attachment in _attachments.OrderBy(a => a.Ordinal))
+        {
+            copy.AddAttachment(attachment.FileName, attachment.ContentType, attachment.Size);
+        }
+
+        return copy;
+    }
+
+    /// <summary>
     /// Sets the read state.
     /// </summary>
     /// <param name="isRead">The new state.</param>

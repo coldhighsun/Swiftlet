@@ -64,6 +64,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMailSender, MailKitMailSender>();
         services.AddHostedService<AccountSyncWorker>();
         services.AddHostedService<InboxWatcher>();
+        services.AddHostedService<BackfillWorker>();
         return services;
     }
 }

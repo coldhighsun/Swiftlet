@@ -18,7 +18,12 @@ public sealed record SyncResult(int FoldersSynced, int NewMessages, IReadOnlyLis
 /// Tunable limits of the synchronization.
 /// </summary>
 /// <param name="MaxMessagesPerFolderPerSync">The maximum number of messages downloaded per folder per run.</param>
-public sealed record MailSyncOptions(int MaxMessagesPerFolderPerSync = 200);
+/// <param name="InitialFetchCount">The number of newest messages downloaded when a folder has no cached messages; the rest is backfilled.</param>
+/// <param name="BackfillBatchSize">The number of older messages downloaded per backfill batch.</param>
+public sealed record MailSyncOptions(
+    int MaxMessagesPerFolderPerSync = 200,
+    int InitialFetchCount = 20,
+    int BackfillBatchSize = 100);
 
 /// <summary>
 /// Synchronizes folders and new messages of an account from IMAP into the local cache.
@@ -131,10 +136,15 @@ public sealed class MailSyncService(
         }
 
         var afterUid = await messages.GetMaxUidAsync(folder.AccountId, folder.Id, cancellationToken);
+
+        // An empty local folder only gets the newest few messages so the user sees mail at once; the rest is backfilled.
+        var limit = afterUid == 0
+            ? Math.Min(options.InitialFetchCount, options.MaxMessagesPerFolderPerSync)
+            : options.MaxMessagesPerFolderPerSync;
         var remote = await session.FetchNewMessagesAsync(
             folder.FullName,
             afterUid,
-            options.MaxMessagesPerFolderPerSync,
+            limit,
             cancellationToken);
         var created = remote.Select(r => ToMessage(folder, r)).ToList();
         if (created.Count > 0)
@@ -251,7 +261,7 @@ public sealed class MailSyncService(
     /// <param name="folder">The containing folder.</param>
     /// <param name="remote">The downloaded message.</param>
     /// <returns>The entity.</returns>
-    private static MailMessage ToMessage(MailFolder folder, RemoteMessage remote)
+    internal static MailMessage ToMessage(MailFolder folder, RemoteMessage remote)
     {
         var message = MailMessage.Create(
             folder.AccountId,

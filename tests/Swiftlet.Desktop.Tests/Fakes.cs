@@ -331,6 +331,46 @@ internal sealed class FakeAppSettings : IAppSettings
     public bool RemoveServerDeletedMessages { get; set; }
 
     /// <inheritdoc />
+    public bool DownloadFullHistory { get; set; } = true;
+
+    /// <inheritdoc />
+    public bool DownloadAllMail { get; set; } = true;
+
+    /// <summary>
+    /// Gets the values passed to <see cref="SetDownloadAllMail"/>.
+    /// </summary>
+    public List<bool> AllMailCalls { get; } = [];
+
+    /// <inheritdoc />
+    public void SetDownloadAllMail(bool value)
+    {
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+
+        AllMailCalls.Add(value);
+        DownloadAllMail = value;
+    }
+
+    /// <summary>
+    /// Gets the values passed to <see cref="SetDownloadFullHistory"/>.
+    /// </summary>
+    public List<bool> HistoryCalls { get; } = [];
+
+    /// <inheritdoc />
+    public void SetDownloadFullHistory(bool value)
+    {
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+
+        HistoryCalls.Add(value);
+        DownloadFullHistory = value;
+    }
+
+    /// <inheritdoc />
     public void SetRemoveServerDeletedMessages(bool value)
     {
         if (Failure is not null)
@@ -460,6 +500,20 @@ internal sealed class FakeSyncEvents : ISyncEvents
     /// <inheritdoc />
     public event EventHandler<AccountSyncedEventArgs>? AccountSynced;
 
+    /// <inheritdoc />
+    public event EventHandler<BackfillProgressEventArgs>? BackfillProgressed;
+
+    /// <summary>
+    /// Raises <see cref="BackfillProgressed"/> on the calling thread.
+    /// </summary>
+    /// <param name="accountId">The account identifier.</param>
+    /// <param name="downloaded">The messages downloaded so far.</param>
+    /// <param name="finished">Whether the pass is over.</param>
+    public void RaiseProgress(Guid accountId, int downloaded, bool finished)
+    {
+        BackfillProgressed?.Invoke(this, new BackfillProgressEventArgs(accountId, downloaded, finished));
+    }
+
     /// <summary>
     /// Raises <see cref="AccountSynced"/> on the calling thread.
     /// </summary>
@@ -472,7 +526,7 @@ internal sealed class FakeSyncEvents : ISyncEvents
     /// <summary>
     /// Gets a value indicating whether anyone is subscribed.
     /// </summary>
-    public bool HasSubscribers => AccountSynced is not null;
+    public bool HasSubscribers => AccountSynced is not null && BackfillProgressed is not null;
 }
 
 /// <summary>

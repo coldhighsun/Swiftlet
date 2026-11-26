@@ -19,6 +19,30 @@ public sealed class AccountSyncedEventArgs(Guid accountId, int newMessages) : Ev
 }
 
 /// <summary>
+/// Event data raised while the history of an account is downloaded in the background.
+/// </summary>
+/// <param name="accountId">The account identifier.</param>
+/// <param name="downloaded">The number of history messages downloaded so far in the current pass.</param>
+/// <param name="finished">Whether the pass is over (everything downloaded, or the pass ended early).</param>
+public sealed class BackfillProgressEventArgs(Guid accountId, int downloaded, bool finished) : EventArgs
+{
+    /// <summary>
+    /// Gets the account identifier.
+    /// </summary>
+    public Guid AccountId { get; } = accountId;
+
+    /// <summary>
+    /// Gets the number of history messages downloaded so far in the current pass.
+    /// </summary>
+    public int Downloaded { get; } = downloaded;
+
+    /// <summary>
+    /// Gets a value indicating whether the pass is over.
+    /// </summary>
+    public bool Finished { get; } = finished;
+}
+
+/// <summary>
 /// Notifies subscribers about completed synchronizations.
 /// </summary>
 public interface ISyncEvents
@@ -27,6 +51,11 @@ public interface ISyncEvents
     /// Raised after an account was synchronized. May be raised on a background thread.
     /// </summary>
     event EventHandler<AccountSyncedEventArgs>? AccountSynced;
+
+    /// <summary>
+    /// Raised after every background history batch and when a history pass ends. May be raised on a background thread.
+    /// </summary>
+    event EventHandler<BackfillProgressEventArgs>? BackfillProgressed;
 }
 
 /// <summary>
@@ -36,6 +65,39 @@ public sealed class SyncEvents : ISyncEvents
 {
     /// <inheritdoc />
     public event EventHandler<AccountSyncedEventArgs>? AccountSynced;
+
+    /// <inheritdoc />
+    public event EventHandler<BackfillProgressEventArgs>? BackfillProgressed;
+
+    /// <summary>
+    /// Raises <see cref="BackfillProgressed"/>; a failing subscriber never affects the backfill or the other subscribers.
+    /// </summary>
+    /// <param name="accountId">The account identifier.</param>
+    /// <param name="downloaded">The number of history messages downloaded so far in the current pass.</param>
+    /// <param name="finished">Whether the pass is over.</param>
+    public void RaiseBackfillProgressed(Guid accountId, int downloaded, bool finished)
+    {
+        var handlers = BackfillProgressed;
+        if (handlers is null)
+        {
+            return;
+        }
+
+        var args = new BackfillProgressEventArgs(accountId, downloaded, finished);
+        foreach (var handler in handlers.GetInvocationList().Cast<EventHandler<BackfillProgressEventArgs>>())
+        {
+            try
+            {
+                handler(this, args);
+            }
+#pragma warning disable CA1031 // Subscribers are arbitrary UI code; one failing must not break the backfill or the other subscribers.
+            catch (Exception)
+#pragma warning restore CA1031
+            {
+                // Intentionally ignored, as in RaiseAccountSynced.
+            }
+        }
+    }
 
     /// <summary>
     /// Raises <see cref="AccountSynced"/>; a failing subscriber never affects the sync or the other subscribers.

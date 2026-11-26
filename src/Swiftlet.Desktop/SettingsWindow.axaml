@@ -7,6 +7,11 @@
         Title="{loc:Loc Settings_Title}" Width="480" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterOwner">
   <StackPanel Margin="20" Spacing="12">
+    <CheckBox Content="{loc:Loc Settings_DownloadHistory}" IsChecked="{Binding DownloadFullHistory}" />
+    <TextBlock Text="{loc:Loc Settings_DownloadHistoryHint}" TextWrapping="Wrap" Opacity="0.7" Margin="28,0,0,0" />
+    <CheckBox Content="{loc:Loc Settings_DownloadAllMail}" IsChecked="{Binding DownloadAllMail}" Margin="28,0,0,0" />
+    <TextBlock Text="{loc:Loc Settings_DownloadAllMailHint}" TextWrapping="Wrap" Opacity="0.7" Margin="56,0,0,0" />
+    <Separator />
     <CheckBox Content="{loc:Loc Settings_RemoveServerDeleted}" IsChecked="{Binding RemoveServerDeletedMessages}" />
     <TextBlock Text="{loc:Loc Settings_RemoveServerDeletedHint}" TextWrapping="Wrap" Opacity="0.7" Margin="28,0,0,0" />
     <Separator />

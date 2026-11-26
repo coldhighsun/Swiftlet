@@ -9,4 +9,10 @@ internal sealed class DefaultSyncSettings : ISyncSettings
 {
     /// <inheritdoc />
     public bool RemoveServerDeletedMessages => false;
+
+    /// <inheritdoc />
+    public bool DownloadFullHistory => true;
+
+    /// <inheritdoc />
+    public bool DownloadAllMail => true;
 }

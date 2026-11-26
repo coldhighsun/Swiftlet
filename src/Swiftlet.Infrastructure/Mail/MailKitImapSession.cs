@@ -98,6 +98,106 @@ internal sealed class MailKitImapSession(ImapClient client, ILogger<MailKitImapS
     }
 
     /// <inheritdoc />
+    public async Task<OlderHeadersPage> ListOlderAsync(
+        string folderFullName,
+        uint beforeUid,
+        int maxCount,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxCount, 1);
+        logger.LogDebug("Listing up to {Max} messages before UID {Uid} in {Folder}", maxCount, beforeUid, folderFullName);
+
+        var folder = await client.GetFolderAsync(folderFullName, cancellationToken);
+        await folder.OpenAsync(FolderAccess.ReadOnly, cancellationToken);
+
+        // The server's own message count next to what SEARCH returns tells a truncated SEARCH from a genuinely small mailbox.
+        logger.LogDebug(
+            "Folder {Folder} on the server: {Exists} messages, UIDNEXT {UidNext}, UIDVALIDITY {UidValidity}; backfilling below UID {Uid}",
+            folderFullName,
+            folder.Count,
+            folder.UidNext?.Id,
+            folder.UidValidity,
+            beforeUid);
+
+        if (beforeUid <= 1)
+        {
+            return new OlderHeadersPage([], 0, 0);
+        }
+
+        // Same \Deleted exclusion as FetchNewMessagesAsync.
+        var query = SearchQuery.Uids(new UniqueIdRange(UniqueId.MinValue, new UniqueId(beforeUid - 1))).And(SearchQuery.NotDeleted);
+        var found = await folder.SearchAsync(query, cancellationToken);
+        var ordered = found.Where(u => u.Id < beforeUid).OrderBy(u => u.Id).ToList();
+        var selected = ordered.TakeLast(maxCount).ToList();
+        var remaining = ordered.Count - selected.Count;
+        logger.LogDebug(
+            "Server reports {Found} messages older than UID {Uid} in {Folder}; listing {Selected}",
+            ordered.Count,
+            beforeUid,
+            folderFullName,
+            selected.Count);
+        if (selected.Count == 0)
+        {
+            return new OlderHeadersPage([], 0, 0);
+        }
+
+        // The envelope carries the Message-ID, so the caller can recognise messages it already holds without downloading them.
+        var summaries = await folder.FetchAsync(
+            selected,
+            MessageSummaryItems.UniqueId | MessageSummaryItems.Flags | MessageSummaryItems.InternalDate | MessageSummaryItems.Envelope,
+            cancellationToken);
+        var byUid = summaries.ToDictionary(s => s.UniqueId.Id);
+
+        var headers = selected
+            .Select(uid =>
+            {
+                byUid.TryGetValue(uid.Id, out var summary);
+                var isRead = summary?.Flags is { } flags && flags.HasFlag(MessageFlags.Seen);
+                return new RemoteHeader(
+                    uid.Id,
+                    string.IsNullOrWhiteSpace(summary?.Envelope?.MessageId) ? null : summary.Envelope.MessageId,
+                    isRead,
+                    summary?.InternalDate ?? DateTimeOffset.UtcNow);
+            })
+            .ToList();
+        return new OlderHeadersPage(headers, remaining, selected[0].Id);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<RemoteMessage>> FetchMessagesAsync(
+        string folderFullName,
+        IReadOnlyList<RemoteHeader> headers,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(headers);
+        if (headers.Count == 0)
+        {
+            return [];
+        }
+
+        logger.LogDebug("Downloading {Count} listed messages in {Folder}", headers.Count, folderFullName);
+        var folder = await client.GetFolderAsync(folderFullName, cancellationToken);
+        await folder.OpenAsync(FolderAccess.ReadOnly, cancellationToken);
+
+        var result = new List<RemoteMessage>(headers.Count);
+        foreach (var header in headers)
+        {
+            try
+            {
+                var mime = await folder.GetMessageAsync(new UniqueId(header.Uid), cancellationToken);
+                result.Add(MimeMessageMapper.Map(header.Uid, mime, header.IsRead, header.InternalDate));
+            }
+            catch (MessageNotFoundException)
+            {
+                // The message was expunged on the server between the listing and the download; the history simply lacks it.
+                logger.LogDebug("UID {Uid} in {Folder} disappeared during backfill", header.Uid, folderFullName);
+            }
+        }
+
+        return result;
+    }
+
+    /// <inheritdoc />
     public async Task<byte[]?> DownloadAttachmentAsync(
         string folderFullName,
         uint uid,
@@ -156,7 +256,7 @@ internal sealed class MailKitImapSession(ImapClient client, ILogger<MailKitImapS
     }
 
     /// <inheritdoc />
-    public async Task DeleteMessageAsync(
+    public async Task<uint?> DeleteMessageAsync(
         string folderFullName,
         uint uid,
         string? trashFolderFullName,
@@ -203,7 +303,8 @@ internal sealed class MailKitImapSession(ImapClient client, ILogger<MailKitImapS
             {
                 // MoveToAsync uses MOVE when available and falls back to COPY + delete otherwise.
                 var trash = await client.GetFolderAsync(trashFolderFullName, cancellationToken);
-                await folder.MoveToAsync(uniqueId, trash, cancellationToken);
+                var moved = await folder.MoveToAsync(uniqueId, trash, cancellationToken);
+                return moved is { IsValid: true } newUid ? newUid.Id : null;
             }
         }
         catch (ImapCommandException)
@@ -217,6 +318,29 @@ internal sealed class MailKitImapSession(ImapClient client, ILogger<MailKitImapS
                 throw;
             }
         }
+
+        return null;
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> HasMessagesBetweenAsync(
+        string folderFullName,
+        uint afterUid,
+        uint beforeUid,
+        CancellationToken cancellationToken = default)
+    {
+        if (beforeUid <= afterUid + 1)
+        {
+            return false;
+        }
+
+        var folder = await client.GetFolderAsync(folderFullName, cancellationToken);
+        await folder.OpenAsync(FolderAccess.ReadOnly, cancellationToken);
+
+        // The same \Deleted exclusion as the regular sync, so messages it would never download do not count as a gap.
+        var query = SearchQuery.Uids(new UniqueIdRange(new UniqueId(afterUid + 1), new UniqueId(beforeUid - 1))).And(SearchQuery.NotDeleted);
+        var found = await folder.SearchAsync(query, cancellationToken);
+        return found.Any(u => u.Id > afterUid && u.Id < beforeUid);
     }
 
     /// <summary>
@@ -515,6 +639,11 @@ internal sealed class MailKitImapSession(ImapClient client, ILogger<MailKitImapS
         if ((attributes & FolderAttributes.Junk) != 0)
         {
             return FolderRole.Junk;
+        }
+
+        if ((attributes & FolderAttributes.All) != 0)
+        {
+            return FolderRole.AllMail;
         }
 
         return (attributes & FolderAttributes.Archive) != 0 ? FolderRole.Archive : FolderRole.Other;

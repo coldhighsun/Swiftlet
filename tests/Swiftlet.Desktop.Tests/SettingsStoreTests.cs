@@ -143,4 +143,70 @@ public class SettingsStoreTests : IDisposable
         store.SetRemoveServerDeletedMessages(true);
         provider.GetRequiredService<ISyncSettings>().RemoveServerDeletedMessages.Should().BeTrue();
     }
+
+    /// <summary>
+    /// Verifies the full-history download is on by default, including for files written before the setting existed.
+    /// </summary>
+    [Fact]
+    public void DownloadFullHistory_NoValueStored_DefaultsToOn()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(StorePath)!);
+        File.WriteAllText(StorePath, "{\"language\":\"en\",\"removeServerDeletedMessages\":true}");
+
+        var store = new AppSettings(StorePath);
+
+        store.DownloadFullHistory.Should().BeTrue();
+        store.RemoveServerDeletedMessages.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies the choice survives a restart and does not disturb the other stored values.
+    /// </summary>
+    [Fact]
+    public void SetDownloadFullHistory_Off_PersistsAndKeepsOtherSettings()
+    {
+        var store = new AppSettings(StorePath);
+        store.Save("zh-Hans");
+        store.SetRemoveServerDeletedMessages(true);
+
+        store.SetDownloadFullHistory(false);
+
+        var reloaded = new AppSettings(StorePath);
+        reloaded.DownloadFullHistory.Should().BeFalse();
+        reloaded.RemoveServerDeletedMessages.Should().BeTrue();
+        reloaded.Load().Should().Be("zh-Hans");
+    }
+
+    /// <summary>
+    /// Verifies changing another setting keeps the stored history choice.
+    /// </summary>
+    [Fact]
+    public void Save_AfterHistoryTurnedOff_KeepsHistoryChoice()
+    {
+        var store = new AppSettings(StorePath);
+        store.SetDownloadFullHistory(false);
+
+        store.Save("en");
+        store.SetRemoveServerDeletedMessages(true);
+
+        new AppSettings(StorePath).DownloadFullHistory.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies the All Mail download is on by default and the choice survives a restart without disturbing the other values.
+    /// </summary>
+    [Fact]
+    public void SetDownloadAllMail_Off_DefaultsOnAndPersistsWithOtherSettings()
+    {
+        var store = new AppSettings(StorePath);
+        store.DownloadAllMail.Should().BeTrue();
+        store.SetDownloadFullHistory(false);
+
+        store.SetDownloadAllMail(false);
+
+        var reloaded = new AppSettings(StorePath);
+        reloaded.DownloadAllMail.Should().BeFalse();
+        reloaded.DownloadFullHistory.Should().BeFalse();
+        reloaded.RemoveServerDeletedMessages.Should().BeFalse();
+    }
 }

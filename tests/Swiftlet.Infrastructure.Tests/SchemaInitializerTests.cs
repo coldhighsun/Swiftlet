@@ -56,6 +56,7 @@ public class SchemaInitializerTests
                     FromName TEXT NOT NULL,
                     FromAddress TEXT NOT NULL,
                     BodyText TEXT NOT NULL,
+                    MessageIdHeader TEXT NULL,
                     IsRead INTEGER NOT NULL,
                     IsFlagged INTEGER NOT NULL);
                 INSERT INTO Messages (Id, Subject, FromName, FromAddress, BodyText, IsRead, IsFlagged)
@@ -171,5 +172,61 @@ public class SchemaInitializerTests
         (await CountTablesAsync(context, "Labels", ct)).Should().Be(0);
         (await CountTablesAsync(context, "MessageLabels", ct)).Should().Be(0);
         (await CountTablesAsync(context, "RemoteImageRules", ct)).Should().Be(0);
+    }
+
+    /// <summary>
+    /// Verifies a database created before the Message-ID index existed gains it, and a repeated run does not fail.
+    /// </summary>
+    [Fact]
+    public async Task InitializeAccount_ExistingDatabaseWithoutMessageIdIndex_AddsIndexIdempotently()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var connection = new SqliteConnection("DataSource=:memory:");
+        await connection.OpenAsync(ct);
+        await using (var setup = connection.CreateCommand())
+        {
+            setup.CommandText =
+                """
+                CREATE TABLE Messages (
+                    Id TEXT NOT NULL PRIMARY KEY,
+                    Subject TEXT NOT NULL,
+                    FromName TEXT NOT NULL,
+                    FromAddress TEXT NOT NULL,
+                    BodyText TEXT NOT NULL,
+                    MessageIdHeader TEXT NULL,
+                    IsRead INTEGER NOT NULL,
+                    IsFlagged INTEGER NOT NULL,
+                    IsFlagSyncPending INTEGER NOT NULL DEFAULT 0);
+                """;
+            await setup.ExecuteNonQueryAsync(ct);
+        }
+
+        var options = new DbContextOptionsBuilder<AccountDbContext>().UseSqlite(connection).Options;
+        await using var context = new AccountDbContext(options);
+
+        await SqliteSchemaInitializer.InitializeAccountAsync(context, ct);
+        await SqliteSchemaInitializer.InitializeAccountAsync(context, ct);
+
+        var count = await context.Database
+            .SqlQuery<int>($"SELECT COUNT(*) AS Value FROM sqlite_master WHERE type = 'index' AND name = 'IX_Messages_MessageIdHeader'")
+            .SingleAsync(ct);
+        count.Should().Be(1);
+    }
+
+    /// <summary>
+    /// Verifies a brand-new account database has the Message-ID index.
+    /// </summary>
+    [Fact]
+    public async Task InitializeAccount_NewDatabase_HasMessageIdIndex()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        await using var context = await db.Factory.CreateAsync(Guid.NewGuid(), ct);
+
+        var count = await context.Database
+            .SqlQuery<int>($"SELECT COUNT(*) AS Value FROM sqlite_master WHERE type = 'index' AND name = 'IX_Messages_MessageIdHeader'")
+            .SingleAsync(ct);
+
+        count.Should().Be(1);
     }
 }

@@ -37,6 +37,23 @@ public sealed record FlagUpdate(uint Uid, bool IsRead, bool IsFlagged);
 public sealed record RemoteFlagState(uint Uid, bool IsRead, bool IsFlagged, bool IsDeleted);
 
 /// <summary>
+/// The envelope-level data of one message, available without downloading its body.
+/// </summary>
+/// <param name="Uid">The IMAP UID.</param>
+/// <param name="MessageId">The Message-ID header value without angle brackets, if any.</param>
+/// <param name="IsRead">Whether the message is flagged as seen on the server.</param>
+/// <param name="InternalDate">The server's internal date, used when the message has no usable Date header.</param>
+public sealed record RemoteHeader(uint Uid, string? MessageId, bool IsRead, DateTimeOffset InternalDate);
+
+/// <summary>
+/// One batch of older messages of a folder, listed without their bodies.
+/// </summary>
+/// <param name="Headers">The listed messages, ordered by UID ascending.</param>
+/// <param name="Remaining">How many still older messages the server holds after this batch.</param>
+/// <param name="OldestUid">The lowest UID this batch covered; 0 when the batch is empty.</param>
+public sealed record OlderHeadersPage(IReadOnlyList<RemoteHeader> Headers, int Remaining, uint OldestUid);
+
+/// <summary>
 /// A message downloaded from an IMAP server.
 /// </summary>
 /// <param name="Uid">The IMAP UID.</param>

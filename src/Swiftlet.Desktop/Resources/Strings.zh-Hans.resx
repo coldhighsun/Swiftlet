@@ -37,6 +37,7 @@
   <data name="Folder_Trash" xml:space="preserve"><value>已删除</value></data>
   <data name="Folder_Junk" xml:space="preserve"><value>垃圾邮件</value></data>
   <data name="Folder_Archive" xml:space="preserve"><value>归档</value></data>
+  <data name="Folder_AllMail" xml:space="preserve"><value>所有邮件</value></data>
   <data name="Folder_UnifiedInbox" xml:space="preserve"><value>统一收件箱</value></data>
   <data name="Message_NoSubject" xml:space="preserve"><value>(无主题)</value></data>
 
@@ -128,6 +129,12 @@
   <data name="Settings_Title" xml:space="preserve"><value>设置</value></data>
   <data name="Settings_RemoveServerDeleted" xml:space="preserve"><value>删除服务器上已删除的邮件的本地副本</value></data>
   <data name="Settings_RemoveServerDeletedHint" xml:space="preserve"><value>只会删除本地副本，不会改动服务器上的邮件。在其他应用或网页端删除的邮件，也会从 Swiftlet 中消失。默认关闭。</value></data>
+  <data name="Settings_DownloadHistory" xml:space="preserve"><value>在后台下载完整的邮件历史</value></data>
+  <data name="Settings_DownloadHistoryHint" xml:space="preserve"><value>最新的邮件会先显示；更早的邮件随后分批下载，不会阻塞新邮件。邮箱特别大时可关闭以节省空间和流量。已删除和垃圾邮件文件夹最后下载。</value></data>
+  <data name="Settings_DownloadAllMail" xml:space="preserve"><value>同时下载 Gmail 的“所有邮件”文件夹</value></data>
+  <data name="Settings_DownloadAllMailHint" xml:space="preserve"><value>“所有邮件”还包含不在任何其他文件夹里的已归档邮件。已从其他文件夹下载过的邮件会在本地复制，不会重复下载。</value></data>
+  <data name="Status_HistoryDownloading" xml:space="preserve"><value>正在下载更早的邮件：已下载 {0} 封…</value></data>
+  <data name="Status_HistoryDone" xml:space="preserve"><value>更早的邮件已下载：共 {0} 封</value></data>
   <data name="Settings_SaveFailed" xml:space="preserve"><value>保存设置失败</value></data>
   <data name="Settings_RemoteImages" xml:space="preserve"><value>远程图片</value></data>
   <data name="Settings_RemoteImagesHint" xml:space="preserve"><value>来自下列发件人（地址）或发件人域（含子域）的邮件会自动加载图片。加载远程图片会让发件人知道你打开了邮件。</value></data>

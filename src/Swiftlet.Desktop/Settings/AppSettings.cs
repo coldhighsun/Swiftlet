@@ -14,6 +14,18 @@ public interface IAppSettings : ISyncSettings
     /// </summary>
     /// <param name="value">The new value.</param>
     void SetRemoveServerDeletedMessages(bool value);
+
+    /// <summary>
+    /// Changes whether the full message history is downloaded in the background, and saves the choice.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    void SetDownloadFullHistory(bool value);
+
+    /// <summary>
+    /// Changes whether the "All Mail" folder is downloaded too, and saves the choice.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    void SetDownloadAllMail(bool value);
 }
 
 /// <summary>
@@ -37,6 +49,16 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     private volatile bool _removeServerDeletedMessages;
 
     /// <summary>
+    /// The in-memory value, read by the backfill worker while the UI thread writes it.
+    /// </summary>
+    private volatile bool _downloadFullHistory;
+
+    /// <summary>
+    /// The in-memory value, read by the backfill worker while the UI thread writes it.
+    /// </summary>
+    private volatile bool _downloadAllMail;
+
+    /// <summary>
     /// The in-memory language preference, guarded by <see cref="_gate"/>; kept so a corrupt file never resets it.
     /// </summary>
     private string? _language;
@@ -51,6 +73,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
         var file = Read();
         _language = file.Language;
         _removeServerDeletedMessages = file.RemoveServerDeletedMessages ?? false;
+        _downloadFullHistory = file.DownloadFullHistory ?? true;
+        _downloadAllMail = file.DownloadAllMail ?? true;
     }
 
     /// <summary>
@@ -58,10 +82,22 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     /// </summary>
     /// <param name="Language">The saved language preference.</param>
     /// <param name="RemoveServerDeletedMessages">Whether messages deleted on the server are removed locally.</param>
-    private sealed record SettingsFile(string? Language, bool? RemoveServerDeletedMessages);
+    /// <param name="DownloadFullHistory">Whether the full message history is downloaded in the background.</param>
+    /// <param name="DownloadAllMail">Whether the "All Mail" folder is downloaded too.</param>
+    private sealed record SettingsFile(
+        string? Language,
+        bool? RemoveServerDeletedMessages,
+        bool? DownloadFullHistory = null,
+        bool? DownloadAllMail = null);
 
     /// <inheritdoc />
     public bool RemoveServerDeletedMessages => _removeServerDeletedMessages;
+
+    /// <inheritdoc />
+    public bool DownloadFullHistory => _downloadFullHistory;
+
+    /// <inheritdoc />
+    public bool DownloadAllMail => _downloadAllMail;
 
     /// <inheritdoc />
     public string Load()
@@ -77,7 +113,7 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     {
         lock (_gate)
         {
-            Write(new SettingsFile(preference, _removeServerDeletedMessages));
+            Write(new SettingsFile(preference, _removeServerDeletedMessages, _downloadFullHistory, _downloadAllMail));
             _language = preference;
         }
     }
@@ -87,8 +123,28 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     {
         lock (_gate)
         {
-            Write(new SettingsFile(_language, value));
+            Write(new SettingsFile(_language, value, _downloadFullHistory, _downloadAllMail));
             _removeServerDeletedMessages = value;
+        }
+    }
+
+    /// <inheritdoc />
+    public void SetDownloadFullHistory(bool value)
+    {
+        lock (_gate)
+        {
+            Write(new SettingsFile(_language, _removeServerDeletedMessages, value, _downloadAllMail));
+            _downloadFullHistory = value;
+        }
+    }
+
+    /// <inheritdoc />
+    public void SetDownloadAllMail(bool value)
+    {
+        lock (_gate)
+        {
+            Write(new SettingsFile(_language, _removeServerDeletedMessages, _downloadFullHistory, value));
+            _downloadAllMail = value;
         }
     }
 

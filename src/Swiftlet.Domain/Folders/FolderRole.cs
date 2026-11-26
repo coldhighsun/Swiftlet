@@ -39,4 +39,9 @@ public enum FolderRole
     /// Archived messages.
     /// </summary>
     Archive = 6,
+
+    /// <summary>
+    /// A folder that holds a copy of every message (Gmail's "All Mail"), so it duplicates the other folders.
+    /// </summary>
+    AllMail = 7,
 }

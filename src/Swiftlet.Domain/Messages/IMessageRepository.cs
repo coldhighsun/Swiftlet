@@ -56,6 +56,29 @@ public interface IMessageRepository
     Task<uint> GetMaxUidAsync(Guid accountId, Guid folderId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Finds cached messages of an account by Message-ID, ignoring one folder.
+    /// </summary>
+    /// <param name="accountId">The owning account.</param>
+    /// <param name="messageIds">The Message-ID header values to look for (without angle brackets).</param>
+    /// <param name="excludedFolderId">The folder whose messages are not considered.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>One cached message (with its attachments) per Message-ID that was found, keyed by Message-ID.</returns>
+    Task<IReadOnlyDictionary<string, MailMessage>> FindByMessageIdsAsync(
+        Guid accountId,
+        IReadOnlyCollection<string> messageIds,
+        Guid excludedFolderId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the lowest cached UID in a folder.
+    /// </summary>
+    /// <param name="accountId">The owning account.</param>
+    /// <param name="folderId">The folder.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The lowest UID, or 0 if the folder has no cached messages.</returns>
+    Task<uint> GetMinUidAsync(Guid accountId, Guid folderId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Deletes all cached messages of a folder.
     /// </summary>
     /// <param name="accountId">The owning account.</param>

@@ -23,6 +23,7 @@ internal sealed class MailMessageConfiguration : IEntityTypeConfiguration<MailMe
         builder.Property(m => m.Preview).IsRequired().HasMaxLength(256);
         builder.HasIndex(m => new { m.FolderId, m.Uid }).IsUnique();
         builder.HasIndex(m => new { m.AccountId, m.SentAt });
+        builder.HasIndex(m => m.MessageIdHeader);
         builder.HasOne<MailFolder>().WithMany().HasForeignKey(m => m.FolderId).OnDelete(DeleteBehavior.Cascade);
         builder.HasMany(m => m.Attachments).WithOne().HasForeignKey(a => a.MessageId).OnDelete(DeleteBehavior.Cascade);
         builder.Navigation(m => m.Attachments).UsePropertyAccessMode(PropertyAccessMode.Field);

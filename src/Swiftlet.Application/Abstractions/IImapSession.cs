@@ -38,6 +38,33 @@ public interface IImapSession : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Lists the newest messages that are older than a UID without downloading their bodies, used to backfill history.
+    /// </summary>
+    /// <param name="folderFullName">The full server-side path of the folder.</param>
+    /// <param name="beforeUid">Only messages with a UID smaller than this are listed.</param>
+    /// <param name="maxCount">The maximum number of messages to list.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The listed messages (ascending by UID) and how many older ones remain on the server.</returns>
+    Task<OlderHeadersPage> ListOlderAsync(
+        string folderFullName,
+        uint beforeUid,
+        int maxCount,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Downloads the full content of previously listed messages.
+    /// A message that is gone from the server by now is left out of the result.
+    /// </summary>
+    /// <param name="folderFullName">The full server-side path of the folder.</param>
+    /// <param name="headers">The listed messages to download.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The downloaded messages.</returns>
+    Task<IReadOnlyList<RemoteMessage>> FetchMessagesAsync(
+        string folderFullName,
+        IReadOnlyList<RemoteHeader> headers,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Downloads and decodes one attachment of a message.
     /// </summary>
     /// <param name="folderFullName">The full server-side path of the folder.</param>
@@ -73,11 +100,28 @@ public interface IImapSession : IAsyncDisposable
     /// <param name="uid">The IMAP UID of the message.</param>
     /// <param name="trashFolderFullName">The Trash folder to move the message to, or <see langword="null"/> to delete it permanently.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A task that completes when the server no longer holds the message in the source folder.</returns>
-    Task DeleteMessageAsync(
+    /// <returns>
+    /// The UID the message has in the Trash folder after a move, or <see langword="null"/> when it was deleted permanently,
+    /// was already gone, or the server did not report the new UID (no UIDPLUS).
+    /// </returns>
+    Task<uint?> DeleteMessageAsync(
         string folderFullName,
         uint uid,
         string? trashFolderFullName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Tells whether a folder holds any message (not flagged as deleted) whose UID lies strictly between two UIDs.
+    /// </summary>
+    /// <param name="folderFullName">The full server-side path of the folder.</param>
+    /// <param name="afterUid">The exclusive lower bound.</param>
+    /// <param name="beforeUid">The exclusive upper bound.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns><see langword="true"/> if at least one such message exists.</returns>
+    Task<bool> HasMessagesBetweenAsync(
+        string folderFullName,
+        uint afterUid,
+        uint beforeUid,
         CancellationToken cancellationToken = default);
 
     /// <summary>

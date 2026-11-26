@@ -143,6 +143,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         TreeRoots.Add(UnifiedInbox);
         localizer.LanguageChanged += (_, _) => RefreshLanguage();
         _syncEvents.AccountSynced += OnAccountSynced;
+        _syncEvents.BackfillProgressed += OnBackfillProgressed;
     }
 
     /// <summary>
@@ -156,6 +157,31 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         _syncEvents.AccountSynced -= OnAccountSynced;
+        _syncEvents.BackfillProgressed -= OnBackfillProgressed;
+    }
+
+    /// <summary>
+    /// Shows how far the background history download has come; may be called from any thread.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OnBackfillProgressed(object? sender, BackfillProgressEventArgs e)
+    {
+        lock (_refreshGate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+        }
+
+        _ = ObserveAsync(_uiThread.InvokeAsync(() =>
+        {
+            StatusText = e.Finished
+                ? _localizer.Format("Status_HistoryDone", e.Downloaded)
+                : _localizer.Format("Status_HistoryDownloading", e.Downloaded);
+            return Task.CompletedTask;
+        }));
     }
 
     /// <summary>
