@@ -209,6 +209,35 @@ public class ThemeTests
     }
 
     /// <summary>
+    /// Verifies the windows take colors from the tokens instead of fixed colors or faded text.
+    /// </summary>
+    [Fact]
+    public void Xaml_Windows_UseTokensForColors()
+    {
+        var directory = Path.Combine(Path.GetDirectoryName(SourceFile())!, "..", "..", "src", "Swiftlet.Desktop");
+        var windows = Directory.GetFiles(Path.GetFullPath(directory), "*.axaml");
+
+        windows.Should().HaveCountGreaterThanOrEqualTo(7);
+        foreach (var file in windows)
+        {
+            var text = File.ReadAllText(file);
+            text.Should().NotContain("IndianRed", Path.GetFileName(file));
+            text.Should().NotContain("Opacity=", Path.GetFileName(file));
+            text.Should().NotContain("SystemFillColor", Path.GetFileName(file));
+        }
+    }
+
+    /// <summary>
+    /// Gets the path of this source file.
+    /// </summary>
+    /// <param name="path">Supplied by the compiler.</param>
+    /// <returns>The path.</returns>
+    private static string SourceFile([System.Runtime.CompilerServices.CallerFilePath] string path = "")
+    {
+        return path;
+    }
+
+    /// <summary>
     /// Reads the color of a token.
     /// </summary>
     /// <param name="token">The resource key.</param>

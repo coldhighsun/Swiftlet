@@ -72,7 +72,7 @@
                   <Button Classes="icon" Padding="6" Command="{Binding RemoveCommand}"
                           ToolTip.Tip="{loc:Loc Compose_RemoveAttachment}"
                           AutomationProperties.Name="{loc:Loc Compose_RemoveAttachment}">
-                    <PathIcon Data="{StaticResource Icon.Close}" />
+                    <PathIcon Data="{StaticResource Icon.Close}" Width="12" Height="12" />
                   </Button>
                 </StackPanel>
               </Border>

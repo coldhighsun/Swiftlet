@@ -507,6 +507,9 @@ public class UiSmokeTests
                 window.GetVisualDescendants().OfType<TextBox>().Select(t => t.Text).Should().Contain(["Receipts", "Travel", "Work"]);
                 window.GetVisualDescendants().OfType<ComboBox>().Should().HaveCount(3);
                 window.GetVisualDescendants().OfType<Button>().Count(b => b.Command == viewModel.DeleteCommand).Should().Be(2);
+                window.GetVisualDescendants().OfType<Button>().Where(b => b.Command == viewModel.DeleteCommand).Should()
+                    .OnlyContain(b => b.Content is PathIcon && b.Classes.Contains("danger")
+                        && UiQueries.Caption(b) == LocalizationManager.Instance["Labels_Delete"] && ToolTip.GetTip(b) != null);
                 window.Close();
             },
             TestContext.Current.CancellationToken);
@@ -1051,6 +1054,105 @@ public class UiSmokeTests
 
                 viewModel.Attachments.Should().BeEmpty();
                 window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the confirmation window answers Enter and Escape with Cancel and marks the confirming button as destructive.
+    /// </summary>
+    [Fact]
+    public async Task ConfirmWindow_Create_CancelIsDefaultAndOkIsDanger()
+    {
+        await DispatchAsync(
+            () =>
+            {
+                var window = ConfirmWindow.Create("Delete", "Delete everything?", "Delete", "Cancel");
+                Render(window, "confirm", "en");
+
+                var buttons = window.GetVisualDescendants().OfType<Button>().ToList();
+                var ok = buttons.Single(b => UiQueries.Caption(b) == "Delete");
+                var cancel = buttons.Single(b => UiQueries.Caption(b) == "Cancel");
+                ok.Classes.Should().Contain("danger");
+                ok.IsDefault.Should().BeFalse();
+                cancel.IsDefault.Should().BeTrue();
+                cancel.IsCancel.Should().BeTrue();
+                window.Title.Should().Be("Delete");
+                window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).Should().Contain("Delete everything?");
+                window.Close();
+                return Task.CompletedTask;
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Renders every window in the dark theme, where each takes the dark background, and checks its icon-only buttons
+    /// are named.
+    /// </summary>
+    [Fact]
+    public async Task AllWindows_DarkTheme_UseDarkBackgroundAndNameIconButtons()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference("zh-Hans");
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Messages[1].AddAttachment("quarterly-report.pdf", "application/pdf", 1_250_000);
+                scenario.Messages[0].AddLabel(scenario.Work);
+                await scenario.StartAsync();
+                scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+                await scenario.ViewModel.WhenIdleAsync();
+                var localizer = TestLocalizer.Chinese();
+                var account = TestData.Account();
+                var dialogs = new FakeDialogService();
+                dialogs.PickedFiles.Add("notes.txt");
+                var compose = new ComposeViewModel(
+                    new FakeDispatcher(), dialogs, localizer, [account],
+                    new ComposeRequest(ComposeMode.Reply, account.Id, "alice@example.com", "Re: Hello", "> quoted", null));
+                await compose.AddAttachmentsCommand.ExecuteAsync(null);
+                var dispatcher = new FakeDispatcher();
+                dispatcher.On<Swiftlet.Application.Labels.GetLabelsQuery>(_ =>
+                    (IReadOnlyList<Swiftlet.Domain.Labels.Label>)new List<Swiftlet.Domain.Labels.Label> { scenario.Work });
+                var labels = new LabelManagerViewModel(dispatcher, LocalizationManager.Instance);
+                await labels.InitializeAsync();
+                var protection = new FakeDatabaseProtection();
+                protection.Results.Enqueue(new Swiftlet.Infrastructure.Persistence.Encryption.DatabaseProtectionResult(
+                    Swiftlet.Infrastructure.Persistence.Encryption.DatabaseProtectionProblem.KeyLost));
+                var startup = new StartupViewModel(
+                    protection, localizer, new FakeDialogService(), new FakeUiThread(), _ => Task.FromResult<string?>(null));
+                await startup.RunCommand.ExecuteAsync(null);
+                var application = Avalonia.Application.Current!;
+                application.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark;
+                try
+                {
+                    (string Name, Window Window)[] windows =
+                    [
+                        ("main", new MainWindow { DataContext = scenario.ViewModel }),
+                        ("compose", new ComposeWindow { DataContext = compose }),
+                        ("add-account", new AddAccountWindow { DataContext = new AddAccountViewModel(new FakeDispatcher(), localizer) { Email = "me@corp.example", Password = "x" } }),
+                        ("settings", new SettingsWindow { DataContext = new SettingsViewModel(new FakeAppSettings(), localizer, new FakeRemoteImageRules()) }),
+                        ("labels", new LabelManagerWindow { DataContext = labels }),
+                        ("startup", new StartupWindow { DataContext = startup }),
+                        ("confirm", ConfirmWindow.Create("删除", "确定删除这封邮件吗？", "删除", "取消")),
+                    ];
+                    foreach (var (name, window) in windows)
+                    {
+                        Render(window, $"dark-{name}");
+
+                        Color(window.Background).Should().Be(Avalonia.Media.Color.Parse("#12171C"), name);
+                        // Scroll bar buttons belong to control templates, so only plain buttons are checked.
+                        window.GetVisualDescendants().OfType<Button>().Where(b => b.GetType() == typeof(Button) && b.Content is PathIcon)
+                            .Should().OnlyContain(
+                            b => !string.IsNullOrEmpty(Avalonia.Automation.AutomationProperties.GetName(b))
+                                && !string.IsNullOrEmpty(ToolTip.GetTip(b) as string),
+                            name);
+                        window.Close();
+                    }
+                }
+                finally
+                {
+                    application.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Default;
+                }
             },
             TestContext.Current.CancellationToken);
     }

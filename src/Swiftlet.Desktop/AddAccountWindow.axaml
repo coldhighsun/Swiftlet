@@ -7,18 +7,24 @@
         x:DataType="vm:AddAccountViewModel"
         Title="{loc:Loc AddAccount_Title}" Width="480" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterOwner">
-  <StackPanel Margin="20" Spacing="10">
+  <StackPanel Margin="24" Spacing="12">
+    <PathIcon Data="{StaticResource Icon.Logo}" Width="48" Height="40" HorizontalAlignment="Center"
+              Foreground="{DynamicResource Brush.Accent}" />
     <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
       <Button Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
               Content="{loc:Loc AddAccount_SignInGoogle}" Command="{Binding SignInWithGoogleCommand}" />
       <Button Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
               Content="{loc:Loc AddAccount_SignInMicrosoft}" Command="{Binding SignInWithMicrosoftCommand}" />
     </Grid>
-    <TextBlock Text="{loc:Loc AddAccount_OrPassword}" HorizontalAlignment="Center" Opacity="0.6" />
+    <Grid ColumnDefinitions="*,Auto,*" ColumnSpacing="12">
+      <Border Height="1" VerticalAlignment="Center" Background="{DynamicResource Brush.Border}" />
+      <TextBlock Grid.Column="1" Classes="caption" Text="{loc:Loc AddAccount_OrPassword}" />
+      <Border Grid.Column="2" Height="1" VerticalAlignment="Center" Background="{DynamicResource Brush.Border}" />
+    </Grid>
     <TextBox Text="{Binding DisplayName}" PlaceholderText="{loc:Loc AddAccount_DisplayName}" />
     <TextBox Text="{Binding Email}" PlaceholderText="{loc:Loc AddAccount_Email}" />
     <TextBox Text="{Binding Password}" PlaceholderText="{loc:Loc AddAccount_Password}" PasswordChar="●" />
-    <TextBlock Text="{Binding ProviderHint}" TextWrapping="Wrap" Opacity="0.7"
+    <TextBlock Classes="caption" Text="{Binding ProviderHint}" TextWrapping="Wrap"
                IsVisible="{Binding ProviderHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
     <Button Content="{loc:Loc AddAccount_ServerSettings}" Command="{Binding ToggleAdvancedCommand}" HorizontalAlignment="Left" />
@@ -33,7 +39,7 @@
       <CheckBox Grid.Row="1" Grid.Column="3" Content="SSL" IsChecked="{Binding SmtpUseSsl}" />
     </Grid>
 
-    <TextBlock Text="{Binding ErrorMessage}" Foreground="IndianRed" TextWrapping="Wrap"
+    <TextBlock Classes="error" Text="{Binding ErrorMessage}" TextWrapping="Wrap"
                IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
     <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
 

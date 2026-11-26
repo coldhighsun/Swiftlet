@@ -7,13 +7,15 @@
         x:DataType="vm:StartupViewModel"
         Title="{loc:Loc Startup_Title}" Width="480" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterScreen">
-  <StackPanel Margin="20" Spacing="16">
+  <StackPanel Margin="24" Spacing="16">
+    <PathIcon Data="{StaticResource Icon.Logo}" Width="48" Height="40" HorizontalAlignment="Center"
+              Foreground="{DynamicResource Brush.Accent}" />
     <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
     <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
     <WrapPanel HorizontalAlignment="Right" ItemSpacing="8" LineSpacing="8">
       <Button Content="{loc:Loc Startup_Retry}" Command="{Binding RunCommand}" IsVisible="{Binding CanRetry}" />
       <Button Content="{loc:Loc Startup_ContinueUnencrypted}" Command="{Binding ContinueCommand}" IsVisible="{Binding CanContinueUnencrypted}" />
-      <Button Content="{loc:Loc Startup_Reset}" Command="{Binding ResetCommand}" IsVisible="{Binding CanReset}" />
+      <Button Classes="danger" Content="{loc:Loc Startup_Reset}" Command="{Binding ResetCommand}" IsVisible="{Binding CanReset}" />
       <Button Content="{loc:Loc Startup_Quit}" Command="{Binding QuitCommand}" />
     </WrapPanel>
   </StackPanel>
