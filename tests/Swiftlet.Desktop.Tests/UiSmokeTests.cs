@@ -40,7 +40,7 @@ public class UiSmokeTests
     /// <summary>
     /// The shared headless session; Avalonia can only be initialized once per process.
     /// </summary>
-    private static readonly HeadlessUnitTestSession Session = HeadlessUnitTestSession.StartNew(typeof(HeadlessEntry));
+    internal static readonly HeadlessUnitTestSession Session = HeadlessUnitTestSession.StartNew(typeof(HeadlessEntry));
 
     /// <summary>
     /// Renders a window and optionally saves a snapshot.
