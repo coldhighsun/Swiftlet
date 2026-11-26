@@ -164,6 +164,11 @@ public static class SqliteSchemaInitializer
         await context.Database.ExecuteSqlRawAsync(
             "CREATE INDEX IF NOT EXISTS IX_Messages_DeletePending ON Messages (FolderId, Uid) WHERE IsDeletePending = 1;",
             cancellationToken);
+
+        // Covers the unread count of the folder tree, which would otherwise read every row and its message body.
+        await context.Database.ExecuteSqlRawAsync(
+            "CREATE INDEX IF NOT EXISTS IX_Messages_Unread ON Messages (FolderId, IsRead, IsDeletePending);",
+            cancellationToken);
     }
 
     /// <summary>

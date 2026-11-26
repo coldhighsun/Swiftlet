@@ -240,4 +240,41 @@ public class SchemaInitializerTests
 
         count.Should().Be(1);
     }
+
+    /// <summary>
+    /// Verifies counting unread messages reads only an index, never the rows with their message bodies, in a new database
+    /// and in one created by an earlier version.
+    /// </summary>
+    /// <param name="upgraded">Whether the index is missing first, as in an earlier version.</param>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UnreadCountQuery_ReadsOnlyTheIndex(bool upgraded)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        await using var context = await db.Factory.CreateAsync(Guid.NewGuid(), ct);
+        if (upgraded)
+        {
+            await context.Database.ExecuteSqlRawAsync("DROP INDEX IF EXISTS IX_Messages_Unread;", ct);
+            await SqliteSchemaInitializer.InitializeAccountAsync(context, ct);
+        }
+
+        var sql = Swiftlet.Infrastructure.Persistence.Repositories.MessageRepository.UnreadCounts(context).ToQueryString();
+        await context.Database.OpenConnectionAsync(ct);
+        await using var command = context.Database.GetDbConnection().CreateCommand();
+#pragma warning disable CA2100 // The text is the query EF generated from the code above, with no user input.
+        command.CommandText = "EXPLAIN QUERY PLAN " + sql;
+#pragma warning restore CA2100
+        var plan = new List<string>();
+        await using (var reader = await command.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+                plan.Add(reader.GetString(reader.GetOrdinal("detail")));
+            }
+        }
+
+        plan.Should().ContainSingle().Which.Should().Contain("USING COVERING INDEX IX_Messages_Unread");
+    }
 }

@@ -353,8 +353,65 @@ public class MainWindowViewModelTests
         }
 
         await scenario.ViewModel.DeleteSelectedCommand.ExecuteAsync(null);
+        await scenario.ViewModel.WhenIdleAsync();
 
         scenario.ViewModel.UnifiedInbox.UnreadCount.Should().Be(0);
+    }
+
+    /// <summary>
+    /// The first folder is listed while the unread counts are still being read.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Reload_SlowCountQuery_DoesNotDelayTheMessageList()
+    {
+        var scenario = new Scenario();
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        scenario.Dispatcher.OnAsync<GetUnreadCountsQuery>(async (_, _) =>
+        {
+            await gate.Task;
+            return new Dictionary<Guid, int>();
+        });
+
+        await scenario.ViewModel.InitializeAsync().WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+        scenario.ViewModel.Messages.Should().HaveCount(2);
+        gate.SetResult();
+        await scenario.ViewModel.WhenIdleAsync();
+    }
+
+    /// <summary>
+    /// A count that arrives after a newer one was shown is discarded.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Reload_OlderCountArrivesLast_KeepsTheNewerCount()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        scenario.Dispatcher.OnAsync<GetUnreadCountsQuery>(async (_, _) =>
+        {
+            var first = Interlocked.Increment(ref calls) == 1;
+            if (first)
+            {
+                entered.SetResult();
+                await gate.Task;
+            }
+
+            return new Dictionary<Guid, int> { [scenario.Inbox.Id] = first ? 5 : 1 };
+        });
+
+        await scenario.ViewModel.RefreshAsync();
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await scenario.ViewModel.RefreshAsync();
+        await WaitForAsync(() => scenario.ViewModel.UnifiedInbox.UnreadCount == 1);
+        gate.SetResult();
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.ViewModel.UnifiedInbox.UnreadCount.Should().Be(1);
     }
 
     /// <summary>
@@ -2068,7 +2125,7 @@ public class MainWindowViewModelTests
 
         await scenario.ViewModel.ReauthenticateAccountCommand.ExecuteAsync(node);
 
-        var relevant = scenario.Dispatcher.Requests.Where(r => r is ReauthenticateOAuthAccountCommand or SyncAccountCommand).ToList();
+        var relevant = scenario.Dispatcher.Sent<object>().Where(r => r is ReauthenticateOAuthAccountCommand or SyncAccountCommand).ToList();
         relevant.Should().Equal(new ReauthenticateOAuthAccountCommand(scenario.Account.Id), new SyncAccountCommand(scenario.Account.Id));
         scenario.ViewModel.IsBusy.Should().BeFalse();
         scenario.ViewModel.StatusText.Should().NotBeEmpty();

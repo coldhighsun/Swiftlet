@@ -39,6 +39,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly Dictionary<Guid, DateTimeOffset> _folderChecks = [];
 
     /// <summary>
+    /// The unread counts being read.
+    /// </summary>
+    private Task _unreadTask = Task.CompletedTask;
+
+    /// <summary>
+    /// Numbers the unread count requests of each account, so an answer that was overtaken is discarded.
+    /// </summary>
+    private readonly Dictionary<Guid, int> _unreadVersions = [];
+
+    /// <summary>
     /// The clock that spaces out folder checks.
     /// </summary>
     private readonly TimeProvider _timeProvider;
@@ -505,6 +515,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         await _loadTask;
         await _selectionTask;
         await _folderCheckTask;
+        await _unreadTask;
     }
 
     /// <summary>
@@ -663,7 +674,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         });
         foreach (var accountId in keys.Select(k => k.AccountId).Distinct())
         {
-            await RefreshUnreadAsync(accountId);
+            StartUnreadRefresh(accountId);
         }
 
         // Fills the page up again, and brings the messages back if they could not be queued.
@@ -703,7 +714,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         });
         if (queued)
         {
-            await RefreshUnreadAsync(node.Folder.AccountId);
+            StartUnreadRefresh(node.Folder.AccountId);
             RemoveFromList([.. Messages.Where(m => m.Message.FolderId == node.Folder.Id)]);
             await ReloadViewAsync();
         }
@@ -1190,7 +1201,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
-        await RefreshUnreadAsync(item.Message.AccountId);
+        StartUnreadRefresh(item.Message.AccountId);
     }
 
     /// <summary>
@@ -1383,13 +1394,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         await ReloadLabelsAsync();
-        foreach (var node in Accounts.ToList())
-        {
-            await RefreshUnreadAsync(node.Account.Id);
-        }
-
-        // Also covers removed accounts, for which nothing is queried.
-        UpdateUnifiedUnread();
 
         if (SelectedNode is null)
         {
@@ -1407,6 +1411,24 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             ListEmptyState = EmptyState.None;
         }
+
+        foreach (var node in Accounts.ToList())
+        {
+            StartUnreadRefresh(node.Account.Id);
+        }
+
+        // Also covers removed accounts, for which nothing is queried.
+        UpdateUnifiedUnread();
+    }
+
+    /// <summary>
+    /// Starts re-reading the unread counts of an account. Nothing waits for it, so lists, syncs and deletions are not
+    /// held up by the badges.
+    /// </summary>
+    /// <param name="accountId">The account.</param>
+    private void StartUnreadRefresh(Guid accountId)
+    {
+        _unreadTask = Task.WhenAll(_unreadTask, RefreshUnreadAsync(accountId));
     }
 
     /// <summary>
@@ -1416,15 +1438,34 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <returns>A task that completes when the counts are shown or the failure is logged.</returns>
     private async Task RefreshUnreadAsync(Guid accountId)
     {
+        int version;
+        lock (_unreadVersions)
+        {
+            version = _unreadVersions.GetValueOrDefault(accountId) + 1;
+            _unreadVersions[accountId] = version;
+        }
+
         try
         {
-            var counts = await _dispatcher.SendAsync(new GetUnreadCountsQuery(accountId));
-            foreach (var folder in Accounts.Where(a => a.Account.Id == accountId).SelectMany(a => a.Folders))
-            {
-                folder.UnreadCount = counts.GetValueOrDefault(folder.Folder.Id);
-            }
+            // Database calls complete synchronously, so they are moved off the UI thread.
+            var counts = await Task.Run(() => _dispatcher.SendAsync(new GetUnreadCountsQuery(accountId)));
 
-            UpdateUnifiedUnread();
+            // The application continues on the UI thread; the lock matters where there is none (tests).
+            lock (_unreadVersions)
+            {
+                if (_unreadVersions[accountId] != version)
+                {
+                    // A later change asked again; its answer is the current one.
+                    return;
+                }
+
+                foreach (var folder in Accounts.Where(a => a.Account.Id == accountId).SelectMany(a => a.Folders))
+                {
+                    folder.UnreadCount = counts.GetValueOrDefault(folder.Folder.Id);
+                }
+
+                UpdateUnifiedUnread();
+            }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

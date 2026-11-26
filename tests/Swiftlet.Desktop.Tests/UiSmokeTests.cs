@@ -1181,6 +1181,31 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies the unread counts are read away from the UI thread, which database calls would otherwise block.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_UnreadCounts_AreReadOffTheUiThread()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var scenario = new MainWindowViewModelTests.Scenario();
+                var onUiThread = new List<bool>();
+                scenario.Dispatcher.On<Swiftlet.Application.Queries.GetUnreadCountsQuery>(_ =>
+                {
+                    onUiThread.Add(Dispatcher.UIThread.CheckAccess());
+                    return new Dictionary<Guid, int> { [scenario.Inbox.Id] = 7 };
+                });
+
+                await scenario.StartAsync();
+
+                onUiThread.Should().NotBeEmpty().And.OnlyContain(v => !v);
+                scenario.ViewModel.UnifiedInbox.UnreadCount.Should().Be(7);
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Reads the color of a solid brush.
     /// </summary>
     /// <param name="brush">The brush.</param>

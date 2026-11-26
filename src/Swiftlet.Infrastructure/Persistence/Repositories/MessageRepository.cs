@@ -176,11 +176,20 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
     public async Task<IReadOnlyDictionary<Guid, int>> CountUnreadByFolderAsync(Guid accountId, CancellationToken cancellationToken = default)
     {
         var context = await contexts.GetAsync(accountId, cancellationToken);
-        return await context.Messages
+        return await UnreadCounts(context).ToDictionaryAsync(c => c.FolderId, c => c.Count, cancellationToken);
+    }
+
+    /// <summary>
+    /// Builds the query counting unread messages per folder; <c>IX_Messages_Unread</c> covers it, so no row is read.
+    /// </summary>
+    /// <param name="context">The account database.</param>
+    /// <returns>The query.</returns>
+    internal static IQueryable<UnreadFolderCount> UnreadCounts(AccountDbContext context)
+    {
+        return context.Messages
             .Where(m => !m.IsRead && !m.IsDeletePending)
             .GroupBy(m => m.FolderId)
-            .Select(g => new { FolderId = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(g => g.FolderId, g => g.Count, cancellationToken);
+            .Select(g => new UnreadFolderCount(g.Key, g.Count()));
     }
 
     /// <inheritdoc />

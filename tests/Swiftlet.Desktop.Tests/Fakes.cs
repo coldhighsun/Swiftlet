@@ -19,7 +19,7 @@ internal sealed class FakeDispatcher : IRequestDispatcher
     /// <summary>
     /// The registered handlers keyed by request type.
     /// </summary>
-    private readonly Dictionary<Type, Func<object, CancellationToken, Task<object?>>> _handlers = [];
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Type, Func<object, CancellationToken, Task<object?>>> _handlers = new();
 
     /// <summary>
     /// Gets the requests received, in order.
@@ -53,7 +53,11 @@ internal sealed class FakeDispatcher : IRequestDispatcher
     /// <returns>The matching requests.</returns>
     public List<TRequest> Sent<TRequest>()
     {
-        return [.. Requests.OfType<TRequest>()];
+        // Locked because requests are also sent, and recorded, from thread-pool threads.
+        lock (Requests)
+        {
+            return [.. Requests.OfType<TRequest>()];
+        }
     }
 
     /// <inheritdoc />
@@ -77,7 +81,7 @@ internal sealed class FakeDispatcher : IRequestDispatcher
     /// <returns>The response.</returns>
     private async Task<TResponse> Dispatch<TResponse>(object request, CancellationToken cancellationToken)
     {
-        // Locked because the folder check is sent from a thread-pool thread while other requests are recorded.
+        // Locked because folder checks and unread counts are sent from thread-pool threads.
         lock (Requests)
         {
             Requests.Add(request);
