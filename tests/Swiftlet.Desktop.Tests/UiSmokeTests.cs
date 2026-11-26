@@ -1016,6 +1016,46 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies each attachment of a new message has a named remove button, and the address rows are borderless.
+    /// </summary>
+    [Fact]
+    public async Task ComposeWindow_WithAttachment_ShowsNamedRemoveButton()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference("en");
+                var account = TestData.Account();
+                var dialogs = new FakeDialogService();
+                dialogs.PickedFiles.Add(Path.Combine(Path.GetTempPath(), "swiftlet-missing-notes.txt"));
+                var viewModel = new ComposeViewModel(
+                    new FakeDispatcher(),
+                    dialogs,
+                    TestLocalizer.English(),
+                    [account],
+                    new ComposeRequest(ComposeMode.New, account.Id, string.Empty, string.Empty, string.Empty, null));
+                await viewModel.AddAttachmentsCommand.ExecuteAsync(null);
+                var window = new ComposeWindow { DataContext = viewModel };
+                Render(window, "compose-attachment", "en");
+
+                window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).Should().Contain("swiftlet-missing-notes.txt");
+                var remove = window.GetVisualDescendants().OfType<Button>()
+                    .Single(b => UiQueries.Caption(b) == "Remove attachment");
+                ToolTip.GetTip(remove).Should().Be("Remove attachment");
+                window.GetVisualDescendants().OfType<TextBox>().Where(t => t.Classes.Contains("flat")).Should().HaveCount(5);
+                var border = window.GetVisualDescendants().OfType<TextBox>().First(t => t.Classes.Contains("flat"))
+                    .GetVisualDescendants().OfType<Border>().First(b => b.Name == "PART_BorderElement");
+                border.BorderThickness.Should().Be(new Thickness(0));
+
+                remove.Command!.Execute(null);
+
+                viewModel.Attachments.Should().BeEmpty();
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Reads the color of a solid brush.
     /// </summary>
     /// <param name="brush">The brush.</param>

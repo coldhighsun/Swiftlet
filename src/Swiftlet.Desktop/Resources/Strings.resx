@@ -189,4 +189,5 @@
   <data name="Empty_NoAccounts" xml:space="preserve"><value>Add a mail account to get started</value></data>
   <data name="Empty_View" xml:space="preserve"><value>No messages here</value></data>
   <data name="Empty_Search" xml:space="preserve"><value>No messages match your search</value></data>
+  <data name="Compose_RemoveAttachment" xml:space="preserve"><value>Remove attachment</value></data>
 </root>
