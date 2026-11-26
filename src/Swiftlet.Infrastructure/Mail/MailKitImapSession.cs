@@ -581,17 +581,7 @@ internal sealed class MailKitImapSession(ImapClient client, ILogger<MailKitImapS
     public async Task<bool> AppendToSentAsync(ReadOnlyMemory<byte> rfc822, CancellationToken cancellationToken = default)
     {
         logger.LogDebug("Appending a {Size} byte copy to the Sent folder", rfc822.Length);
-        IMailFolder? sent;
-        try
-        {
-            sent = client.GetFolder(SpecialFolder.Sent);
-        }
-        catch (NotSupportedException)
-        {
-            // The server advertises neither SPECIAL-USE nor XLIST, so the Sent folder cannot be identified.
-            return false;
-        }
-
+        var sent = await FindSentFolderAsync(cancellationToken);
         if (sent is null)
         {
             return false;
@@ -600,7 +590,31 @@ internal sealed class MailKitImapSession(ImapClient client, ILogger<MailKitImapS
         using var stream = new MemoryStream(rfc822.ToArray());
         var message = await MimeMessage.LoadAsync(stream, cancellationToken);
         await sent.AppendAsync(message, MessageFlags.Seen, cancellationToken);
+        logger.LogDebug("Saved the sent copy in {Folder}", sent.FullName);
         return true;
+    }
+
+    /// <summary>
+    /// Finds the Sent folder: first through MailKit's special folders, then by the attributes in the folder listing.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The folder, or <see langword="null"/> if the server marks none as Sent.</returns>
+    private async Task<IMailFolder?> FindSentFolderAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (client.GetFolder(SpecialFolder.Sent) is { } special)
+            {
+                return special;
+            }
+        }
+        catch (NotSupportedException)
+        {
+            // The server advertises neither SPECIAL-USE nor XLIST; its folder listing may still mark the Sent folder.
+        }
+
+        var fullName = SentFolderLocator.Find(await ListFoldersAsync(cancellationToken));
+        return fullName is null ? null : await client.GetFolderAsync(fullName, cancellationToken);
     }
 
     /// <inheritdoc />
