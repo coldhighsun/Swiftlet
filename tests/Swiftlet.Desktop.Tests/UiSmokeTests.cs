@@ -43,6 +43,25 @@ public class UiSmokeTests
     internal static readonly HeadlessUnitTestSession Session = HeadlessUnitTestSession.StartNew(typeof(HeadlessEntry));
 
     /// <summary>
+    /// Runs an asynchronous test body on the UI thread and waits for all of it. Passing an async lambda straight to
+    /// <see cref="HeadlessUnitTestSession.Dispatch{TResult}(Func{TResult}, CancellationToken)"/> only starts it, so a
+    /// failed assertion would be lost; returning a value selects the overload that awaits.
+    /// </summary>
+    /// <param name="body">The test body.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes with <see langword="true"/> when the body has completed.</returns>
+    private static Task<bool> DispatchAsync(Func<Task> body, CancellationToken cancellationToken)
+    {
+        return Session.Dispatch(
+            async () =>
+            {
+                await body();
+                return true;
+            },
+            cancellationToken);
+    }
+
+    /// <summary>
     /// Renders a window and optionally saves a snapshot.
     /// </summary>
     /// <param name="window">The window.</param>
@@ -78,7 +97,7 @@ public class UiSmokeTests
     [Fact]
     public async Task MainWindow_WithSelectedMessage_ShowsTreeListAndReader()
     {
-        await Session.Dispatch(
+        await DispatchAsync(
             async () =>
             {
                 var scenario = new MainWindowViewModelTests.Scenario();
@@ -91,12 +110,13 @@ public class UiSmokeTests
                 var window = new MainWindow { DataContext = scenario.ViewModel };
                 Render(window, "main-window");
 
-                window.GetVisualDescendants().OfType<TreeView>().Single().ItemCount.Should().Be(1);
+                window.GetVisualDescendants().OfType<TreeView>().Single().ItemCount.Should().Be(3, "the unified inbox, the account and the label");
                 window.GetVisualDescendants().OfType<ListBox>().Single().ItemCount.Should().Be(2);
                 var texts = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
                 texts.Should().Contain("Hello 2");
                 texts.Should().Contain(t => t != null && t.Contains("line one", StringComparison.Ordinal));
-                texts.Should().NotContain("选择一封邮件阅读");
+                window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Text == "选择一封邮件阅读")
+                    .Should().OnlyContain(t => !t.IsEffectivelyVisible);
                 window.GetVisualDescendants().OfType<Button>()
                     .Should().Contain(b => (b.Content as string) != null && ((string)b.Content!).Contains("quarterly-report.pdf", StringComparison.Ordinal));
                 window.Close();
@@ -110,7 +130,7 @@ public class UiSmokeTests
     [Fact]
     public async Task MainWindow_HtmlMessageSelected_ShowsHtmlBodyView()
     {
-        await Session.Dispatch(
+        await DispatchAsync(
             async () =>
             {
                 var scenario = new MainWindowViewModelTests.Scenario();
@@ -125,7 +145,7 @@ public class UiSmokeTests
                 var htmlView = window.GetVisualDescendants().OfType<Swiftlet.Desktop.Controls.HtmlBodyView>().Single();
                 htmlView.IsVisible.Should().BeTrue();
                 htmlView.Document.Should().Contain("<p>rich</p>");
-                window.GetVisualDescendants().OfType<SelectableTextBlock>().Single().IsVisible.Should().BeFalse();
+                window.GetVisualDescendants().OfType<ScrollViewer>().Single(v => v.Content is SelectableTextBlock).IsVisible.Should().BeFalse();
                 window.Close();
             },
             TestContext.Current.CancellationToken);
@@ -137,7 +157,7 @@ public class UiSmokeTests
     [Fact]
     public async Task MainWindow_LanguageSwitchedAtRuntime_RelabelsControls()
     {
-        await Session.Dispatch(
+        await DispatchAsync(
             async () =>
             {
                 var scenario = new MainWindowViewModelTests.Scenario();
@@ -207,7 +227,7 @@ public class UiSmokeTests
     [InlineData("zh-Hans", "重置本地数据…")]
     public async Task StartupWindow_KeyLost_ShowsResetButton(string language, string reset)
     {
-        await Session.Dispatch(
+        await DispatchAsync(
             async () =>
             {
                 var protection = new FakeDatabaseProtection();
@@ -236,7 +256,7 @@ public class UiSmokeTests
     [Fact]
     public async Task MainWindow_NothingSelected_ShowsPlaceholder()
     {
-        await Session.Dispatch(
+        await DispatchAsync(
             async () =>
             {
                 var scenario = new MainWindowViewModelTests.Scenario();
@@ -306,7 +326,7 @@ public class UiSmokeTests
     [InlineData("en", "Unified Inbox", "Delete")]
     public async Task MainWindow_WithUnifiedInboxAndLabels_Renders(string language, string unifiedInbox, string delete)
     {
-        await Session.Dispatch(
+        await DispatchAsync(
             async () =>
             {
                 LocalizationManager.Instance.SetPreference(language);
@@ -340,7 +360,7 @@ public class UiSmokeTests
     [InlineData("en", "Remote images were blocked to protect your privacy.", "Load images")]
     public async Task MainWindow_RemoteImagesBlocked_ShowsBannerUntilLoaded(string language, string notice, string loadButton)
     {
-        await Session.Dispatch(
+        await DispatchAsync(
             async () =>
             {
                 LocalizationManager.Instance.SetPreference(language);
@@ -383,7 +403,7 @@ public class UiSmokeTests
         string senderText,
         string domainText)
     {
-        await Session.Dispatch(
+        await DispatchAsync(
             async () =>
             {
                 LocalizationManager.Instance.SetPreference(language);
@@ -428,7 +448,7 @@ public class UiSmokeTests
         string add,
         string remove)
     {
-        await Session.Dispatch(
+        await DispatchAsync(
             async () =>
             {
                 LocalizationManager.Instance.SetPreference(language);
@@ -466,7 +486,7 @@ public class UiSmokeTests
     [InlineData("en", "Manage labels", "Add", "Save")]
     public async Task LabelManagerWindow_Renders(string language, string title, string add, string save)
     {
-        await Session.Dispatch(
+        await DispatchAsync(
             async () =>
             {
                 LocalizationManager.Instance.SetPreference(language);
@@ -540,7 +560,7 @@ public class UiSmokeTests
     [Fact]
     public async Task MainWindow_LabelsFlyout_TickingLabelSendsCommand()
     {
-        await Session.Dispatch(
+        await DispatchAsync(
             async () =>
             {
                 LocalizationManager.Instance.SetPreference("en");
@@ -576,7 +596,7 @@ public class UiSmokeTests
     [Fact]
     public async Task MainWindow_AccountNodeContextMenu_OffersDeleteAndOAuthOnlyReauthenticate()
     {
-        await Session.Dispatch(
+        await DispatchAsync(
             async () =>
             {
                 LocalizationManager.Instance.SetPreference("en");
@@ -613,7 +633,7 @@ public class UiSmokeTests
     [Fact]
     public async Task MainWindow_MessageList_MultiSelectionAndDeleteKeyDeleteAll()
     {
-        await Session.Dispatch(
+        await DispatchAsync(
             async () =>
             {
                 LocalizationManager.Instance.SetPreference("en");
@@ -653,7 +673,7 @@ public class UiSmokeTests
     [Fact]
     public async Task MainWindow_MessageList_RightClickKeepsMultiSelection()
     {
-        await Session.Dispatch(
+        await DispatchAsync(
             async () =>
             {
                 LocalizationManager.Instance.SetPreference("en");
@@ -684,7 +704,7 @@ public class UiSmokeTests
     [Fact]
     public async Task MainWindow_FolderNodeContextMenu_OffersDeleteAllExceptForAllMail()
     {
-        await Session.Dispatch(
+        await DispatchAsync(
             async () =>
             {
                 LocalizationManager.Instance.SetPreference("en");
