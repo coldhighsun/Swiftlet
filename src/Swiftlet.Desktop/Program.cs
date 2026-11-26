@@ -2,6 +2,7 @@ using Avalonia;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Serilog;
 using Swiftlet.Application;
 using Swiftlet.Application.Abstractions;
@@ -12,6 +13,7 @@ using Swiftlet.Desktop.ViewModels;
 using Swiftlet.Infrastructure;
 using Swiftlet.Infrastructure.Mail;
 using Swiftlet.Infrastructure.Persistence;
+using Swiftlet.Infrastructure.Security;
 
 namespace Swiftlet.Desktop;
 
@@ -38,6 +40,7 @@ internal static class Program
             typeof(Program).Assembly.GetName().Version,
             System.Runtime.InteropServices.RuntimeInformation.OSDescription,
             dataDirectory);
+        ProtectDataDirectory(dataDirectory, logger);
         builder.Services.AddApplication();
         builder.Services.AddInfrastructure(dataDirectory);
         var settings = builder.Services.AddAppSettings(Path.Combine(dataDirectory, "settings.json"));
@@ -47,6 +50,7 @@ internal static class Program
         builder.Services.AddSingleton<IRequestDispatcher, ScopedRequestDispatcher>();
         builder.Services.AddSingleton<IDialogService, AvaloniaDialogService>();
         builder.Services.AddSingleton<IUiThread, AvaloniaUiThread>();
+        builder.Services.AddSingleton(sp => new HtmlPreviewStore(Path.GetTempPath(), sp.GetService<ILogger<HtmlPreviewStore>>()));
         builder.Services.AddSingleton<MainWindowViewModel>();
         builder.Services.AddTransient<AddAccountViewModel>();
         builder.Services.AddTransient<LabelManagerViewModel>();
@@ -55,6 +59,9 @@ internal static class Program
 
         using var host = builder.Build();
         InitializeDatabaseAsync(host.Services).GetAwaiter().GetResult();
+        // Mail previews are plain text: those a crashed run left behind are removed now, this run's own ones on exit.
+        var previews = host.Services.GetRequiredService<HtmlPreviewStore>();
+        previews.RemoveLeftovers();
         host.Start();
         try
         {
@@ -62,8 +69,27 @@ internal static class Program
         }
         finally
         {
+            previews.Clear();
             HostShutdown.Stop(host, logger);
             logger.Information("Swiftlet stopped");
+        }
+    }
+
+    /// <summary>
+    /// Keeps other local users out of the mail data.
+    /// </summary>
+    /// <param name="dataDirectory">The application data directory.</param>
+    /// <param name="logger">The logger.</param>
+    private static void ProtectDataDirectory(string dataDirectory, Serilog.ILogger logger)
+    {
+        try
+        {
+            DataDirectoryProtection.RestrictToCurrentUser(dataDirectory);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Some file systems refuse permission changes; the application still works, so it starts anyway.
+            logger.Warning(ex, "Could not restrict access to the data directory {DataDirectory}", dataDirectory);
         }
     }
 

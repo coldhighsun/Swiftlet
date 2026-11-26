@@ -159,8 +159,7 @@ public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogSe
     /// <inheritdoc />
     public void ShowHtmlInBrowser(string html)
     {
-        var path = Path.Combine(Path.GetTempPath(), $"swiftlet-{Guid.NewGuid():N}.html");
-        File.WriteAllText(path, HtmlPreviewFile.Build(html));
+        var path = services.GetRequiredService<HtmlPreviewStore>().Write(html);
         Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
     }
 }
