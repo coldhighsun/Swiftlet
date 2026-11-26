@@ -159,6 +159,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         localizer.LanguageChanged += (_, _) => RefreshLanguage();
         _syncEvents.AccountSynced += OnAccountSynced;
         _syncEvents.BackfillProgressed += OnBackfillProgressed;
+        _syncEvents.DeletionProgressed += OnDeletionProgressed;
+        SelectedMessages.CollectionChanged += (_, _) => DeleteSelectedCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>
@@ -173,6 +175,48 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         _syncEvents.AccountSynced -= OnAccountSynced;
         _syncEvents.BackfillProgressed -= OnBackfillProgressed;
+        _syncEvents.DeletionProgressed -= OnDeletionProgressed;
+    }
+
+    /// <summary>
+    /// Shows how the background deletion is doing and reloads the view when a run ends or messages come back; may be called from any thread.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OnDeletionProgressed(object? sender, DeletionProgressEventArgs e)
+    {
+        lock (_refreshGate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+        }
+
+        _ = ObserveAsync(_uiThread.InvokeAsync(() =>
+        {
+            if (e.Error is { } error)
+            {
+                var failure = e.WillRetry ? _localizer["Status_DeleteRetrying"] : _localizer["Error_DeleteRejected"];
+                StatusText = _localizer.Format("Error_Format", failure, error);
+            }
+            else if (e.Finished)
+            {
+                StatusText = _localizer.Format("Status_DeleteDone", e.Deleted);
+            }
+            else
+            {
+                StatusText = _localizer.Format("Status_Deleting", e.Deleted, e.Remaining);
+            }
+
+            // Moved messages appear in Trash and refused ones come back, so the view is reloaded.
+            if (e.Finished || (e.Error is not null && !e.WillRetry))
+            {
+                ScheduleRefresh();
+            }
+
+            return Task.CompletedTask;
+        }));
     }
 
     /// <summary>
@@ -212,11 +256,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Schedules a coalesced refresh on the UI thread; may be called from any thread.
+    /// Refreshes the view after an account was synchronized; may be called from any thread.
     /// </summary>
     /// <param name="sender">The event sender.</param>
     /// <param name="e">The event arguments.</param>
     private void OnAccountSynced(object? sender, AccountSyncedEventArgs e)
+    {
+        ScheduleRefresh();
+    }
+
+    /// <summary>
+    /// Schedules a coalesced refresh on the UI thread; may be called from any thread.
+    /// </summary>
+    private void ScheduleRefresh()
     {
         lock (_refreshGate)
         {
@@ -320,6 +372,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// Gets the messages of the selected folder or search.
     /// </summary>
     public ObservableCollection<MessageItemViewModel> Messages { get; } = [];
+
+    /// <summary>
+    /// Gets the messages selected in the list; the list control keeps it up to date.
+    /// </summary>
+    public ObservableCollection<MessageItemViewModel> SelectedMessages { get; } = [];
 
     /// <summary>
     /// Gets one checkable entry per existing label for the selected message; empty when no message is selected.
@@ -522,36 +579,172 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Deletes the selected message on the mail server after the user confirmed, then removes it from the list.
+    /// Deletes the selected messages after the user confirmed. They leave the list at once; the mail server is told in the background.
     /// </summary>
-    /// <returns>A task that completes when the deletion has finished or been cancelled.</returns>
-    [RelayCommand(CanExecute = nameof(HasSelectedMessage))]
+    /// <returns>A task that completes when the deletion has been queued or cancelled.</returns>
+    [RelayCommand(CanExecute = nameof(HasSelection), AllowConcurrentExecutions = true)]
     private async Task DeleteSelectedAsync()
     {
-        var item = SelectedMessage!;
-        var text = WillDeletePermanently(item.Message)
-            ? _localizer.Format("Confirm_Delete_Permanent", item.Subject)
-            : _localizer.Format("Confirm_Delete_ToTrash", item.Subject);
-        if (!await _dialogs.ConfirmAsync(
-                _localizer["Confirm_Delete_Title"],
-                text,
-                _localizer["Toolbar_Delete"]))
+        var targets = DeletionTargets();
+        if (targets.Count == 0 || !await ConfirmDeletionAsync(targets))
         {
             return;
         }
 
+        var keys = targets.Select(t => new MessageKey(t.Message.AccountId, t.Id)).ToList();
+        RemoveFromList(targets);
         await GuardedAsync("Error_DeleteMessage", async () =>
         {
-            var outcome = await _dispatcher.SendAsync(new DeleteMessageCommand(item.Message.AccountId, item.Id));
-            if (SelectedMessage == item)
-            {
-                SelectedMessage = null;
-            }
+            await _dispatcher.SendAsync(new DeleteMessagesCommand(keys));
+            StatusText = _localizer.Format("Status_DeleteQueued", keys.Count);
+        });
 
+        // Fills the page up again, and brings the messages back if they could not be queued.
+        await ReloadViewAsync();
+    }
+
+    /// <summary>
+    /// Deletes every message of a folder after the user confirmed, including those that were never downloaded.
+    /// </summary>
+    /// <param name="node">The folder node the menu was opened on.</param>
+    /// <returns>A task that completes when the deletion has been queued or cancelled.</returns>
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private async Task EmptyFolderAsync(FolderNodeViewModel? node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        if (!node.CanEmpty)
+        {
+            return;
+        }
+
+        var permanent = node.Folder.Role == FolderRole.Trash || !HasTrash(node.Folder.AccountId);
+        var text = permanent
+            ? _localizer.Format("Confirm_EmptyFolder_Permanent", node.Name, node.Account.EmailAddress)
+            : _localizer.Format("Confirm_EmptyFolder_ToTrash", node.Name, node.Account.EmailAddress);
+        if (!await _dialogs.ConfirmAsync(_localizer["Confirm_EmptyFolder_Title"], text, _localizer["Toolbar_Delete"]))
+        {
+            return;
+        }
+
+        var queued = false;
+        await GuardedAsync("Error_EmptyFolder", async () =>
+        {
+            queued = await _dispatcher.SendAsync(new EmptyFolderCommand(node.Folder.AccountId, node.Folder.Id));
+            StatusText = queued
+                ? _localizer.Format("Status_EmptyQueued", node.Name)
+                : _localizer.Format("Status_NothingToDelete", node.Name);
+        });
+        if (queued)
+        {
+            RemoveFromList([.. Messages.Where(m => m.Message.FolderId == node.Folder.Id)]);
+            await ReloadViewAsync();
+        }
+    }
+
+    /// <summary>
+    /// Gets the messages a delete applies to, in list order: the selection, or the message shown in the reading pane.
+    /// </summary>
+    /// <returns>The messages to delete.</returns>
+    private List<MessageItemViewModel> DeletionTargets()
+    {
+        var selected = SelectedMessages.ToHashSet();
+        if (selected.Count == 0 && SelectedMessage is { } single)
+        {
+            selected.Add(single);
+        }
+
+        return [.. Messages.Where(selected.Contains)];
+    }
+
+    /// <summary>
+    /// Asks the user once to confirm a deletion, saying whether the messages can still be recovered from Trash.
+    /// </summary>
+    /// <param name="targets">The messages to delete.</param>
+    /// <returns><see langword="true"/> if the user confirmed.</returns>
+    private async Task<bool> ConfirmDeletionAsync(List<MessageItemViewModel> targets)
+    {
+        var permanent = targets.Count(t => WillDeletePermanently(t.Message));
+        string text;
+        if (targets.Count == 1)
+        {
+            text = permanent == 1
+                ? _localizer.Format("Confirm_Delete_Permanent", targets[0].Subject)
+                : _localizer.Format("Confirm_Delete_ToTrash", targets[0].Subject);
+        }
+        else if (permanent == 0)
+        {
+            text = _localizer.Format("Confirm_DeleteMany_ToTrash", targets.Count);
+        }
+        else if (permanent == targets.Count)
+        {
+            text = _localizer.Format("Confirm_DeleteMany_Permanent", targets.Count);
+        }
+        else
+        {
+            text = _localizer.Format("Confirm_DeleteMany_Mixed", targets.Count - permanent, permanent);
+        }
+
+        return await _dialogs.ConfirmAsync(_localizer["Confirm_Delete_Title"], text, _localizer["Toolbar_Delete"]);
+    }
+
+    /// <summary>
+    /// Takes messages out of the list at once. If the shown message is among them, the next remaining one is selected.
+    /// </summary>
+    /// <param name="removed">The messages to remove.</param>
+    private void RemoveFromList(List<MessageItemViewModel> removed)
+    {
+        if (removed.Count == 0)
+        {
+            return;
+        }
+
+        // A load that started before the deletion would bring the messages back, so its result is discarded.
+        _loadVersion++;
+        var gone = removed.ToHashSet();
+        MessageItemViewModel? next = null;
+        if (SelectedMessage is { } shown && gone.Contains(shown))
+        {
+            var index = Math.Max(0, Messages.IndexOf(shown));
+            next = Messages.Skip(index).FirstOrDefault(m => !gone.Contains(m))
+                ?? Messages.Take(index).LastOrDefault(m => !gone.Contains(m));
+            SelectedMessage = null;
+        }
+
+        SelectedMessages.Clear();
+        foreach (var item in gone)
+        {
             Messages.Remove(item);
-            StatusText = outcome == DeleteOutcome.MovedToTrash
-                ? _localizer["Status_MovedToTrash"]
-                : _localizer["Status_DeletedPermanently"];
+        }
+
+        if (next is not null)
+        {
+            SelectedMessage = next;
+        }
+    }
+
+    /// <summary>
+    /// Reloads the listed view, a search included, keeping the pages already loaded.
+    /// </summary>
+    /// <returns>A task that completes when the list has been replaced.</returns>
+    private async Task ReloadViewAsync()
+    {
+        if (_shownSearchText is not { } search)
+        {
+            _loadTask = LoadMessagesAsync(SelectedNode, keepLoaded: true);
+            await _loadTask;
+            return;
+        }
+
+        var version = ++_loadVersion;
+        var take = Math.Max(PageSize, Messages.Count);
+        await GuardedAsync("Error_Search", async () =>
+        {
+            var results = await FetchPageAsync(SelectedNode, search, 0, take);
+            if (version == _loadVersion)
+            {
+                _hasMore = results.Count >= take;
+                ReplaceMessages(results);
+            }
         });
     }
 
@@ -640,7 +833,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         var inTrash = folders.Any(f => f.Folder.Id == message.FolderId && f.Folder.Role == FolderRole.Trash);
-        return inTrash || !folders.Any(f => f.Folder.Role == FolderRole.Trash);
+        return inTrash || !HasTrash(message.AccountId);
+    }
+
+    /// <summary>
+    /// Determines whether a loaded account has a Trash folder.
+    /// </summary>
+    /// <param name="accountId">The account identifier.</param>
+    /// <returns><see langword="true"/> if deleted messages of the account can be moved to Trash.</returns>
+    private bool HasTrash(Guid accountId)
+    {
+        return Accounts.Any(a => a.Account.Id == accountId && a.Folders.Any(f => f.Folder.Role == FolderRole.Trash));
     }
 
     /// <summary>
@@ -723,6 +926,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// Gets a value indicating whether a message is selected.
     /// </summary>
     private bool HasSelectedMessage => SelectedMessage is not null;
+
+    /// <summary>
+    /// Gets a value indicating whether there is at least one message to delete.
+    /// </summary>
+    private bool HasSelection => SelectedMessage is not null || SelectedMessages.Count > 0;
 
     /// <summary>
     /// Gets a value indicating whether the selected message has an HTML body.

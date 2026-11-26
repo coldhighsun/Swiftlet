@@ -261,4 +261,38 @@ public class MailMessageAndFolderTests
         copy.Attachments.Select(a => a.MessageId).Should().OnlyContain(id => id == copy.Id);
         original.Attachments.Should().HaveCount(2);
     }
+
+    /// <summary>
+    /// Verifies a second empty request never lowers the boundary of the first.
+    /// </summary>
+    [Fact]
+    public void RequestEmpty_LowerSecondBoundary_KeepsHigherOne()
+    {
+        var folder = Swiftlet.Domain.Folders.MailFolder.Create(Guid.NewGuid(), "INBOX", "Inbox", Swiftlet.Domain.Folders.FolderRole.Inbox);
+
+        folder.RequestEmpty(20);
+        folder.RequestEmpty(10);
+
+        folder.EmptyThroughUid.Should().Be(20u);
+        folder.ClearEmptyRequest();
+        folder.EmptyThroughUid.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Verifies a changed UIDVALIDITY abandons the empty request, whose UIDs no longer mean anything.
+    /// </summary>
+    [Fact]
+    public void UpdateUidValidity_Changed_ClearsEmptyRequest()
+    {
+        var folder = Swiftlet.Domain.Folders.MailFolder.Create(Guid.NewGuid(), "INBOX", "Inbox", Swiftlet.Domain.Folders.FolderRole.Inbox);
+        folder.UpdateUidValidity(1);
+        folder.RequestEmpty(20);
+
+        folder.UpdateUidValidity(1);
+        var kept = folder.EmptyThroughUid;
+        folder.UpdateUidValidity(2);
+
+        kept.Should().Be(20u);
+        folder.EmptyThroughUid.Should().BeNull();
+    }
 }

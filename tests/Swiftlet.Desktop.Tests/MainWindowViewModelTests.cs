@@ -1010,7 +1010,7 @@ public class MainWindowViewModelTests
         await scenario.ViewModel.DeleteSelectedCommand.ExecuteAsync(null);
 
         scenario.Dialogs.Confirmations.Should().ContainSingle();
-        scenario.Dispatcher.Sent<DeleteMessageCommand>().Should().BeEmpty();
+        scenario.Dispatcher.Sent<DeleteMessagesCommand>().Should().BeEmpty();
         scenario.ViewModel.Messages.Should().HaveCount(2);
     }
 
@@ -1024,6 +1024,7 @@ public class MainWindowViewModelTests
         var trash = TestData.Folder(scenario.Account, "Trash", FolderRole.Trash);
         scenario.Dispatcher.On<GetFoldersQuery>(_ => new List<MailFolder> { scenario.Inbox, trash });
         scenario.Messages.Add(TestData.Message(scenario.Account, trash, 3, "Old news"));
+        scenario.Dispatcher.On<GetMessagesQuery>(_ => scenario.Messages.ToList());
         await scenario.StartAsync();
         scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages.Single(m => m.Subject == "Old news");
 
@@ -1071,62 +1072,226 @@ public class MainWindowViewModelTests
     }
 
     /// <summary>
-    /// Verifies a confirmed delete sends the command and removes the message from the list.
+    /// Verifies a confirmed delete queues the message, removes it at once and selects the next one.
     /// </summary>
     [Fact]
-    public async Task DeleteSelected_Confirmed_SendsCommandAndRemovesFromList()
+    public async Task DeleteSelected_Confirmed_SendsCommandRemovesAndSelectsNext()
     {
         var scenario = new Scenario();
         scenario.Dialogs.ConfirmResult = true;
-        scenario.Dispatcher.On<DeleteMessageCommand>(_ => DeleteOutcome.MovedToTrash);
+        scenario.Dispatcher.On<DeleteMessagesCommand>(c =>
+        {
+            scenario.Messages.RemoveAll(m => c.Messages.Any(k => k.MessageId == m.Id));
+            return c.Messages.Count;
+        });
         await scenario.StartAsync();
         var item = scenario.ViewModel.Messages[0];
+        var next = scenario.ViewModel.Messages[1];
         scenario.ViewModel.SelectedMessage = item;
 
         await scenario.ViewModel.DeleteSelectedCommand.ExecuteAsync(null);
 
-        scenario.Dispatcher.Sent<DeleteMessageCommand>().Should().ContainSingle().Which.MessageId.Should().Be(item.Id);
-        scenario.ViewModel.Messages.Should().NotContain(item).And.HaveCount(1);
-        scenario.ViewModel.SelectedMessage.Should().BeNull();
+        var sent = scenario.Dispatcher.Sent<DeleteMessagesCommand>().Should().ContainSingle().Which;
+        sent.Messages.Should().Equal(new MessageKey(scenario.Account.Id, item.Id));
+        scenario.ViewModel.Messages.Should().Equal(next);
+        scenario.ViewModel.SelectedMessage.Should().BeSameAs(next);
+        scenario.ViewModel.StatusText.Should().Be("正在后台删除 1 封邮件");
     }
 
     /// <summary>
-    /// Verifies a server failure keeps the message listed and reports the error.
+    /// Verifies several selected messages are confirmed once, with their number, and queued together.
     /// </summary>
     [Fact]
-    public async Task DeleteSelected_ServerFails_KeepsMessageAndShowsError()
+    public async Task DeleteSelected_MultipleMessages_ConfirmsOnceAndQueuesAll()
     {
         var scenario = new Scenario();
         scenario.Dialogs.ConfirmResult = true;
-        scenario.Dispatcher.On<DeleteMessageCommand>(_ => throw new IOException("server down"));
+        var trash = TestData.Folder(scenario.Account, "Trash", FolderRole.Trash);
+        scenario.Dispatcher.On<GetFoldersQuery>(_ => new List<MailFolder> { scenario.Inbox, trash });
+        scenario.Dispatcher.On<DeleteMessagesCommand>(c =>
+        {
+            scenario.Messages.Clear();
+            return c.Messages.Count;
+        });
+        await scenario.StartAsync();
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+        scenario.ViewModel.SelectedMessages.Clear();
+        foreach (var item in scenario.ViewModel.Messages)
+        {
+            scenario.ViewModel.SelectedMessages.Add(item);
+        }
+
+        await scenario.ViewModel.DeleteSelectedCommand.ExecuteAsync(null);
+
+        scenario.Dialogs.Confirmations.Should().ContainSingle().Which.Message.Should().StartWith("2 封邮件").And.Contain("已删除文件夹");
+        scenario.Dispatcher.Sent<DeleteMessagesCommand>().Should().ContainSingle().Which.Messages.Should().HaveCount(2);
+        scenario.ViewModel.Messages.Should().BeEmpty();
+        scenario.ViewModel.SelectedMessage.Should().BeNull();
+        scenario.ViewModel.SelectedMessages.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies a selection mixing Trash and other folders says how many are lost for good.
+    /// </summary>
+    [Fact]
+    public async Task DeleteSelected_MixedSelection_ConfirmsBothCounts()
+    {
+        var scenario = new Scenario();
+        var trash = TestData.Folder(scenario.Account, "Trash", FolderRole.Trash);
+        scenario.Dispatcher.On<GetFoldersQuery>(_ => new List<MailFolder> { scenario.Inbox, trash });
+        scenario.Messages.Add(TestData.Message(scenario.Account, trash, 3, "Old news"));
+        scenario.Dispatcher.On<GetMessagesQuery>(_ => scenario.Messages.ToList());
+        await scenario.StartAsync();
+        foreach (var item in scenario.ViewModel.Messages)
+        {
+            scenario.ViewModel.SelectedMessages.Add(item);
+        }
+
+        await scenario.ViewModel.DeleteSelectedCommand.ExecuteAsync(null);
+
+        scenario.Dialogs.Confirmations.Should().ContainSingle().Which.Message.Should().StartWith("2 封邮件").And.Contain("另有 1 封将永久删除");
+    }
+
+    /// <summary>
+    /// Verifies a further delete can start while an earlier one has not finished.
+    /// </summary>
+    [Fact]
+    public async Task DeleteSelected_EarlierDeleteStillRunning_CanDeleteTheNext()
+    {
+        var scenario = new Scenario();
+        scenario.Dialogs.ConfirmResult = true;
+        var release = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        scenario.Dispatcher.OnAsync<DeleteMessagesCommand>((_, _) => release.Task);
+        await scenario.StartAsync();
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+
+        var first = scenario.ViewModel.DeleteSelectedCommand.ExecuteAsync(null);
+        scenario.ViewModel.DeleteSelectedCommand.CanExecute(null).Should().BeTrue();
+        var second = scenario.ViewModel.DeleteSelectedCommand.ExecuteAsync(null);
+
+        scenario.Dispatcher.Sent<DeleteMessagesCommand>().Should().HaveCount(2);
+        scenario.Messages.Clear();
+        release.SetResult(1);
+        await Task.WhenAll(first, second);
+        scenario.ViewModel.Messages.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that when the deletion cannot be queued the message comes back and the error is shown.
+    /// </summary>
+    [Fact]
+    public async Task DeleteSelected_QueueingFails_RestoresMessageAndShowsError()
+    {
+        var scenario = new Scenario();
+        scenario.Dialogs.ConfirmResult = true;
+        scenario.Dispatcher.On<DeleteMessagesCommand>(_ => throw new IOException("disk full"));
         await scenario.StartAsync();
         scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
 
         await scenario.ViewModel.DeleteSelectedCommand.ExecuteAsync(null);
 
         scenario.ViewModel.Messages.Should().HaveCount(2);
-        scenario.ViewModel.StatusText.Should().Contain("server down").And.Contain("删除邮件失败");
+        scenario.ViewModel.StatusText.Should().Contain("disk full").And.Contain("删除邮件失败");
     }
 
     /// <summary>
-    /// Verifies the status text differs between moved-to-trash and permanent deletion.
+    /// Verifies emptying a folder confirms with the folder and the kind of deletion, then queues it.
     /// </summary>
-    /// <param name="outcome">The outcome reported by the server.</param>
-    /// <param name="expected">The expected status text.</param>
+    /// <param name="hasTrash">Whether the account has a Trash folder.</param>
+    /// <param name="expected">The text the confirmation must contain.</param>
     [Theory]
-    [InlineData(DeleteOutcome.MovedToTrash, "已移至服务器的已删除文件夹")]
-    [InlineData(DeleteOutcome.DeletedPermanently, "已从服务器永久删除")]
-    public async Task DeleteSelected_Outcome_ShowsMatchingStatusText(DeleteOutcome outcome, string expected)
+    [InlineData(true, "已删除文件夹")]
+    [InlineData(false, "永久删除")]
+    public async Task EmptyFolder_Confirmed_QueuesAndClearsList(bool hasTrash, string expected)
     {
         var scenario = new Scenario();
         scenario.Dialogs.ConfirmResult = true;
-        scenario.Dispatcher.On<DeleteMessageCommand>(_ => outcome);
+        if (hasTrash)
+        {
+            var trash = TestData.Folder(scenario.Account, "Trash", FolderRole.Trash);
+            scenario.Dispatcher.On<GetFoldersQuery>(_ => new List<MailFolder> { scenario.Inbox, trash });
+        }
+
+        scenario.Dispatcher.On<EmptyFolderCommand>(_ =>
+        {
+            scenario.Messages.Clear();
+            return true;
+        });
         await scenario.StartAsync();
-        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+        var node = scenario.ViewModel.Accounts[0].Folders.Single(f => f.Folder.Id == scenario.Inbox.Id);
 
-        await scenario.ViewModel.DeleteSelectedCommand.ExecuteAsync(null);
+        await scenario.ViewModel.EmptyFolderCommand.ExecuteAsync(node);
 
-        scenario.ViewModel.StatusText.Should().Be(expected);
+        scenario.Dialogs.Confirmations.Should().ContainSingle().Which.Message.Should().Contain(expected).And.Contain("尚未下载");
+        scenario.Dispatcher.Sent<EmptyFolderCommand>().Should().ContainSingle().Which.FolderId.Should().Be(scenario.Inbox.Id);
+        scenario.ViewModel.Messages.Should().BeEmpty();
+        scenario.ViewModel.StatusText.Should().StartWith("正在后台删除");
+    }
+
+    /// <summary>
+    /// Verifies a cancelled confirmation leaves the folder alone.
+    /// </summary>
+    [Fact]
+    public async Task EmptyFolder_Cancelled_SendsNothing()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+
+        await scenario.ViewModel.EmptyFolderCommand.ExecuteAsync(scenario.ViewModel.Accounts[0].Folders[0]);
+
+        scenario.Dialogs.Confirmations.Should().ContainSingle();
+        scenario.Dispatcher.Sent<EmptyFolderCommand>().Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies All Mail is never emptied.
+    /// </summary>
+    [Fact]
+    public async Task EmptyFolder_AllMail_DoesNothing()
+    {
+        var scenario = new Scenario();
+        scenario.Dialogs.ConfirmResult = true;
+        var allMail = TestData.Folder(scenario.Account, "All", FolderRole.AllMail);
+        scenario.Dispatcher.On<GetFoldersQuery>(_ => new List<MailFolder> { scenario.Inbox, allMail });
+        await scenario.StartAsync();
+        var node = scenario.ViewModel.Accounts[0].Folders.Single(f => f.Folder.Id == allMail.Id);
+
+        await scenario.ViewModel.EmptyFolderCommand.ExecuteAsync(node);
+
+        node.CanEmpty.Should().BeFalse();
+        scenario.Dialogs.Confirmations.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies the status line follows the background deletion, and the list is reloaded when a run ends.
+    /// </summary>
+    /// <param name="finished">Whether the run is over.</param>
+    /// <param name="error">The reported error.</param>
+    /// <param name="willRetry">Whether the deletion is retried.</param>
+    /// <param name="expected">The expected start of the status text.</param>
+    /// <param name="reloads">Whether the list is reloaded.</param>
+    [Theory]
+    [InlineData(false, null, false, "正在从服务器删除：已完成 3 封，剩余 4 封", false)]
+    [InlineData(true, null, false, "已在服务器上删除 3 封邮件", true)]
+    [InlineData(false, "offline", true, "服务器删除失败，稍后自动重试", false)]
+    [InlineData(true, "read only", false, "服务器拒绝删除", true)]
+    public async Task DeletionProgressed_Report_UpdatesStatusAndReloads(
+        bool finished,
+        string? error,
+        bool willRetry,
+        string expected,
+        bool reloads)
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        var loads = scenario.Dispatcher.Sent<GetMessagesQuery>().Count;
+
+        scenario.SyncEvents.RaiseDeletion(new DeletionProgressEventArgs(scenario.Account.Id, 3, 4, finished, error, willRetry));
+        await Task.WhenAll(scenario.UiThread.Invocations);
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.ViewModel.StatusText.Should().StartWith(expected);
+        (scenario.Dispatcher.Sent<GetMessagesQuery>().Count > loads).Should().Be(reloads);
     }
 
     /// <summary>

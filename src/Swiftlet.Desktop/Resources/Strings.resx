@@ -70,8 +70,21 @@
   <data name="Status_AccountFoldersFailed" xml:space="preserve"><value>{0}: {1} folder(s) failed to sync</value></data>
   <data name="Status_ProblemSeparator" xml:space="preserve"><value>; </value></data>
   <data name="Status_SearchResults" xml:space="preserve"><value>Found {0} message(s)</value></data>
-  <data name="Status_MovedToTrash" xml:space="preserve"><value>Moved to the Trash folder on the server</value></data>
-  <data name="Status_DeletedPermanently" xml:space="preserve"><value>Permanently deleted from the server</value></data>
+  <data name="Status_DeleteQueued" xml:space="preserve"><value>Deleting {0} message(s) in the background</value></data>
+  <data name="Status_Deleting" xml:space="preserve"><value>Deleting on the server: {0} done, {1} to go</value></data>
+  <data name="Status_DeleteDone" xml:space="preserve"><value>Deleted {0} message(s) on the server</value></data>
+  <data name="Status_DeleteRetrying" xml:space="preserve"><value>Deleting on the server failed and will be retried</value></data>
+  <data name="Error_DeleteRejected" xml:space="preserve"><value>The server refused to delete; the messages are shown again</value></data>
+  <data name="Menu_Folder_Empty" xml:space="preserve"><value>Delete all messages</value></data>
+  <data name="Error_EmptyFolder" xml:space="preserve"><value>Failed to delete the folder contents</value></data>
+  <data name="Status_EmptyQueued" xml:space="preserve"><value>Deleting all messages of "{0}" in the background</value></data>
+  <data name="Status_NothingToDelete" xml:space="preserve"><value>"{0}" has no downloaded messages to delete</value></data>
+  <data name="Confirm_EmptyFolder_Title" xml:space="preserve"><value>Delete all messages</value></data>
+  <data name="Confirm_EmptyFolder_ToTrash" xml:space="preserve"><value>All messages in the folder "{0}" of {1}, including those not downloaded yet, will be moved to the Trash folder on the mail server.&#10;Continue?</value></data>
+  <data name="Confirm_EmptyFolder_Permanent" xml:space="preserve"><value>All messages in the folder "{0}" of {1}, including those not downloaded yet, will be PERMANENTLY deleted from the mail server and cannot be recovered.&#10;Continue?</value></data>
+  <data name="Confirm_DeleteMany_ToTrash" xml:space="preserve"><value>{0} messages will be moved to the Trash folder on the mail server.&#10;Continue?</value></data>
+  <data name="Confirm_DeleteMany_Permanent" xml:space="preserve"><value>{0} messages will be PERMANENTLY deleted from the mail server and cannot be recovered.&#10;Continue?</value></data>
+  <data name="Confirm_DeleteMany_Mixed" xml:space="preserve"><value>{0} messages will be moved to the Trash folder, and {1} will be PERMANENTLY deleted and cannot be recovered.&#10;Continue?</value></data>
   <data name="Confirm_Delete_Title" xml:space="preserve"><value>Delete message</value></data>
   <data name="Confirm_Delete_ToTrash" xml:space="preserve"><value>This message will be moved to the Trash folder on the mail server:&#10;"{0}"&#10;Continue?</value></data>
   <data name="Confirm_Delete_Permanent" xml:space="preserve"><value>This message will be PERMANENTLY deleted from the mail server and cannot be recovered:&#10;"{0}"&#10;Continue?</value></data>

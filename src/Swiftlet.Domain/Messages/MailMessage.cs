@@ -104,6 +104,11 @@ public sealed class MailMessage
     public bool IsFlagSyncPending { get; private set; }
 
     /// <summary>
+    /// Gets a value indicating whether the user deleted the message and the server has not been told yet. Such a message is hidden from every view.
+    /// </summary>
+    public bool IsDeletePending { get; private set; }
+
+    /// <summary>
     /// Gets the attachments.
     /// </summary>
     public IReadOnlyList<MailAttachment> Attachments => _attachments;
@@ -178,23 +183,6 @@ public sealed class MailMessage
             IsRead = isRead,
             Preview = BuildPreview(bodyText),
         };
-    }
-
-    /// <summary>
-    /// Re-homes the cached message after the server moved it to another folder of the same account, so its content
-    /// need not be downloaded again. Labels, flags and attachments stay as they are.
-    /// </summary>
-    /// <param name="folderId">The folder the message now belongs to.</param>
-    /// <param name="uid">The IMAP UID the message has in that folder.</param>
-    public void MoveToFolder(Guid folderId, uint uid)
-    {
-        if (folderId == Guid.Empty)
-        {
-            throw new ArgumentException("Folder id is required.", nameof(folderId));
-        }
-
-        FolderId = folderId;
-        Uid = uid;
     }
 
     /// <summary>

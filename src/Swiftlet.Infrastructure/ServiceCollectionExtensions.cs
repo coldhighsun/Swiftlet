@@ -21,7 +21,7 @@ namespace Swiftlet.Infrastructure;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers persistence, secret storage, OAuth 2.0, MailKit IMAP/SMTP services and the background sync worker.
+    /// Registers persistence, secret storage, OAuth 2.0, MailKit IMAP/SMTP services and the background workers.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <param name="dataDirectory">The directory holding the global SQLite database, the per-account mail databases (accounts subdirectory), settings and file-based secrets.</param>
@@ -65,6 +65,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<AccountSyncWorker>();
         services.AddHostedService<InboxWatcher>();
         services.AddHostedService<BackfillWorker>();
+        services.AddHostedService<DeletionWorker>();
         return services;
     }
 }

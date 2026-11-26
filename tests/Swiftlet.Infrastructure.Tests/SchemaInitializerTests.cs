@@ -50,8 +50,11 @@ public class SchemaInitializerTests
         {
             setup.CommandText =
                 """
+                CREATE TABLE Folders (Id TEXT NOT NULL PRIMARY KEY);
                 CREATE TABLE Messages (
                     Id TEXT NOT NULL PRIMARY KEY,
+                    FolderId TEXT NULL,
+                    Uid INTEGER NULL,
                     Subject TEXT NOT NULL,
                     FromName TEXT NOT NULL,
                     FromAddress TEXT NOT NULL,
@@ -72,6 +75,11 @@ public class SchemaInitializerTests
         await SqliteSchemaInitializer.InitializeAccountAsync(context, ct);
 
         (await CountPendingColumnsAsync(context, ct)).Should().Be(1);
+        var deletion = await context.Database
+            .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM pragma_table_info('Messages') WHERE name = 'IsDeletePending' UNION ALL SELECT COUNT(*) FROM pragma_table_info('Folders') WHERE name = 'EmptyThroughUid'")
+            .ToListAsync(ct);
+        deletion.Should().Equal(1, 1);
+        (await context.Database.SqlQueryRaw<int>("SELECT IsDeletePending AS Value FROM Messages").SingleAsync(ct)).Should().Be(0);
         var pending = await context.Database
             .SqlQueryRaw<int>("SELECT IsFlagSyncPending AS Value FROM Messages")
             .SingleAsync(ct);
@@ -187,8 +195,11 @@ public class SchemaInitializerTests
         {
             setup.CommandText =
                 """
+                CREATE TABLE Folders (Id TEXT NOT NULL PRIMARY KEY);
                 CREATE TABLE Messages (
                     Id TEXT NOT NULL PRIMARY KEY,
+                    FolderId TEXT NULL,
+                    Uid INTEGER NULL,
                     Subject TEXT NOT NULL,
                     FromName TEXT NOT NULL,
                     FromAddress TEXT NOT NULL,

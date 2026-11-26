@@ -163,7 +163,7 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
         var context = await contexts.GetAsync(accountId, cancellationToken);
         var messages = await context.Messages
             .Include(m => m.Attachments)
-            .Where(m => m.FolderId == folderId)
+            .Where(m => m.FolderId == folderId && !m.IsDeletePending)
             .OrderByDescending(m => m.SentAt)
             .Skip(skip)
             .Take(take)
@@ -185,7 +185,7 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
             var context = await contexts.GetAsync(accountId, cancellationToken);
             candidates.AddRange(await context.Messages
                 .Include(m => m.Attachments)
-                .Where(m => context.Folders.Any(f => f.Id == m.FolderId && f.Role == FolderRole.Inbox))
+                .Where(m => !m.IsDeletePending && context.Folders.Any(f => f.Id == m.FolderId && f.Role == FolderRole.Inbox))
                 .OrderByDescending(m => m.SentAt)
                 .Take(skip + take)
                 .ToListAsync(cancellationToken));
@@ -217,7 +217,7 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
             {
                 candidates.AddRange(await context.Messages
                     .Include(m => m.Attachments)
-                    .Where(m => batch.Contains(m.Id))
+                    .Where(m => !m.IsDeletePending && batch.Contains(m.Id))
                     .ToListAsync(cancellationToken));
             }
         }
@@ -366,6 +366,142 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
         return page;
     }
 
+    /// <inheritdoc />
+    public async Task<int> MarkDeletePendingAsync(
+        Guid accountId,
+        IReadOnlyCollection<Guid> messageIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(messageIds);
+        var context = await contexts.GetAsync(accountId, cancellationToken);
+
+        // One transaction, so a selection is hidden as a whole or not at all.
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        var marked = 0;
+        foreach (var batch in messageIds.Chunk(BatchSize))
+        {
+            marked += await context.Messages
+                .Where(m => batch.Contains(m.Id))
+                .ExecuteUpdateAsync(setters => setters.SetProperty(m => m.IsDeletePending, true), cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return marked;
+    }
+
+    /// <inheritdoc />
+    public async Task<int> MarkFolderDeletePendingAsync(
+        Guid accountId,
+        Guid folderId,
+        uint throughUid,
+        CancellationToken cancellationToken = default)
+    {
+        var context = await contexts.GetAsync(accountId, cancellationToken);
+        return await context.Messages
+            .Where(m => m.FolderId == folderId && m.Uid <= throughUid)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(m => m.IsDeletePending, true), cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<PendingDeletion>> GetPendingDeletionsAsync(
+        Guid accountId,
+        int take,
+        CancellationToken cancellationToken = default)
+    {
+        var context = await contexts.GetAsync(accountId, cancellationToken);
+        return await context.Messages
+            .AsNoTracking()
+            .Where(m => m.IsDeletePending)
+            .OrderBy(m => m.FolderId)
+            .ThenBy(m => m.Uid)
+            .Take(take)
+            .Select(m => new PendingDeletion(m.Id, m.FolderId, m.Uid))
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<int> CountPendingDeletionsAsync(Guid accountId, CancellationToken cancellationToken = default)
+    {
+        var context = await contexts.GetAsync(accountId, cancellationToken);
+        return await context.Messages.CountAsync(m => m.IsDeletePending, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<PendingDeletion>> GetByUidsAsync(
+        Guid accountId,
+        Guid folderId,
+        IReadOnlyCollection<uint> uids,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(uids);
+        var context = await contexts.GetAsync(accountId, cancellationToken);
+        var found = new List<PendingDeletion>();
+        foreach (var batch in uids.Chunk(BatchSize))
+        {
+            found.AddRange(await context.Messages
+                .AsNoTracking()
+                .Where(m => m.FolderId == folderId && batch.Contains(m.Uid))
+                .Select(m => new PendingDeletion(m.Id, m.FolderId, m.Uid))
+                .ToListAsync(cancellationToken));
+        }
+
+        return found;
+    }
+
+    /// <inheritdoc />
+    public async Task DeleteThroughUidAsync(
+        Guid accountId,
+        Guid folderId,
+        uint throughUid,
+        CancellationToken cancellationToken = default)
+    {
+        var context = await contexts.GetAsync(accountId, cancellationToken);
+        var ids = await context.Messages
+            .Where(m => m.FolderId == folderId && m.Uid <= throughUid)
+            .Select(m => m.Id)
+            .ToListAsync(cancellationToken);
+        await DeleteRangeAsync(accountId, ids, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task ClearDeletePendingAsync(Guid accountId, Guid folderId, CancellationToken cancellationToken = default)
+    {
+        var context = await contexts.GetAsync(accountId, cancellationToken);
+        await context.Messages
+            .Where(m => m.FolderId == folderId && m.IsDeletePending)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(m => m.IsDeletePending, false), cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task MoveToFolderAsync(
+        Guid accountId,
+        Guid folderId,
+        IReadOnlyCollection<(Guid MessageId, uint Uid)> moves,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(moves);
+        if (moves.Count == 0)
+        {
+            return;
+        }
+
+        var context = await contexts.GetAsync(accountId, cancellationToken);
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        foreach (var (messageId, uid) in moves)
+        {
+            await context.Messages
+                .Where(m => m.Id == messageId)
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(m => m.FolderId, folderId)
+                        .SetProperty(m => m.Uid, uid)
+                        .SetProperty(m => m.IsDeletePending, false),
+                    cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+    }
+
     /// <summary>
     /// Searches one account's database.
     /// </summary>
@@ -409,9 +545,10 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
         // The "All Mail" copy of a message that also lives in another folder would show up twice; keep only the other copy.
         // Messages without a Message-ID cannot be matched and stay visible.
         source = source.Where(m =>
-            m.MessageIdHeader == null
-            || !context.Folders.Any(f => f.Id == m.FolderId && f.Role == FolderRole.AllMail)
-            || !context.Messages.Any(n => n.FolderId != m.FolderId && n.MessageIdHeader == m.MessageIdHeader));
+            !m.IsDeletePending
+            && (m.MessageIdHeader == null
+                || !context.Folders.Any(f => f.Id == m.FolderId && f.Role == FolderRole.AllMail)
+                || !context.Messages.Any(n => !n.IsDeletePending && n.FolderId != m.FolderId && n.MessageIdHeader == m.MessageIdHeader)));
 
         return await source
             .Include(m => m.Attachments)

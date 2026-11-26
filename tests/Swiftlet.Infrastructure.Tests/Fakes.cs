@@ -222,54 +222,79 @@ internal sealed class FakeImapSession : IImapSession
     }
 
     /// <summary>
-    /// Gets the recorded delete calls.
+    /// Gets the recorded delete calls, one per batch.
     /// </summary>
-    public List<(string Folder, uint Uid, string? TrashFolder)> DeleteCalls { get; } = [];
+    public List<(string Folder, uint[] Uids, string? TrashFolder)> DeleteCalls { get; } = [];
 
     /// <summary>
-    /// Gets or sets an exception to throw from <see cref="DeleteMessageAsync"/>.
+    /// Gets or sets an exception to throw from <see cref="DeleteMessagesAsync"/>.
     /// </summary>
     public Exception? DeleteFailure { get; set; }
 
+    /// <summary>
+    /// Gets the failures thrown by the next <see cref="DeleteMessagesAsync"/> calls, one per call.
+    /// </summary>
+    public Queue<Exception> DeleteFailures { get; } = new();
+
+    /// <summary>
+    /// Gets or sets a callback run inside <see cref="DeleteMessagesAsync"/> before the server state changes.
+    /// </summary>
+    public Func<Task>? OnDeleteAsync { get; set; }
+
     /// <inheritdoc />
-    public Task<uint?> DeleteMessageAsync(
+    public async Task<IReadOnlyDictionary<uint, uint>> DeleteMessagesAsync(
         string folderFullName,
-        uint uid,
+        IReadOnlyList<uint> uids,
         string? trashFolderFullName,
         CancellationToken cancellationToken = default)
     {
-        DeleteCalls.Add((folderFullName, uid, trashFolderFullName));
+        DeleteCalls.Add((folderFullName, [.. uids], trashFolderFullName));
+        if (OnDeleteAsync is not null)
+        {
+            await OnDeleteAsync();
+        }
+
+        if (DeleteFailures.TryDequeue(out var queued))
+        {
+            throw queued;
+        }
+
         if (DeleteFailure is not null)
         {
-            return Task.FromException<uint?>(DeleteFailure);
+            throw DeleteFailure;
         }
 
-        // Mimic the server: the message leaves the source folder and, for a move, appears in Trash under the next free UID.
+        // Mimic the server: the messages leave the source folder and, for a move, appear in Trash under the next free UIDs.
+        var moved = new Dictionary<uint, uint>();
         var source = Messages.GetValueOrDefault(folderFullName);
-        var original = source?.FirstOrDefault(m => m.Uid == uid);
-        source?.RemoveAll(m => m.Uid == uid);
-        if (trashFolderFullName is null)
+        foreach (var uid in uids)
         {
-            return Task.FromResult<uint?>(null);
-        }
+            var original = source?.FirstOrDefault(m => m.Uid == uid);
+            source?.RemoveAll(m => m.Uid == uid);
+            if (trashFolderFullName is null || original is null)
+            {
+                continue;
+            }
 
-        if (!Messages.TryGetValue(trashFolderFullName, out var trash))
-        {
-            trash = [];
-            Messages[trashFolderFullName] = trash;
-        }
+            if (!Messages.TryGetValue(trashFolderFullName, out var trash))
+            {
+                trash = [];
+                Messages[trashFolderFullName] = trash;
+            }
 
-        var newUid = Math.Max(trash.Count == 0 ? 0u : trash.Max(m => m.Uid), TrashNextUidFloor) + 1;
-        if (original is not null)
-        {
+            var newUid = Math.Max(trash.Count == 0 ? 0u : trash.Max(m => m.Uid), TrashNextUidFloor) + 1;
             trash.Add(original with { Uid = newUid });
+            if (MoveReportsNewUid)
+            {
+                moved[uid] = newUid;
+            }
         }
 
-        return Task.FromResult<uint?>(MoveReportsNewUid ? newUid : null);
+        return moved;
     }
 
     /// <summary>
-    /// Gets or sets a value indicating whether a move reports the new UID (a server with UIDPLUS); when <see langword="false"/> it reports none.
+    /// Gets or sets a value indicating whether a move reports the new UIDs (a server with UIDPLUS); when <see langword="false"/> it reports none.
     /// </summary>
     public bool MoveReportsNewUid { get; set; } = true;
 
@@ -279,31 +304,27 @@ internal sealed class FakeImapSession : IImapSession
     public uint TrashNextUidFloor { get; set; }
 
     /// <summary>
-    /// Gets the recorded <see cref="HasMessagesBetweenAsync"/> calls.
+    /// Gets the recorded <see cref="ListUidsBetweenAsync"/> calls.
     /// </summary>
     public List<(string Folder, uint After, uint Before)> RangeCalls { get; } = [];
 
     /// <inheritdoc />
-    public async Task<bool> HasMessagesBetweenAsync(
+    public Task<IReadOnlyList<uint>> ListUidsBetweenAsync(
         string folderFullName,
         uint afterUid,
         uint beforeUid,
         CancellationToken cancellationToken = default)
     {
         RangeCalls.Add((folderFullName, afterUid, beforeUid));
-        if (OnRangeCheckAsync is not null)
-        {
-            await OnRangeCheckAsync();
-        }
-
-        var any = (Messages.GetValueOrDefault(folderFullName) ?? []).Any(m => m.Uid > afterUid && m.Uid < beforeUid);
-        return any;
+        IReadOnlyList<uint> uids =
+        [
+            .. (Messages.GetValueOrDefault(folderFullName) ?? [])
+                .Select(m => m.Uid)
+                .Where(u => u > afterUid && u < beforeUid)
+                .Order(),
+        ];
+        return Task.FromResult(uids);
     }
-
-    /// <summary>
-    /// Gets or sets a callback run inside <see cref="HasMessagesBetweenAsync"/>, to simulate a sync caching messages meanwhile.
-    /// </summary>
-    public Func<Task>? OnRangeCheckAsync { get; set; }
 
     /// <summary>
     /// Gets the simulated server-side flags per folder and UID, seeded lazily from <see cref="Messages"/>.

@@ -498,6 +498,18 @@ internal static class TestData
 internal sealed class FakeSyncEvents : ISyncEvents
 {
     /// <inheritdoc />
+    public event EventHandler<DeletionProgressEventArgs>? DeletionProgressed;
+
+    /// <summary>
+    /// Raises <see cref="DeletionProgressed"/>.
+    /// </summary>
+    /// <param name="args">The event data.</param>
+    public void RaiseDeletion(DeletionProgressEventArgs args)
+    {
+        DeletionProgressed?.Invoke(this, args);
+    }
+
+    /// <inheritdoc />
     public event EventHandler<AccountSyncedEventArgs>? AccountSynced;
 
     /// <inheritdoc />

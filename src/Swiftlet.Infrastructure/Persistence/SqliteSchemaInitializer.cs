@@ -76,6 +76,7 @@ public static class SqliteSchemaInitializer
         await context.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", cancellationToken);
         await context.Database.EnsureCreatedAsync(cancellationToken);
         await EnsureFlagSyncColumnAsync(context, cancellationToken);
+        await EnsureDeletionColumnsAsync(context, cancellationToken);
 
         // Same name EF gives the index, so a new database (created by EnsureCreated above) is unaffected.
         await context.Database.ExecuteSqlRawAsync(
@@ -95,16 +96,58 @@ public static class SqliteSchemaInitializer
     /// <returns>A task that completes when the column exists.</returns>
     internal static async Task EnsureFlagSyncColumnAsync(AccountDbContext context, CancellationToken cancellationToken = default)
     {
-        var existing = await context.Database
-            .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM pragma_table_info('Messages') WHERE name = 'IsFlagSyncPending'")
-            .SingleAsync(cancellationToken);
+        await EnsureColumnAsync(
+            context,
+            "SELECT COUNT(*) AS Value FROM pragma_table_info('Messages') WHERE name = 'IsFlagSyncPending'",
+            "ALTER TABLE Messages ADD COLUMN IsFlagSyncPending INTEGER NOT NULL DEFAULT 0;",
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Adds the columns behind background deletion to a database created by an earlier version; does nothing when they exist.
+    /// </summary>
+    /// <param name="context">The database context.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the columns exist.</returns>
+    internal static async Task EnsureDeletionColumnsAsync(AccountDbContext context, CancellationToken cancellationToken = default)
+    {
+        await EnsureColumnAsync(
+            context,
+            "SELECT COUNT(*) AS Value FROM pragma_table_info('Messages') WHERE name = 'IsDeletePending'",
+            "ALTER TABLE Messages ADD COLUMN IsDeletePending INTEGER NOT NULL DEFAULT 0;",
+            cancellationToken);
+        await EnsureColumnAsync(
+            context,
+            "SELECT COUNT(*) AS Value FROM pragma_table_info('Folders') WHERE name = 'EmptyThroughUid'",
+            "ALTER TABLE Folders ADD COLUMN EmptyThroughUid INTEGER NULL;",
+            cancellationToken);
+
+        // Only the few rows waiting for deletion are indexed, so looking for work stays cheap on large mailboxes.
+        await context.Database.ExecuteSqlRawAsync(
+            "CREATE INDEX IF NOT EXISTS IX_Messages_DeletePending ON Messages (FolderId, Uid) WHERE IsDeletePending = 1;",
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs a statement that adds a column unless the column already exists.
+    /// </summary>
+    /// <param name="context">The database context.</param>
+    /// <param name="countStatement">The query returning how many columns of that name exist.</param>
+    /// <param name="alterStatement">The statement adding the column.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the column exists.</returns>
+    private static async Task EnsureColumnAsync(
+        AccountDbContext context,
+        string countStatement,
+        string alterStatement,
+        CancellationToken cancellationToken)
+    {
+        var existing = await context.Database.SqlQueryRaw<int>(countStatement).SingleAsync(cancellationToken);
         if (existing > 0)
         {
             return;
         }
 
-        await context.Database.ExecuteSqlRawAsync(
-            "ALTER TABLE Messages ADD COLUMN IsFlagSyncPending INTEGER NOT NULL DEFAULT 0;",
-            cancellationToken);
+        await context.Database.ExecuteSqlRawAsync(alterStatement, cancellationToken);
     }
 }

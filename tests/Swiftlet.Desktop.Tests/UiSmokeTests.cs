@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using Avalonia;
+using Avalonia.Input;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
@@ -561,6 +562,115 @@ public class UiSmokeTests
                 scenario.Dispatcher.Sent<Swiftlet.Application.Accounts.ReauthenticateOAuthAccountCommand>()
                     .Should().ContainSingle().Which.AccountId.Should().Be(oauth.Id);
                 oauthMenu.Close();
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the message list allows selecting several messages, which reach the view model, and that Delete removes them.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_MessageList_MultiSelectionAndDeleteKeyDeleteAll()
+    {
+        await Session.Dispatch(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference("en");
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Localizer.SetPreference("en");
+                scenario.Dialogs.ConfirmResult = true;
+                scenario.Dispatcher.On<Swiftlet.Application.Messages.DeleteMessagesCommand>(c =>
+                {
+                    scenario.Messages.Clear();
+                    return c.Messages.Count;
+                });
+                await scenario.StartAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-multi-select", "en");
+                var list = window.GetVisualDescendants().OfType<ListBox>().Single();
+
+                list.SelectAll();
+                Snapshot(window, "main-window-multi-select-all");
+                scenario.ViewModel.SelectedMessages.Should().HaveCount(2);
+                var first = list.GetVisualDescendants().OfType<ListBoxItem>().First();
+                first.Focus();
+                window.KeyPressQwerty(PhysicalKey.Delete, RawInputModifiers.None);
+                Dispatcher.UIThread.RunJobs();
+                await scenario.ViewModel.WhenIdleAsync();
+
+                scenario.Dispatcher.Sent<Swiftlet.Application.Messages.DeleteMessagesCommand>()
+                    .Should().ContainSingle().Which.Messages.Should().HaveCount(2);
+                scenario.ViewModel.Messages.Should().BeEmpty();
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies right-clicking one of several selected messages keeps the selection for the context menu.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_MessageList_RightClickKeepsMultiSelection()
+    {
+        await Session.Dispatch(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference("en");
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Localizer.SetPreference("en");
+                await scenario.StartAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-right-click", "en");
+                var list = window.GetVisualDescendants().OfType<ListBox>().Single();
+                list.SelectAll();
+                Dispatcher.UIThread.RunJobs();
+                var second = list.GetVisualDescendants().OfType<ListBoxItem>().ElementAt(1);
+                var point = second.TranslatePoint(new Point(10, 10), window)!.Value;
+
+                window.MouseDown(point, MouseButton.Right);
+                window.MouseUp(point, MouseButton.Right);
+                Dispatcher.UIThread.RunJobs();
+
+                scenario.ViewModel.SelectedMessages.Should().HaveCount(2);
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies folder nodes offer deleting all messages, except for All Mail.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_FolderNodeContextMenu_OffersDeleteAllExceptForAllMail()
+    {
+        await Session.Dispatch(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference("en");
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Localizer.SetPreference("en");
+                var allMail = TestData.Folder(scenario.Account, "All", Swiftlet.Domain.Folders.FolderRole.AllMail);
+                scenario.Dispatcher.On<Swiftlet.Application.Queries.GetFoldersQuery>(
+                    _ => new List<Swiftlet.Domain.Folders.MailFolder> { scenario.Inbox, allMail });
+                await scenario.StartAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-folder-menu", "en");
+
+                var tree = window.GetVisualDescendants().OfType<TreeView>().Single();
+                foreach (var folder in scenario.ViewModel.Accounts[0].Folders)
+                {
+                    var text = tree.GetVisualDescendants().OfType<TextBlock>().Single(t => t.DataContext == folder && t.ContextMenu is not null);
+                    var menu = text.ContextMenu!;
+                    menu.Open(text);
+                    Dispatcher.UIThread.RunJobs();
+                    var item = menu.Items.OfType<MenuItem>().Should().ContainSingle().Which;
+                    item.Header.Should().Be("Delete all messages");
+                    item.IsEffectivelyEnabled.Should().Be(folder.CanEmpty);
+                    item.CommandParameter.Should().BeSameAs(folder);
+                    menu.Close();
+                }
+
                 window.Close();
             },
             TestContext.Current.CancellationToken);

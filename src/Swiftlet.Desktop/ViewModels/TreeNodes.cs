@@ -54,6 +54,12 @@ public sealed class FolderNodeViewModel(MailFolder folder, MailAccount account, 
     public MailAccount Account { get; } = account;
 
     /// <summary>
+    /// Gets a value indicating whether all messages of the folder can be deleted at once. All Mail cannot: it mirrors every
+    /// other folder, so emptying it would delete the whole mailbox.
+    /// </summary>
+    public bool CanEmpty => Folder.Role != FolderRole.AllMail;
+
+    /// <summary>
     /// Gets the text shown in the tree; well-known folders use localized names.
     /// </summary>
     public string Name => Folder.Role switch

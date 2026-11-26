@@ -106,7 +106,15 @@
             </StackPanel>
           </DataTemplate>
           <DataTemplate DataType="vm:FolderNodeViewModel">
-            <TextBlock Text="{Binding Name}" />
+            <TextBlock Text="{Binding Name}">
+              <TextBlock.ContextMenu>
+                <ContextMenu>
+                  <MenuItem Header="{loc:Loc Menu_Folder_Empty}" IsEnabled="{Binding CanEmpty}"
+                            Command="{Binding $parent[TreeView].((vm:MainWindowViewModel)DataContext).EmptyFolderCommand}"
+                            CommandParameter="{Binding}" />
+                </ContextMenu>
+              </TextBlock.ContextMenu>
+            </TextBlock>
           </DataTemplate>
         </TreeView.DataTemplates>
       </TreeView>
@@ -114,8 +122,12 @@
       <GridSplitter Grid.Column="1" Width="4" />
 
       <ListBox Grid.Column="2" ItemsSource="{Binding Messages}" SelectedItem="{Binding SelectedMessage}"
+               SelectionMode="Multiple" SelectedItems="{Binding SelectedMessages}"
                ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                ScrollViewer.ScrollChanged="OnMessageListScrollChanged">
+        <ListBox.KeyBindings>
+          <KeyBinding Gesture="Delete" Command="{Binding DeleteSelectedCommand}" />
+        </ListBox.KeyBindings>
         <ListBox.ContextMenu>
           <ContextMenu>
             <MenuItem Header="{loc:Loc Toolbar_Delete}" Command="{Binding DeleteSelectedCommand}" />

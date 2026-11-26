@@ -93,32 +93,34 @@ public interface IImapSession : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Deletes a message on the server.
-    /// A message that is already gone counts as deleted; every other failure is thrown.
+    /// Deletes messages of one folder on the server.
+    /// Messages that are already gone count as deleted; every other failure is thrown.
     /// </summary>
-    /// <param name="folderFullName">The full server-side path of the folder holding the message.</param>
-    /// <param name="uid">The IMAP UID of the message.</param>
-    /// <param name="trashFolderFullName">The Trash folder to move the message to, or <see langword="null"/> to delete it permanently.</param>
+    /// <param name="folderFullName">The full server-side path of the folder holding the messages.</param>
+    /// <param name="uids">The IMAP UIDs of the messages.</param>
+    /// <param name="trashFolderFullName">The Trash folder to move the messages to, or <see langword="null"/> to delete them permanently.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>
-    /// The UID the message has in the Trash folder after a move, or <see langword="null"/> when it was deleted permanently,
-    /// was already gone, or the server did not report the new UID (no UIDPLUS).
+    /// The UID each moved message has in the Trash folder, keyed by its old UID. A message is missing when it was deleted
+    /// permanently, was already gone, or the server did not report the new UID (no UIDPLUS).
     /// </returns>
-    Task<uint?> DeleteMessageAsync(
+    /// <exception cref="MailOperationRejectedException">The server refused the operation; repeating it cannot succeed.</exception>
+    /// <exception cref="NotSupportedException">The server lacks a feature needed to delete safely.</exception>
+    Task<IReadOnlyDictionary<uint, uint>> DeleteMessagesAsync(
         string folderFullName,
-        uint uid,
+        IReadOnlyList<uint> uids,
         string? trashFolderFullName,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Tells whether a folder holds any message (not flagged as deleted) whose UID lies strictly between two UIDs.
+    /// Lists the UIDs of the messages (not flagged as deleted) of a folder that lie strictly between two UIDs.
     /// </summary>
     /// <param name="folderFullName">The full server-side path of the folder.</param>
     /// <param name="afterUid">The exclusive lower bound.</param>
     /// <param name="beforeUid">The exclusive upper bound.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns><see langword="true"/> if at least one such message exists.</returns>
-    Task<bool> HasMessagesBetweenAsync(
+    /// <returns>The UIDs, ascending.</returns>
+    Task<IReadOnlyList<uint>> ListUidsBetweenAsync(
         string folderFullName,
         uint afterUid,
         uint beforeUid,

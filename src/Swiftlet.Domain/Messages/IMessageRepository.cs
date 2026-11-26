@@ -224,4 +224,88 @@ public interface IMessageRepository
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that completes when the messages are deleted.</returns>
     Task DeleteRangeAsync(Guid accountId, IReadOnlyCollection<Guid> messageIds, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Marks messages as deleted by the user, which hides them from every view until the server has been told.
+    /// </summary>
+    /// <param name="accountId">The owning account.</param>
+    /// <param name="messageIds">The message identifiers; unknown ones are ignored.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The number of messages marked.</returns>
+    Task<int> MarkDeletePendingAsync(Guid accountId, IReadOnlyCollection<Guid> messageIds, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Marks every cached message of a folder up to a UID as deleted by the user.
+    /// </summary>
+    /// <param name="accountId">The owning account.</param>
+    /// <param name="folderId">The folder.</param>
+    /// <param name="throughUid">The highest UID to mark.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The number of messages marked.</returns>
+    Task<int> MarkFolderDeletePendingAsync(Guid accountId, Guid folderId, uint throughUid, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets messages of an account waiting to be deleted on the server, ordered by folder and UID.
+    /// </summary>
+    /// <param name="accountId">The owning account.</param>
+    /// <param name="take">The maximum number of messages to return.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The pending deletions.</returns>
+    Task<IReadOnlyList<PendingDeletion>> GetPendingDeletionsAsync(Guid accountId, int take, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Counts the messages of an account waiting to be deleted on the server.
+    /// </summary>
+    /// <param name="accountId">The owning account.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The number of pending deletions.</returns>
+    Task<int> CountPendingDeletionsAsync(Guid accountId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the cached messages of a folder that have one of the given UIDs.
+    /// </summary>
+    /// <param name="accountId">The owning account.</param>
+    /// <param name="folderId">The folder.</param>
+    /// <param name="uids">The IMAP UIDs.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The cached messages found.</returns>
+    Task<IReadOnlyList<PendingDeletion>> GetByUidsAsync(
+        Guid accountId,
+        Guid folderId,
+        IReadOnlyCollection<uint> uids,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes every cached message of a folder up to a UID, with attachments and label links.
+    /// </summary>
+    /// <param name="accountId">The owning account.</param>
+    /// <param name="folderId">The folder.</param>
+    /// <param name="throughUid">The highest UID to delete.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the messages are deleted.</returns>
+    Task DeleteThroughUidAsync(Guid accountId, Guid folderId, uint throughUid, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Makes the messages of a folder that wait for deletion visible again, because the server refused to delete them.
+    /// </summary>
+    /// <param name="accountId">The owning account.</param>
+    /// <param name="folderId">The folder.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the marks are removed.</returns>
+    Task ClearDeletePendingAsync(Guid accountId, Guid folderId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Re-homes cached messages after the server moved them to another folder of the same account, so their content need
+    /// not be downloaded again. Labels, flags and attachments stay as they are; the pending deletion mark is removed.
+    /// </summary>
+    /// <param name="accountId">The owning account.</param>
+    /// <param name="folderId">The folder the messages now belong to.</param>
+    /// <param name="moves">The identifier of each message and the UID it has in that folder.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the messages are moved.</returns>
+    Task MoveToFolderAsync(
+        Guid accountId,
+        Guid folderId,
+        IReadOnlyCollection<(Guid MessageId, uint Uid)> moves,
+        CancellationToken cancellationToken = default);
 }

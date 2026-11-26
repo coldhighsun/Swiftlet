@@ -36,6 +36,12 @@ public sealed class MailFolder
     public uint? UidValidity { get; private set; }
 
     /// <summary>
+    /// Gets the highest UID of a pending "delete all messages" request, or <see langword="null"/> when none is pending.
+    /// Every server message up to this UID is to be deleted; later ones arrived after the request and are kept.
+    /// </summary>
+    public uint? EmptyThroughUid { get; private set; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="MailFolder"/> class for persistence.
     /// </summary>
     private MailFolder()
@@ -80,6 +86,30 @@ public sealed class MailFolder
     {
         var invalidated = UidValidity.HasValue && UidValidity.Value != uidValidity;
         UidValidity = uidValidity;
+        if (invalidated)
+        {
+            // The boundary names UIDs of the old epoch; applying it to the new one could delete unrelated mail.
+            EmptyThroughUid = null;
+        }
+
         return invalidated;
+    }
+
+    /// <summary>
+    /// Requests that every message up to a UID be deleted; an earlier request with a higher boundary is kept.
+    /// </summary>
+    /// <param name="throughUid">The highest UID to delete.</param>
+    public void RequestEmpty(uint throughUid)
+    {
+        ArgumentOutOfRangeException.ThrowIfZero(throughUid);
+        EmptyThroughUid = Math.Max(throughUid, EmptyThroughUid ?? 0);
+    }
+
+    /// <summary>
+    /// Ends the pending request to delete all messages, because it was carried out or has to be abandoned.
+    /// </summary>
+    public void ClearEmptyRequest()
+    {
+        EmptyThroughUid = null;
     }
 }

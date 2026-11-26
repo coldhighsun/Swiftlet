@@ -26,7 +26,7 @@ public enum BackfillOutcome
     NotStarted = 2,
 
     /// <summary>
-    /// The batch was not run because the cache and the server disagree (UIDVALIDITY changed) or the folder is gone; the regular sync repairs that.
+    /// The batch was not run because the cache and the server disagree (UIDVALIDITY changed, which the regular sync repairs), the folder is gone or it is being emptied.
     /// </summary>
     Skipped = 3,
 
@@ -125,7 +125,8 @@ public sealed class MailBackfillService(
         ArgumentNullException.ThrowIfNull(session);
 
         var folder = await folders.GetAsync(accountId, folderId, cancellationToken);
-        if (folder is null)
+        // History of a folder that is being emptied would only be downloaded to be deleted again.
+        if (folder is null || folder.EmptyThroughUid is not null)
         {
             return new BackfillBatchResult(BackfillOutcome.Skipped, 0, 0);
         }

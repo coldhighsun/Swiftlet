@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Messages;
 using Swiftlet.Application.Sync;
 
 namespace Swiftlet.Application;
@@ -34,6 +35,8 @@ public static class DependencyInjection
         services.AddSingleton<ISyncEvents>(static sp => sp.GetRequiredService<SyncEvents>());
         services.AddScoped<MailSyncService>();
         services.AddScoped<MailBackfillService>();
+        services.AddSingleton<DeletionSignal>();
+        services.AddScoped<PendingDeletionService>();
         return services;
     }
 }

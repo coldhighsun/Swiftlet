@@ -55,6 +55,49 @@ public sealed class BackfillProgressEventArgs(Guid accountId, int downloaded, bo
 }
 
 /// <summary>
+/// Event data raised while messages are deleted on the server in the background.
+/// </summary>
+/// <param name="accountId">The account identifier.</param>
+/// <param name="deleted">The number of messages deleted so far in the current run.</param>
+/// <param name="remaining">How many messages are still waiting.</param>
+/// <param name="finished">Whether the current run is over.</param>
+/// <param name="error">Why deleting failed, or <see langword="null"/> while all is well.</param>
+/// <param name="willRetry">Whether the failed deletion stays pending and is attempted again.</param>
+public sealed class DeletionProgressEventArgs(Guid accountId, int deleted, int remaining, bool finished, string? error = null, bool willRetry = false) : EventArgs
+{
+    /// <summary>
+    /// Gets the account identifier.
+    /// </summary>
+    public Guid AccountId { get; } = accountId;
+
+    /// <summary>
+    /// Gets the number of messages deleted so far in the current run.
+    /// </summary>
+    public int Deleted { get; } = deleted;
+
+    /// <summary>
+    /// Gets how many messages are still waiting.
+    /// </summary>
+    public int Remaining { get; } = remaining;
+
+    /// <summary>
+    /// Gets a value indicating whether the current run is over.
+    /// </summary>
+    public bool Finished { get; } = finished;
+
+    /// <summary>
+    /// Gets why deleting failed, or <see langword="null"/> while all is well.
+    /// </summary>
+    public string? Error { get; } = error;
+
+    /// <summary>
+    /// Gets a value indicating whether the failed deletion stays pending and is attempted again; when <see langword="false"/>
+    /// together with an <see cref="Error"/>, the messages are visible again.
+    /// </summary>
+    public bool WillRetry { get; } = willRetry;
+}
+
+/// <summary>
 /// Notifies subscribers about completed synchronizations.
 /// </summary>
 public interface ISyncEvents
@@ -68,6 +111,11 @@ public interface ISyncEvents
     /// Raised after every message the background history download stores and when a history pass ends. May be raised on a background thread.
     /// </summary>
     event EventHandler<BackfillProgressEventArgs>? BackfillProgressed;
+
+    /// <summary>
+    /// Raised while the background deletion works through pending messages. May be raised on a background thread.
+    /// </summary>
+    event EventHandler<DeletionProgressEventArgs>? DeletionProgressed;
 }
 
 /// <summary>
@@ -80,6 +128,36 @@ public sealed class SyncEvents : ISyncEvents
 
     /// <inheritdoc />
     public event EventHandler<BackfillProgressEventArgs>? BackfillProgressed;
+
+    /// <inheritdoc />
+    public event EventHandler<DeletionProgressEventArgs>? DeletionProgressed;
+
+    /// <summary>
+    /// Raises <see cref="DeletionProgressed"/>; a failing subscriber never affects the deletion or the other subscribers.
+    /// </summary>
+    /// <param name="args">The event data.</param>
+    public void RaiseDeletionProgressed(DeletionProgressEventArgs args)
+    {
+        var handlers = DeletionProgressed;
+        if (handlers is null)
+        {
+            return;
+        }
+
+        foreach (var handler in handlers.GetInvocationList().Cast<EventHandler<DeletionProgressEventArgs>>())
+        {
+            try
+            {
+                handler(this, args);
+            }
+#pragma warning disable CA1031 // Subscribers are arbitrary UI code; one failing must not break the deletion or the other subscribers.
+            catch (Exception)
+#pragma warning restore CA1031
+            {
+                // Intentionally ignored, as in RaiseAccountSynced.
+            }
+        }
+    }
 
     /// <summary>
     /// Raises <see cref="BackfillProgressed"/>; a failing subscriber never affects the backfill or the other subscribers.
