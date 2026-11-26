@@ -9,7 +9,9 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <NoWarn>$(NoWarn);CA1848;CA1873</NoWarn>
     <RootNamespace>$(MSBuildProjectName)</RootNamespace>
-    <UseArtifactsOutputPath>true</UseArtifactsOutputPath>
+    <UseArtifactsOutput>true</UseArtifactsOutput>
+    <!-- Without this, tests/Directory.Build.props would make the test projects use their own tests/artifacts. -->
+    <ArtifactsPath>$(MSBuildThisFileDirectory)artifacts</ArtifactsPath>
     <SatelliteResourceLanguages>en;zh-Hans</SatelliteResourceLanguages>
     <DebugType>embedded</DebugType>
   </PropertyGroup>
