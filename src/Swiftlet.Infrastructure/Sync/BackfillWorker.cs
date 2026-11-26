@@ -193,22 +193,33 @@ public sealed class BackfillWorker(
         {
             while (settings.DownloadFullHistory)
             {
+                var before = downloaded;
                 var result = await coordinator.RunExclusiveAsync(
                     account.Id,
                     async () =>
                     {
                         await using var scope = scopeFactory.CreateAsyncScope();
                         return await scope.ServiceProvider.GetRequiredService<MailBackfillService>()
-                            .BackfillBatchAsync(session, account.Id, folder.Id, cancellationToken);
+                            .BackfillBatchAsync(
+                                session,
+                                account.Id,
+                                folder.Id,
+                                (stored, remaining) =>
+                                {
+                                    // Every committed message is reported, so the UI shows live progress instead of one jump per batch.
+                                    downloaded = before + stored;
+                                    onProgress(downloaded);
+                                    events.RaiseBackfillProgressed(account.Id, downloaded, false, folder.FullName, remaining);
+                                },
+                                cancellationToken);
                     },
                     cancellationToken);
 
                 if (result.Added > 0)
                 {
-                    downloaded += result.Added;
+                    downloaded = before + result.Added;
                     onProgress(downloaded);
                     events.RaiseAccountSynced(account.Id, result.Added);
-                    events.RaiseBackfillProgressed(account.Id, downloaded, false);
                 }
 
                 if (result.Outcome != BackfillOutcome.Progressed)

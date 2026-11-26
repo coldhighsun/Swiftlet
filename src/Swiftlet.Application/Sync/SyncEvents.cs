@@ -24,7 +24,9 @@ public sealed class AccountSyncedEventArgs(Guid accountId, int newMessages) : Ev
 /// <param name="accountId">The account identifier.</param>
 /// <param name="downloaded">The number of history messages downloaded so far in the current pass.</param>
 /// <param name="finished">Whether the pass is over (everything downloaded, or the pass ended early).</param>
-public sealed class BackfillProgressEventArgs(Guid accountId, int downloaded, bool finished) : EventArgs
+/// <param name="folderName">The folder being downloaded, or <see langword="null"/> when the report is not about a folder (for example the final one).</param>
+/// <param name="remaining">How many older messages the folder still holds on the server.</param>
+public sealed class BackfillProgressEventArgs(Guid accountId, int downloaded, bool finished, string? folderName = null, int remaining = 0) : EventArgs
 {
     /// <summary>
     /// Gets the account identifier.
@@ -40,6 +42,16 @@ public sealed class BackfillProgressEventArgs(Guid accountId, int downloaded, bo
     /// Gets a value indicating whether the pass is over.
     /// </summary>
     public bool Finished { get; } = finished;
+
+    /// <summary>
+    /// Gets the full name of the folder being downloaded, or <see langword="null"/> when the report is not about a folder.
+    /// </summary>
+    public string? FolderName { get; } = folderName;
+
+    /// <summary>
+    /// Gets how many older messages the folder still holds on the server.
+    /// </summary>
+    public int Remaining { get; } = remaining;
 }
 
 /// <summary>
@@ -53,7 +65,7 @@ public interface ISyncEvents
     event EventHandler<AccountSyncedEventArgs>? AccountSynced;
 
     /// <summary>
-    /// Raised after every background history batch and when a history pass ends. May be raised on a background thread.
+    /// Raised after every message the background history download stores and when a history pass ends. May be raised on a background thread.
     /// </summary>
     event EventHandler<BackfillProgressEventArgs>? BackfillProgressed;
 }
@@ -75,7 +87,9 @@ public sealed class SyncEvents : ISyncEvents
     /// <param name="accountId">The account identifier.</param>
     /// <param name="downloaded">The number of history messages downloaded so far in the current pass.</param>
     /// <param name="finished">Whether the pass is over.</param>
-    public void RaiseBackfillProgressed(Guid accountId, int downloaded, bool finished)
+    /// <param name="folderName">The folder being downloaded, if the report is about one.</param>
+    /// <param name="remaining">How many older messages the folder still holds on the server.</param>
+    public void RaiseBackfillProgressed(Guid accountId, int downloaded, bool finished, string? folderName = null, int remaining = 0)
     {
         var handlers = BackfillProgressed;
         if (handlers is null)
@@ -83,7 +97,7 @@ public sealed class SyncEvents : ISyncEvents
             return;
         }
 
-        var args = new BackfillProgressEventArgs(accountId, downloaded, finished);
+        var args = new BackfillProgressEventArgs(accountId, downloaded, finished, folderName, remaining);
         foreach (var handler in handlers.GetInvocationList().Cast<EventHandler<BackfillProgressEventArgs>>())
         {
             try

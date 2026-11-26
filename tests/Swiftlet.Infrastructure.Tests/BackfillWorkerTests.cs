@@ -20,17 +20,17 @@ namespace Swiftlet.Infrastructure.Tests;
 public class BackfillWorkerTests
 {
     /// <summary>
-    /// Verifies the worker downloads the whole history in batches and reports every batch.
+    /// Verifies the worker downloads the whole history in batches, reports every stored message and refreshes the views once per batch.
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>
     [Fact]
-    public async Task BackfillAccountAsync_LargeFolder_DownloadsEverythingAndReportsEachBatch()
+    public async Task BackfillAccountAsync_LargeFolder_DownloadsEverythingAndReportsEachMessage()
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
         await using var h = await Harness.CreateAsync(250, ct);
-        var progress = new List<(int Downloaded, bool Finished)>();
-        h.Events.BackfillProgressed += (_, e) => progress.Add((e.Downloaded, e.Finished));
+        var progress = new List<(int Downloaded, bool Finished, string? Folder, int Remaining)>();
+        h.Events.BackfillProgressed += (_, e) => progress.Add((e.Downloaded, e.Finished, e.FolderName, e.Remaining));
         var refreshes = 0;
         h.Events.AccountSynced += (_, _) => refreshes++;
 
@@ -40,7 +40,10 @@ public class BackfillWorkerTests
         // Assert
         complete.Should().BeTrue();
         (await h.CachedCountAsync("INBOX", ct)).Should().Be(250);
-        progress.Should().Equal((100, false), (200, false), (230, false));
+        progress.Select(p => p.Downloaded).Should().Equal(Enumerable.Range(1, 230), "every stored message is reported");
+        progress.Should().OnlyContain(p => !p.Finished && p.Folder == "INBOX");
+        progress[0].Remaining.Should().Be(229, "130 older messages were left after listing the first 100, minus the one just stored");
+        progress[^1].Remaining.Should().Be(0);
         refreshes.Should().Be(3);
         h.Factory.Session.Disposed.Should().BeTrue("the dedicated connection is closed when the pass ends");
     }

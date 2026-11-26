@@ -1621,6 +1621,26 @@ public class MainWindowViewModelTests
     }
 
     /// <summary>
+    /// A progress report that names a folder shows the account, the folder, the count so far and how many older messages are left.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task BackfillProgressed_WithFolder_ShowsAccountFolderAndRemaining()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+
+        await Task.Run(() => scenario.SyncEvents.RaiseProgress(scenario.Account.Id, 37, finished: false, "[Gmail]/Sent", 1234), TestContext.Current.CancellationToken);
+        await Task.WhenAll(scenario.UiThread.Invocations);
+
+        scenario.ViewModel.StatusText.Should()
+            .Contain("37")
+            .And.Contain(scenario.Account.EmailAddress)
+            .And.Contain("[Gmail]/Sent")
+            .And.Contain("1234");
+    }
+
+    /// <summary>
     /// After dispose a progress notification no longer touches the status line.
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>

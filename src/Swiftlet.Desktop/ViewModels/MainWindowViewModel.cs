@@ -192,9 +192,21 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         _ = ObserveAsync(_uiThread.InvokeAsync(() =>
         {
-            StatusText = e.Finished
-                ? _localizer.Format("Status_HistoryDone", e.Downloaded)
-                : _localizer.Format("Status_HistoryDownloading", e.Downloaded);
+            if (e.Finished)
+            {
+                StatusText = _localizer.Format("Status_HistoryDone", e.Downloaded);
+            }
+            else if (e.FolderName is { } folderName)
+            {
+                // Name the account and folder and how many messages of the folder are still to come, so the user can see the download move.
+                var account = _accounts.FirstOrDefault(a => a.Id == e.AccountId)?.EmailAddress ?? string.Empty;
+                StatusText = _localizer.Format("Status_HistoryDownloadingFolder", e.Downloaded, account, folderName, e.Remaining);
+            }
+            else
+            {
+                StatusText = _localizer.Format("Status_HistoryDownloading", e.Downloaded);
+            }
+
             return Task.CompletedTask;
         }));
     }

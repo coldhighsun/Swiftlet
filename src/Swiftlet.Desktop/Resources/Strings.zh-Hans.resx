@@ -134,6 +134,7 @@
   <data name="Settings_DownloadAllMail" xml:space="preserve"><value>同时下载 Gmail 的“所有邮件”文件夹</value></data>
   <data name="Settings_DownloadAllMailHint" xml:space="preserve"><value>“所有邮件”还包含不在任何其他文件夹里的已归档邮件。已从其他文件夹下载过的邮件会在本地复制，不会重复下载。</value></data>
   <data name="Status_HistoryDownloading" xml:space="preserve"><value>正在下载更早的邮件：已下载 {0} 封…</value></data>
+  <data name="Status_HistoryDownloadingFolder" xml:space="preserve"><value>正在下载更早的邮件（{1}，{2}）：已下载 {0} 封，该文件夹还剩 {3} 封…</value></data>
   <data name="Status_HistoryDone" xml:space="preserve"><value>更早的邮件已下载：共 {0} 封</value></data>
   <data name="Settings_SaveFailed" xml:space="preserve"><value>保存设置失败</value></data>
   <data name="Settings_RemoteImages" xml:space="preserve"><value>远程图片</value></data>

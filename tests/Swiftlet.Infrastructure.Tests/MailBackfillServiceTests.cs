@@ -396,12 +396,73 @@ public class MailBackfillServiceTests
         result.Outcome.Should().Be(BackfillOutcome.Completed);
         result.Added.Should().Be(80, "All Mail's first sync already cached the newest 20");
         result.Copied.Should().Be(60, "the 60 INBOX twins are copied, the 20 older archived messages are downloaded");
-        factory.Session.FetchMessagesCalls.Should().ContainSingle()
-            .Which.Uids.Should().BeEquivalentTo(Enumerable.Range(1061, 20).Select(u => (uint)u));
+        factory.Session.FetchMessagesCalls.Should().OnlyContain(c => c.Uids.Length == 1, "every message is downloaded and committed on its own");
+        factory.Session.FetchMessagesCalls.SelectMany(c => c.Uids).Should()
+            .BeEquivalentTo(Enumerable.Range(1061, 20).Select(u => (uint)u));
         await using var verifier = db.CreateVerifier();
         var context = await verifier.AccountAsync(account.Id, ct);
         context.Messages.Count(m => m.FolderId == allMail.Id).Should().Be(100);
         context.Messages.Where(m => m.FolderId == allMail.Id).Select(m => m.Uid).Distinct().Count().Should().Be(100);
+    }
+
+    /// <summary>
+    /// Verifies a download that fails midway keeps the messages already committed, and the next batch resumes below them without leaving a gap.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task BackfillBatchAsync_FailsMidBatch_KeepsCommittedMessagesAndResumesWithoutGap()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (session, accountId, folderId, _) = await SeedFirstSyncAsync(db, 250, ct);
+        var backfill = CreateBackfill(db);
+        session.OnFetchMessages = headers =>
+        {
+            if (headers.Any(h => h.Uid == 180))
+            {
+                throw new IOException("Simulated connection loss.");
+            }
+        };
+
+        // Act
+        var act = () => backfill.BackfillBatchAsync(session, accountId, folderId, ct);
+
+        // Assert: the batch listed UIDs 131..230 and stores newest first, so 230..181 are committed when UID 180 fails.
+        await act.Should().ThrowAsync<IOException>();
+        var messages = db.CreateMessageRepository();
+        (await messages.GetMinUidAsync(accountId, folderId, ct)).Should().Be(181u);
+
+        session.OnFetchMessages = null;
+        while ((await backfill.BackfillBatchAsync(session, accountId, folderId, ct)).Outcome == BackfillOutcome.Progressed)
+        {
+        }
+
+        await using var verifier = db.CreateVerifier();
+        var context = await verifier.AccountAsync(accountId, ct);
+        context.Messages.Select(m => m.Uid).OrderBy(u => u).ToList().Should().Equal(Enumerable.Range(1, 250).Select(u => (uint)u));
+    }
+
+    /// <summary>
+    /// Verifies the progress callback reports every committed message with the number of older messages still left in the folder.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task BackfillBatchAsync_WithCallback_ReportsEveryStoredMessage()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (session, accountId, folderId, _) = await SeedFirstSyncAsync(db, 250, ct);
+        var reports = new List<(int Stored, int Left)>();
+
+        // Act
+        await CreateBackfill(db).BackfillBatchAsync(session, accountId, folderId, (stored, left) => reports.Add((stored, left)), ct);
+
+        // Assert
+        reports.Select(r => r.Stored).Should().Equal(Enumerable.Range(1, 100));
+        reports[0].Left.Should().Be(229);
+        reports[^1].Left.Should().Be(130);
     }
 
     /// <summary>

@@ -134,6 +134,7 @@
   <data name="Settings_DownloadAllMail" xml:space="preserve"><value>Also download Gmail's "All Mail" folder</value></data>
   <data name="Settings_DownloadAllMailHint" xml:space="preserve"><value>All Mail also holds archived messages that are in no other folder. Messages already downloaded from another folder are copied locally instead of downloaded again.</value></data>
   <data name="Status_HistoryDownloading" xml:space="preserve"><value>Downloading older mail: {0} messages so far…</value></data>
+  <data name="Status_HistoryDownloadingFolder" xml:space="preserve"><value>Downloading older mail ({1}, {2}): {0} messages so far, {3} older ones left in this folder…</value></data>
   <data name="Status_HistoryDone" xml:space="preserve"><value>Older mail downloaded: {0} messages</value></data>
   <data name="Settings_SaveFailed" xml:space="preserve"><value>Failed to save settings</value></data>
   <data name="Settings_RemoteImages" xml:space="preserve"><value>Remote images</value></data>

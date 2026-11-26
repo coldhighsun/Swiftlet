@@ -134,6 +134,11 @@ internal sealed class FakeImapSession : IImapSession
     public Action<string>? OnFetchOlder { get; set; }
 
     /// <summary>
+    /// Gets or sets a callback run at the start of <see cref="FetchMessagesAsync"/>, which may throw to simulate a failing download.
+    /// </summary>
+    public Action<IReadOnlyList<RemoteHeader>>? OnFetchMessages { get; set; }
+
+    /// <summary>
     /// Gets the recorded <see cref="FetchMessagesAsync"/> calls.
     /// </summary>
     public List<(string Folder, uint[] Uids)> FetchMessagesCalls { get; } = [];
@@ -167,6 +172,7 @@ internal sealed class FakeImapSession : IImapSession
         IReadOnlyList<RemoteHeader> headers,
         CancellationToken cancellationToken = default)
     {
+        OnFetchMessages?.Invoke(headers);
         FetchMessagesCalls.Add((folderFullName, [.. headers.Select(h => h.Uid)]));
         var all = Messages.GetValueOrDefault(folderFullName) ?? [];
         IReadOnlyList<RemoteMessage> result =

@@ -509,9 +509,11 @@ internal sealed class FakeSyncEvents : ISyncEvents
     /// <param name="accountId">The account identifier.</param>
     /// <param name="downloaded">The messages downloaded so far.</param>
     /// <param name="finished">Whether the pass is over.</param>
-    public void RaiseProgress(Guid accountId, int downloaded, bool finished)
+    /// <param name="folderName">The folder being downloaded, if the report is about one.</param>
+    /// <param name="remaining">How many older messages the folder still holds.</param>
+    public void RaiseProgress(Guid accountId, int downloaded, bool finished, string? folderName = null, int remaining = 0)
     {
-        BackfillProgressed?.Invoke(this, new BackfillProgressEventArgs(accountId, downloaded, finished));
+        BackfillProgressed?.Invoke(this, new BackfillProgressEventArgs(accountId, downloaded, finished, folderName, remaining));
     }
 
     /// <summary>

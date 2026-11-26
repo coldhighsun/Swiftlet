@@ -94,10 +94,32 @@ public sealed class MailBackfillService(
     /// <param name="folderId">The folder identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The batch result.</returns>
+    public Task<BackfillBatchResult> BackfillBatchAsync(
+        IImapSession session,
+        Guid accountId,
+        Guid folderId,
+        CancellationToken cancellationToken = default)
+    {
+        return BackfillBatchAsync(session, accountId, folderId, null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Downloads and stores the next batch of older messages of a folder, committing every message as soon as it is downloaded.
+    /// Messages are stored from the newest to the oldest, so the lowest cached UID (the cursor of the next batch) always moves down without leaving a gap,
+    /// and an interrupted batch loses at most the message that was being downloaded.
+    /// The caller must hold the account's <see cref="SyncCoordinator"/> lock so no regular sync changes the folder meanwhile.
+    /// </summary>
+    /// <param name="session">The IMAP session.</param>
+    /// <param name="accountId">The account identifier.</param>
+    /// <param name="folderId">The folder identifier.</param>
+    /// <param name="onStored">Called after messages were committed, with the number stored so far in this batch and how many older messages the folder still holds; optional.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The batch result.</returns>
     public async Task<BackfillBatchResult> BackfillBatchAsync(
         IImapSession session,
         Guid accountId,
         Guid folderId,
+        Action<int, int>? onStored,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -133,39 +155,62 @@ public sealed class MailBackfillService(
             // from the local cache; only messages never seen before are downloaded.
             var wanted = page.Headers.Where(h => h.MessageId is not null).Select(h => h.MessageId!).ToList();
             var known = await messages.FindByMessageIdsAsync(accountId, wanted, folderId, cancellationToken);
-            var stored = new List<MailMessage>(page.Headers.Count);
-            var toDownload = new List<RemoteHeader>();
-            foreach (var header in page.Headers)
+            var storedCount = 0;
+            var copied = 0;
+            var handled = 0;
+            var pendingCopies = new List<MailMessage>();
+
+            // Commits the copies collected so far; always done before a download so higher UIDs are stored before lower ones.
+            async Task FlushCopiesAsync()
             {
+                if (pendingCopies.Count == 0)
+                {
+                    return;
+                }
+
+                await messages.AddRangeAsync(pendingCopies, cancellationToken);
+                storedCount += pendingCopies.Count;
+                copied += pendingCopies.Count;
+                pendingCopies.Clear();
+                onStored?.Invoke(storedCount, page.Remaining + page.Headers.Count - handled);
+            }
+
+            foreach (var header in page.Headers.OrderByDescending(h => h.Uid))
+            {
+                handled++;
+
+                // A message the account already holds in another folder is copied from the local cache; nothing is downloaded.
                 if (header.MessageId is not null && known.TryGetValue(header.MessageId, out var original))
                 {
-                    stored.Add(original.CopyToFolder(folder.Id, header.Uid, header.IsRead));
+                    pendingCopies.Add(original.CopyToFolder(folder.Id, header.Uid, header.IsRead));
+                    continue;
                 }
-                else
+
+                await FlushCopiesAsync();
+                var downloaded = await session.FetchMessagesAsync(folder.FullName, [header], cancellationToken);
+                if (downloaded.Count == 0)
                 {
-                    toDownload.Add(header);
+                    continue;
                 }
+
+                await messages.AddRangeAsync([MailSyncService.ToMessage(folder, downloaded[0])], cancellationToken);
+                storedCount++;
+                onStored?.Invoke(storedCount, page.Remaining + page.Headers.Count - handled);
             }
 
-            var copied = stored.Count;
-            if (toDownload.Count > 0)
-            {
-                var downloaded = await session.FetchMessagesAsync(folder.FullName, toDownload, cancellationToken);
-                stored.AddRange(downloaded.Select(r => MailSyncService.ToMessage(folder, r)));
-            }
+            await FlushCopiesAsync();
 
-            if (stored.Count > 0)
+            if (storedCount > 0)
             {
-                await messages.AddRangeAsync(stored, cancellationToken);
                 logger.LogDebug(
                     "Backfilled {Count} messages into {Folder} ({Copied} copied from other folders); {Remaining} older remain.",
-                    stored.Count,
+                    storedCount,
                     folder.FullName,
                     copied,
                     page.Remaining);
                 return new BackfillBatchResult(
                     page.Remaining > 0 ? BackfillOutcome.Progressed : BackfillOutcome.Completed,
-                    stored.Count,
+                    storedCount,
                     page.Remaining,
                     copied);
             }
