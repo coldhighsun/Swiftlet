@@ -81,6 +81,38 @@ public class SecretStoreTests
     }
 
     /// <summary>
+    /// Verifies replacing a secret goes through a temporary file that does not stay behind, even when an interrupted
+    /// earlier write left one (runs on Windows only).
+    /// </summary>
+    [Fact]
+    [SupportedOSPlatform("windows")]
+    public async Task WindowsSecretStore_Overwrite_LeavesNoTemporaryFile()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "DPAPI is only available on Windows.");
+        var ct = TestContext.Current.CancellationToken;
+        var directory = Path.Combine(Path.GetTempPath(), $"swiftlet-test-{Guid.NewGuid():N}");
+        try
+        {
+            var store = new WindowsSecretStore(directory);
+            await store.SetAsync("k", "first", ct);
+            var file = Directory.GetFiles(directory).Should().ContainSingle().Subject;
+            await File.WriteAllTextAsync($"{file}.tmp", "half written", ct);
+
+            await store.SetAsync("k", "second", ct);
+
+            Directory.GetFiles(directory).Should().Equal(file);
+            (await store.GetAsync("k", ct)).Should().Be("second");
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// Verifies the macOS store builds the expected <c>security</c> commands and Base64-encodes values.
     /// </summary>
     [Fact]

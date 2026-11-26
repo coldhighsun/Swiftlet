@@ -50,7 +50,18 @@ public sealed class WindowsSecretStore : ISecretStore
     {
         ArgumentNullException.ThrowIfNull(value);
         var encrypted = ProtectedData.Protect(Encoding.UTF8.GetBytes(value), Entropy, DataProtectionScope.CurrentUser);
-        await File.WriteAllBytesAsync(PathFor(key), encrypted, cancellationToken);
+        var path = PathFor(key);
+        var temporary = $"{path}.tmp";
+
+        // The database key must survive a power loss once data is encrypted with it, so the file is flushed to disk
+        // before it atomically replaces the old one.
+        await using (var stream = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
+        {
+            await stream.WriteAsync(encrypted, cancellationToken);
+            stream.Flush(flushToDisk: true);
+        }
+
+        File.Move(temporary, path, overwrite: true);
     }
 
     /// <inheritdoc />
