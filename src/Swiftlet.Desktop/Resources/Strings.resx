@@ -10,7 +10,7 @@
   <data name="Toolbar_Compose" xml:space="preserve"><value>Compose</value></data>
   <data name="Toolbar_Reply" xml:space="preserve"><value>Reply</value></data>
   <data name="Toolbar_Forward" xml:space="preserve"><value>Forward</value></data>
-  <data name="Toolbar_Star" xml:space="preserve"><value>★ Star</value></data>
+  <data name="Toolbar_Star" xml:space="preserve"><value>Star</value></data>
   <data name="Toolbar_ViewInBrowser" xml:space="preserve"><value>View in browser</value></data>
   <data name="Toolbar_Sync" xml:space="preserve"><value>Sync</value></data>
   <data name="Toolbar_AddAccount" xml:space="preserve"><value>Add account</value></data>

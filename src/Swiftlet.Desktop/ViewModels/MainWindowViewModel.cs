@@ -154,7 +154,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <param name="dispatcher">The request dispatcher.</param>
     /// <param name="dialogs">The dialog service.</param>
     /// <param name="localizer">The localizer.</param>
-    /// <param name="languageSelector">The language picker view model.</param>
     /// <param name="syncEvents">The sync notifications that trigger a refresh.</param>
     /// <param name="uiThread">The UI thread marshaller.</param>
     /// <param name="remoteImageRules">The saved rules that allow remote images for senders.</param>
@@ -164,7 +163,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         IRequestDispatcher dispatcher,
         IDialogService dialogs,
         ILocalizer localizer,
-        LanguageSelectorViewModel languageSelector,
         ISyncEvents syncEvents,
         IUiThread uiThread,
         IRemoteImageRules remoteImageRules,
@@ -179,7 +177,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _dispatcher = dispatcher;
         _dialogs = dialogs;
         _localizer = localizer;
-        LanguageSelector = languageSelector;
         SearchText = string.Empty;
         StatusText = string.Empty;
         UnifiedInbox = new UnifiedInboxNodeViewModel(localizer);
@@ -408,11 +405,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             }
         }
     }
-
-    /// <summary>
-    /// Gets the language picker.
-    /// </summary>
-    public LanguageSelectorViewModel LanguageSelector { get; }
 
     /// <summary>
     /// Gets the unified inbox node.
@@ -1404,7 +1396,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             TreeRoots.Remove(node);
         }
 
-        var added = labels.Select(l => new LabelNodeViewModel(l)).ToList();
+        var added = labels.Select((label, index) => new LabelNodeViewModel(label, index == 0)).ToList();
         foreach (var node in added)
         {
             TreeRoots.Add(node);

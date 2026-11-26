@@ -54,12 +54,10 @@ public class MainWindowViewModelTests
             Dispatcher.On<SyncAccountCommand>(_ => new SyncResult(2, 1, []));
             Dispatcher.On<SyncFolderCommand>(_ => new FolderSyncResult(0, false));
             Localizer = TestLocalizer.Chinese();
-            LanguageStore = new FakeLanguageStore();
             ViewModel = new MainWindowViewModel(
                 Dispatcher,
                 Dialogs,
                 Localizer,
-                new LanguageSelectorViewModel(Localizer, LanguageStore, NullLogger<LanguageSelectorViewModel>.Instance),
                 SyncEvents,
                 UiThread,
                 RemoteImageRules,
@@ -76,11 +74,6 @@ public class MainWindowViewModelTests
         /// Gets the localizer, fixed to Simplified Chinese until a test switches it.
         /// </summary>
         public LocalizationManager Localizer { get; }
-
-        /// <summary>
-        /// Gets the in-memory language preference store.
-        /// </summary>
-        public FakeLanguageStore LanguageStore { get; }
 
         /// <summary>
         /// Gets or sets a value indicating whether the account exists.
@@ -156,6 +149,25 @@ public class MainWindowViewModelTests
             await ViewModel.InitializeAsync();
             await ViewModel.WhenIdleAsync();
         }
+    }
+
+    /// <summary>
+    /// Only the first label node starts the label section of the tree.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Reload_SeveralLabels_OnlyTheFirstStartsTheSection()
+    {
+        var scenario = new Scenario();
+        scenario.Dispatcher.On<GetLabelsQuery>(_ => (IReadOnlyList<Label>)new List<Label>
+        {
+            Label.Create("Travel", "#1E88E5"),
+            scenario.Work,
+        });
+
+        await scenario.StartAsync();
+
+        scenario.ViewModel.TreeRoots.OfType<LabelNodeViewModel>().Select(n => n.StartsSection).Should().Equal(true, false);
     }
 
     /// <summary>

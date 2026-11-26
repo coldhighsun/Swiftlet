@@ -166,7 +166,7 @@ public class UiSmokeTests
                 await scenario.ViewModel.WhenIdleAsync();
                 var window = new MainWindow { DataContext = scenario.ViewModel };
                 Render(window, "main-window-zh");
-                var buttons = () => window.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).ToList();
+                var buttons = () => UiQueries.ButtonCaptions(window);
                 var labels = () => window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
                 buttons().Should().Contain("写邮件").And.Contain("同步");
                 labels().Should().Contain("发件人：");
@@ -343,7 +343,7 @@ public class UiSmokeTests
                 window.GetVisualDescendants().OfType<TreeView>().Single().ItemCount.Should().Be(3);
                 var texts = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
                 texts.Should().Contain(unifiedInbox).And.Contain("Work");
-                window.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).Should().Contain(delete);
+                UiQueries.ButtonCaptions(window).Should().Contain(delete);
                 window.Close();
             },
             TestContext.Current.CancellationToken);
@@ -571,7 +571,7 @@ public class UiSmokeTests
                 var window = new MainWindow { DataContext = scenario.ViewModel };
                 Render(window, "main-window-labels-flyout", "en");
 
-                var button = window.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Labels");
+                var button = window.GetVisualDescendants().OfType<Button>().Single(b => UiQueries.Caption(b) == "Labels");
                 button.IsEnabled.Should().BeTrue();
                 button.Flyout!.ShowAt(button);
                 Dispatcher.UIThread.RunJobs();
@@ -609,10 +609,10 @@ public class UiSmokeTests
                 var window = new MainWindow { DataContext = scenario.ViewModel };
                 Render(window, "main-window-account-menu", "en");
 
-                var passwordMenu = OpenAccountMenu(window, scenario.Account.EmailAddress);
+                var passwordMenu = OpenAccountMenu(window, scenario.ViewModel.Accounts[0]);
                 passwordMenu.Items.OfType<MenuItem>().Where(i => i.IsVisible).Select(i => i.Header).Should().Equal("Remove account");
                 passwordMenu.Close();
-                var oauthMenu = OpenAccountMenu(window, oauth.EmailAddress);
+                var oauthMenu = OpenAccountMenu(window, scenario.ViewModel.Accounts[1]);
                 var items = oauthMenu.Items.OfType<MenuItem>().Where(i => i.IsVisible).ToList();
                 items.Select(i => i.Header).Should().Equal("Remove account", "Re-sign in");
                 items.Should().OnlyContain(i => i.Command != null && i.CommandParameter != null);
@@ -720,9 +720,9 @@ public class UiSmokeTests
                 var tree = window.GetVisualDescendants().OfType<TreeView>().Single();
                 foreach (var folder in scenario.ViewModel.Accounts[0].Folders)
                 {
-                    var text = tree.GetVisualDescendants().OfType<TextBlock>().Single(t => t.DataContext == folder && t.ContextMenu is not null);
-                    var menu = text.ContextMenu!;
-                    menu.Open(text);
+                    var row = UiQueries.MenuOwner(tree, folder);
+                    var menu = row.ContextMenu!;
+                    menu.Open(row);
                     Dispatcher.UIThread.RunJobs();
                     var item = menu.Items.OfType<MenuItem>().Should().ContainSingle().Which;
                     item.Header.Should().Be("Delete all messages");
@@ -737,17 +737,190 @@ public class UiSmokeTests
     }
 
     /// <summary>
-    /// Opens the context menu of the tree node showing an account address.
+    /// Verifies the sidebar offers composing, adding an account and the settings, and the language picker left the window.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_Sidebar_HoldsTheGlobalActions()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference("en");
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Localizer.SetPreference("en");
+                await scenario.StartAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-sidebar", "en");
+
+                var sidebar = window.FindControl<Control>("Sidebar")!;
+                UiQueries.ButtonCaptions(sidebar).Should().Contain(["Compose", "Add account", "Settings"]);
+                UiQueries.ButtonCaptions(window.FindControl<Control>("MessagePane")!).Should().Contain("Sync");
+                UiQueries.ButtonCaptions(window.FindControl<Control>("ReaderActions")!)
+                    .Should().Contain(["Reply", "Forward", "Star", "Labels", "View in browser", "Delete"]);
+                window.GetVisualDescendants().OfType<ComboBox>().Should().BeEmpty();
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the message actions only show while a message is open.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_NothingSelected_HidesReaderActions()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var scenario = new MainWindowViewModelTests.Scenario();
+                await scenario.StartAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-no-actions");
+                var actions = window.FindControl<Control>("ReaderActions")!;
+                actions.IsEffectivelyVisible.Should().BeFalse();
+
+                scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+                await scenario.ViewModel.WhenIdleAsync();
+                Snapshot(window, "main-window-actions");
+
+                actions.IsEffectivelyVisible.Should().BeTrue();
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the three panes and every message action stay inside the narrowest window, even with a very long address.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    [Theory]
+    [InlineData("zh-Hans")]
+    [InlineData("en")]
+    public async Task MainWindow_MinimumWidth_PanesAndActionsFit(string language)
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference(language);
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Localizer.SetPreference(language);
+                var longAccount = TestData.Account($"{new string('a', 68)}@example.com");
+                scenario.Dispatcher.On<Swiftlet.Application.Queries.GetAccountsQuery>(
+                    _ => new List<Swiftlet.Domain.Accounts.MailAccount> { scenario.Account, longAccount });
+                await scenario.StartAsync();
+                scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+                await scenario.ViewModel.WhenIdleAsync();
+
+                var window = new MainWindow { DataContext = scenario.ViewModel, Width = 800, Height = 480 };
+                Render(window, $"main-window-narrow-{language}", language);
+
+                window.FindControl<Control>("Sidebar")!.Bounds.Width.Should().BeGreaterThanOrEqualTo(180);
+                window.FindControl<Control>("MessagePane")!.Bounds.Width.Should().BeGreaterThanOrEqualTo(260);
+                var reader = window.FindControl<Control>("ReaderPane")!;
+                reader.Bounds.Width.Should().BeGreaterThanOrEqualTo(300);
+                reader.Bounds.Right.Should().BeLessThanOrEqualTo(800);
+                var buttons = window.FindControl<Control>("ReaderActions")!.GetVisualDescendants().OfType<Button>().ToList();
+                buttons.Should().HaveCount(6);
+                foreach (var button in buttons)
+                {
+                    button.Bounds.Width.Should().BeGreaterThan(0);
+                    button.TranslatePoint(new Point(button.Bounds.Width, 0), window)!.Value.X
+                        .Should().BeLessThanOrEqualTo(800, UiQueries.Caption(button));
+                }
+
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies every button showing only an icon says what it does, both in a tooltip and to assistive technology.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_IconButtons_HaveNameAndToolTip()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var scenario = new MainWindowViewModelTests.Scenario();
+                await scenario.StartAsync();
+                scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+                await scenario.ViewModel.WhenIdleAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-icon-buttons");
+
+                var iconButtons = window.GetVisualDescendants().OfType<Button>().Where(b => b.Content is PathIcon).ToList();
+
+                iconButtons.Should().HaveCountGreaterThanOrEqualTo(6);
+                iconButtons.Should().OnlyContain(b =>
+                    !string.IsNullOrEmpty(Avalonia.Automation.AutomationProperties.GetName(b))
+                    && !string.IsNullOrEmpty(ToolTip.GetTip(b) as string));
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the selected folder is marked with the subtle accent and a disabled icon button gets no grey box.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_SelectionAndDisabledButtons_UseTheDesignColors()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var scenario = new MainWindowViewModelTests.Scenario();
+                await scenario.StartAsync();
+                scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+                await scenario.ViewModel.WhenIdleAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-selection-colors");
+
+                var row = window.GetVisualDescendants().OfType<TreeViewItem>().Single(i => i.IsSelected);
+                var layout = row.GetVisualDescendants().OfType<Border>().First(b => b.Name == "PART_LayoutRoot");
+                Color(layout.Background).Should().Be(Token(window, "Brush.AccentSubtle"));
+                var disabled = window.FindControl<Control>("ReaderActions")!.GetVisualDescendants().OfType<Button>()
+                    .Single(b => !b.IsEffectivelyEnabled);
+                var presenter = disabled.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>().First();
+                Color(presenter.Background).A.Should().Be(0);
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Reads the color of a solid brush.
+    /// </summary>
+    /// <param name="brush">The brush.</param>
+    /// <returns>The color.</returns>
+    private static Avalonia.Media.Color Color(Avalonia.Media.IBrush? brush)
+    {
+        return brush.Should().BeAssignableTo<Avalonia.Media.ISolidColorBrush>().Which.Color;
+    }
+
+    /// <summary>
+    /// Reads the color of a design token in the theme of a window.
+    /// </summary>
+    /// <param name="window">The window.</param>
+    /// <param name="key">The resource key.</param>
+    /// <returns>The color.</returns>
+    private static Avalonia.Media.Color Token(Window window, string key)
+    {
+        Avalonia.Application.Current!.TryGetResource(key, window.ActualThemeVariant, out var value).Should().BeTrue();
+        return Color((Avalonia.Media.IBrush)value!);
+    }
+
+    /// <summary>
+    /// Opens the context menu of the tree row of an account.
     /// </summary>
     /// <param name="window">The main window.</param>
-    /// <param name="address">The account address.</param>
+    /// <param name="account">The account node.</param>
     /// <returns>The opened menu.</returns>
-    private static ContextMenu OpenAccountMenu(MainWindow window, string address)
+    private static ContextMenu OpenAccountMenu(MainWindow window, AccountNodeViewModel account)
     {
-        var text = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == address);
-        var menu = text.ContextMenu;
-        menu.Should().NotBeNull();
-        menu!.Open(text);
+        var row = UiQueries.MenuOwner(window, account);
+        var menu = row.ContextMenu!;
+        menu.Open(row);
         Dispatcher.UIThread.RunJobs();
         AvaloniaHeadlessPlatform.ForceRenderTimerTick();
         return menu;

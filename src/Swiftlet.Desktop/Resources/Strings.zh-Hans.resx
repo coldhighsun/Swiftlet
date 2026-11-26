@@ -10,7 +10,7 @@
   <data name="Toolbar_Compose" xml:space="preserve"><value>写邮件</value></data>
   <data name="Toolbar_Reply" xml:space="preserve"><value>回复</value></data>
   <data name="Toolbar_Forward" xml:space="preserve"><value>转发</value></data>
-  <data name="Toolbar_Star" xml:space="preserve"><value>★ 星标</value></data>
+  <data name="Toolbar_Star" xml:space="preserve"><value>星标</value></data>
   <data name="Toolbar_ViewInBrowser" xml:space="preserve"><value>浏览器查看</value></data>
   <data name="Toolbar_Sync" xml:space="preserve"><value>同步</value></data>
   <data name="Toolbar_AddAccount" xml:space="preserve"><value>添加账号</value></data>

@@ -147,8 +147,14 @@ public sealed class UnifiedInboxNodeViewModel(ILocalizer localizer) : Observable
 /// A label node in the tree; selecting it lists the messages carrying the label.
 /// </summary>
 /// <param name="label">The label.</param>
-public sealed class LabelNodeViewModel(Label label)
+/// <param name="startsSection">Whether this is the first label node, which is set apart from the accounts above.</param>
+public sealed class LabelNodeViewModel(Label label, bool startsSection = false)
 {
+    /// <summary>
+    /// Gets a value indicating whether this is the first label node, which is set apart from the accounts above.
+    /// </summary>
+    public bool StartsSection { get; } = startsSection;
+
     /// <summary>
     /// Gets the label.
     /// </summary>

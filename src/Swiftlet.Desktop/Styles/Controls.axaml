@@ -59,6 +59,18 @@
     <Setter Property="Padding" Value="8" />
   </Style>
 
+  <Style Selector="Button.icon:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <!-- Selected rows: a light accent behind normal text. -->
+  <Style Selector="TreeViewItem:selected /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="{DynamicResource Brush.AccentSubtle}" />
+  </Style>
+  <Style Selector="TreeViewItem:selected:pointerover /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="{DynamicResource Brush.AccentSubtle}" />
+  </Style>
+
   <Style Selector="Button.danger /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Foreground" Value="{DynamicResource Brush.Danger}" />
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.Danger}" />
@@ -70,5 +82,22 @@
   </Style>
   <Style Selector="Button.icon.danger /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <!-- Buttons made of an icon and a caption. -->
+  <Style Selector="Button > StackPanel > PathIcon">
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+  </Style>
+  <Style Selector="Button.icon > PathIcon">
+    <Setter Property="Width" Value="18" />
+    <Setter Property="Height" Value="18" />
+  </Style>
+  <Style Selector="PathIcon.star">
+    <Setter Property="Data" Value="{StaticResource Icon.Star}" />
+  </Style>
+  <Style Selector="PathIcon.star.flagged">
+    <Setter Property="Data" Value="{StaticResource Icon.StarFilled}" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Star}" />
   </Style>
 </Styles>
