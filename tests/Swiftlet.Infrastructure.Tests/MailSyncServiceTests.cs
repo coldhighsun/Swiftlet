@@ -586,6 +586,68 @@ public class MailSyncServiceTests
     }
 
     /// <summary>
+    /// Verifies a single-folder sync removes the server-deleted messages of that folder and leaves the other folders alone.
+    /// </summary>
+    [Fact]
+    public async Task SyncSingleFolder_ServerDeleted_ReconcilesOnlyThatFolder()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, _) = await db.SeedAccountAsync(ct);
+        var factory = new FakeImapSessionFactory();
+        factory.Session.Folders.Add(TestData.Folder("INBOX", FolderRole.Inbox));
+        factory.Session.Folders.Add(TestData.Folder("Trash", FolderRole.Trash));
+        factory.Session.Messages["INBOX"] = [TestData.Remote(1), TestData.Remote(2)];
+        factory.Session.Messages["Trash"] = [TestData.Remote(1), TestData.Remote(2)];
+        var service = CreateService(db, factory, settings: new FakeSyncSettings { RemoveServerDeletedMessages = true });
+        await service.SyncAsync(account.Id, ct);
+        var folders = await db.CreateFolderRepository().GetByAccountAsync(account.Id, ct);
+        var inbox = folders.Single(f => f.FullName == "INBOX");
+        var trash = folders.Single(f => f.FullName == "Trash");
+        factory.Session.RemoveFromServer("INBOX", 1);
+        factory.Session.RemoveFromServer("Trash", 1);
+
+        var result = await service.SyncSingleFolderAsync(account.Id, trash.Id, ct);
+
+        result.Should().Be(new FolderSyncResult(0, true));
+        (await StatesAsync(db, account.Id, trash.Id, ct)).Select(m => m.Uid).Should().Equal(2u);
+        (await StatesAsync(db, account.Id, inbox.Id, ct)).Should().HaveCount(2);
+    }
+
+    /// <summary>
+    /// Verifies a single-folder sync also downloads new mail.
+    /// </summary>
+    [Fact]
+    public async Task SyncSingleFolder_NewMessage_IsCached()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (service, session, accountId, folderId) = await SeedSyncedInboxAsync(db, new FakeSyncSettings(), [1], ct);
+        session.Messages["INBOX"].Add(TestData.Remote(2));
+
+        var result = await service.SyncSingleFolderAsync(accountId, folderId, ct);
+
+        result.Should().Be(new FolderSyncResult(1, true));
+        (await StatesAsync(db, accountId, folderId, ct)).Should().HaveCount(2);
+    }
+
+    /// <summary>
+    /// Verifies a folder that no longer exists locally is ignored without connecting.
+    /// </summary>
+    [Fact]
+    public async Task SyncSingleFolder_UnknownFolder_ReportsNoChange()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, _) = await db.SeedAccountAsync(ct);
+        var factory = new FakeImapSessionFactory { Failure = new IOException("must not connect") };
+
+        var result = await CreateService(db, factory).SyncSingleFolderAsync(account.Id, Guid.NewGuid(), ct);
+
+        result.Should().Be(new FolderSyncResult(0, false));
+    }
+
+    /// <summary>
     /// Verifies the first sync creates selectable folders and caches their messages.
     /// </summary>
     [Fact]

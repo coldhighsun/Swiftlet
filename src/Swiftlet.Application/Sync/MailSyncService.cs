@@ -16,6 +16,13 @@ namespace Swiftlet.Application.Sync;
 public sealed record SyncResult(int FoldersSynced, int NewMessages, IReadOnlyList<string> FailedFolders);
 
 /// <summary>
+/// The outcome of synchronizing one folder.
+/// </summary>
+/// <param name="NewMessages">The number of new messages cached.</param>
+/// <param name="Changed">Whether anything in the cache changed.</param>
+public sealed record FolderSyncResult(int NewMessages, bool Changed);
+
+/// <summary>
 /// Tunable limits of the synchronization.
 /// </summary>
 /// <param name="MaxMessagesPerFolderPerSync">The maximum number of messages downloaded per folder per run.</param>
@@ -98,6 +105,27 @@ public sealed class MailSyncService(
             run.NewMessages,
             run.Failed.Count);
         return new SyncResult(run.Synced, run.NewMessages, run.Failed);
+    }
+
+    /// <summary>
+    /// Synchronizes a single folder on one connection, so the folder the user opens catches up without waiting for the next account sync.
+    /// </summary>
+    /// <param name="accountId">The account identifier.</param>
+    /// <param name="folderId">The folder identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The outcome; nothing changed if the account or folder no longer exists.</returns>
+    public async Task<FolderSyncResult> SyncSingleFolderAsync(Guid accountId, Guid folderId, CancellationToken cancellationToken = default)
+    {
+        var account = await accounts.GetAsync(accountId, cancellationToken);
+        if (account is null || await folders.GetAsync(accountId, folderId, cancellationToken) is not { } folder)
+        {
+            return new FolderSyncResult(0, false);
+        }
+
+        await using var session = await imapFactory.ConnectAsync(account, cancellationToken);
+        using var run = new SyncRun(account, [folder], null);
+        var (newMessages, changed) = await SyncFolderAsync(session, run, folder, cancellationToken);
+        return new FolderSyncResult(newMessages, changed);
     }
 
     /// <summary>

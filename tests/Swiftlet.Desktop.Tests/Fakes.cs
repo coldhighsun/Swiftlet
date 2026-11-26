@@ -76,13 +76,44 @@ internal sealed class FakeDispatcher : IRequestDispatcher
     /// <returns>The response.</returns>
     private async Task<TResponse> Dispatch<TResponse>(object request, CancellationToken cancellationToken)
     {
-        Requests.Add(request);
+        // Locked because the folder check is sent from a thread-pool thread while other requests are recorded.
+        lock (Requests)
+        {
+            Requests.Add(request);
+        }
+
         if (!_handlers.TryGetValue(request.GetType(), out var handler))
         {
             throw new InvalidOperationException($"No fake handler for {request.GetType().Name}.");
         }
 
         return (TResponse)(await handler(request, cancellationToken))!;
+    }
+}
+
+/// <summary>
+/// A clock that only moves when a test tells it to.
+/// </summary>
+internal sealed class FakeClock : TimeProvider
+{
+    /// <summary>
+    /// The current time.
+    /// </summary>
+    private DateTimeOffset _now = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+    /// <inheritdoc />
+    public override DateTimeOffset GetUtcNow()
+    {
+        return _now;
+    }
+
+    /// <summary>
+    /// Moves the clock forward.
+    /// </summary>
+    /// <param name="by">How far to move.</param>
+    public void Advance(TimeSpan by)
+    {
+        _now += by;
     }
 }
 

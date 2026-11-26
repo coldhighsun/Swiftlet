@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using Mediator;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Application.Abstractions;
@@ -51,6 +52,7 @@ public class MainWindowViewModelTests
             Dispatcher.On<SetMessageFlaggedCommand>(_ => Unit.Value);
             Dispatcher.On<SetMessageLabelCommand>(_ => Unit.Value);
             Dispatcher.On<SyncAccountCommand>(_ => new SyncResult(2, 1, []));
+            Dispatcher.On<SyncFolderCommand>(_ => new FolderSyncResult(0, false));
             Localizer = TestLocalizer.Chinese();
             LanguageStore = new FakeLanguageStore();
             ViewModel = new MainWindowViewModel(
@@ -61,8 +63,14 @@ public class MainWindowViewModelTests
                 SyncEvents,
                 UiThread,
                 RemoteImageRules,
-                Logger);
+                Logger,
+                Clock);
         }
+
+        /// <summary>
+        /// Gets the clock of the view model.
+        /// </summary>
+        public FakeClock Clock { get; } = new();
 
         /// <summary>
         /// Gets the localizer, fixed to Simplified Chinese until a test switches it.
@@ -2041,5 +2049,96 @@ public class MainWindowViewModelTests
 
         scenario.Dispatcher.Sent<GetMessagesQuery>().Count(q => q.Skip == 50).Should().Be(1);
         scenario.ViewModel.Messages.Should().HaveCount(100);
+    }
+
+    /// <summary>
+    /// Verifies opening a folder checks it against the server at once.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task SelectedNode_Folder_SynchronizesThatFolder()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+
+        await SelectAsync(scenario, scenario.Sent);
+
+        scenario.Dispatcher.Sent<SyncFolderCommand>().Should().ContainSingle(c => c.FolderId == scenario.Sent.Id)
+            .Which.AccountId.Should().Be(scenario.Account.Id);
+    }
+
+    /// <summary>
+    /// Verifies reopening a folder does not log in to the server again until a while has passed.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task SelectedNode_FolderReopened_ChecksAgainOnlyAfterTheInterval()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        await SelectAsync(scenario, scenario.Sent);
+        await SelectAsync(scenario, scenario.Inbox);
+        scenario.Clock.Advance(TimeSpan.FromSeconds(29));
+        await SelectAsync(scenario, scenario.Sent);
+        var withinInterval = scenario.Dispatcher.Sent<SyncFolderCommand>().Count(c => c.FolderId == scenario.Sent.Id);
+
+        await SelectAsync(scenario, scenario.Inbox);
+        scenario.Clock.Advance(TimeSpan.FromSeconds(1));
+        await SelectAsync(scenario, scenario.Sent);
+
+        withinInterval.Should().Be(1);
+        scenario.Dispatcher.Sent<SyncFolderCommand>().Count(c => c.FolderId == scenario.Sent.Id).Should().Be(2);
+    }
+
+    /// <summary>
+    /// Verifies views spanning several folders are left to the regular synchronization.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task SelectedNode_UnifiedInboxOrLabel_SynchronizesNoFolder()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        var before = scenario.Dispatcher.Sent<SyncFolderCommand>().Count;
+
+        scenario.ViewModel.SelectedNode = scenario.ViewModel.TreeRoots[0];
+        await scenario.ViewModel.WhenIdleAsync();
+        scenario.ViewModel.SelectedNode = scenario.ViewModel.TreeRoots.OfType<LabelNodeViewModel>().Single();
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.Dispatcher.Sent<SyncFolderCommand>().Should().HaveCount(before);
+    }
+
+    /// <summary>
+    /// Verifies an unreachable server leaves the cached messages listed and is only logged.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task SelectedNode_FolderCheckFails_KeepsCachedListAndLogsWarning()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        await SelectAsync(scenario, scenario.Sent);
+        scenario.Clock.Advance(TimeSpan.FromMinutes(1));
+        scenario.Dispatcher.On<SyncFolderCommand>(_ => throw new IOException("offline"));
+        var status = scenario.ViewModel.StatusText;
+
+        await SelectAsync(scenario, scenario.Inbox);
+
+        scenario.ViewModel.Messages.Should().HaveCount(2);
+        scenario.ViewModel.StatusText.Should().Be(status);
+        scenario.Logger.Entries.Should().Contain(e => e.Level == LogLevel.Warning);
+    }
+
+    /// <summary>
+    /// Selects the tree node of a folder and waits until the view model is idle.
+    /// </summary>
+    /// <param name="scenario">The scenario.</param>
+    /// <param name="folder">The folder to open.</param>
+    /// <returns>A task that completes when the list is loaded and the folder is checked.</returns>
+    private static async Task SelectAsync(Scenario scenario, MailFolder folder)
+    {
+        scenario.ViewModel.SelectedNode = scenario.ViewModel.Accounts[0].Folders.Single(f => f.Folder.Id == folder.Id);
+        await scenario.ViewModel.WhenIdleAsync();
     }
 }

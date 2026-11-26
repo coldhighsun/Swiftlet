@@ -29,6 +29,26 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private const int PageSize = 50;
 
     /// <summary>
+    /// How long after checking a folder against the server opening it again does not check it again.
+    /// </summary>
+    private static readonly TimeSpan FolderCheckInterval = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// When each folder was last checked against the server because the user opened it.
+    /// </summary>
+    private readonly Dictionary<Guid, DateTimeOffset> _folderChecks = [];
+
+    /// <summary>
+    /// The clock that spaces out folder checks.
+    /// </summary>
+    private readonly TimeProvider _timeProvider;
+
+    /// <summary>
+    /// The folder checks started by opening folders.
+    /// </summary>
+    private Task _folderCheckTask = Task.CompletedTask;
+
+    /// <summary>
     /// The request dispatcher.
     /// </summary>
     private readonly IRequestDispatcher _dispatcher;
@@ -134,6 +154,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <param name="uiThread">The UI thread marshaller.</param>
     /// <param name="remoteImageRules">The saved rules that allow remote images for senders.</param>
     /// <param name="logger">The logger; optional.</param>
+    /// <param name="timeProvider">The clock; optional.</param>
     public MainWindowViewModel(
         IRequestDispatcher dispatcher,
         IDialogService dialogs,
@@ -142,9 +163,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         ISyncEvents syncEvents,
         IUiThread uiThread,
         IRemoteImageRules remoteImageRules,
-        ILogger<MainWindowViewModel>? logger = null)
+        ILogger<MainWindowViewModel>? logger = null,
+        TimeProvider? timeProvider = null)
     {
         _logger = logger ?? NullLogger<MainWindowViewModel>.Instance;
+        _timeProvider = timeProvider ?? TimeProvider.System;
         _remoteImageRules = remoteImageRules;
         _syncEvents = syncEvents;
         _uiThread = uiThread;
@@ -438,13 +461,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Waits until pending list loads and selection side effects have finished.
+    /// Waits until pending list loads, selection side effects and folder checks have finished.
     /// </summary>
     /// <returns>A task that completes when the view model is idle.</returns>
     internal async Task WhenIdleAsync()
     {
         await _loadTask;
         await _selectionTask;
+        await _folderCheckTask;
     }
 
     /// <summary>
@@ -946,6 +970,46 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _logger.LogInformation("Selected {Node}", value?.GetType().Name);
         SearchText = string.Empty;
         _loadTask = LoadMessagesAsync(value);
+        if (value is FolderNodeViewModel folder)
+        {
+            CheckFolderIfDue(folder.Folder);
+        }
+    }
+
+    /// <summary>
+    /// Starts a server check of an opened folder, so mail deleted or changed elsewhere shows without waiting for the next account sync.
+    /// Skipped when the folder was checked a moment ago, which also covers the tree being rebuilt around the same selection.
+    /// </summary>
+    /// <param name="folder">The opened folder.</param>
+    private void CheckFolderIfDue(MailFolder folder)
+    {
+        var now = _timeProvider.GetUtcNow();
+        if (_folderChecks.TryGetValue(folder.Id, out var last) && now - last < FolderCheckInterval)
+        {
+            return;
+        }
+
+        _folderChecks[folder.Id] = now;
+        _folderCheckTask = Task.WhenAll(_folderCheckTask, CheckFolderAsync(folder.AccountId, folder.Id));
+    }
+
+    /// <summary>
+    /// Synchronizes one folder off the UI thread; a change is shown through the sync notification.
+    /// </summary>
+    /// <param name="accountId">The owning account.</param>
+    /// <param name="folderId">The folder.</param>
+    /// <returns>A task that completes when the check has ended.</returns>
+    private async Task CheckFolderAsync(Guid accountId, Guid folderId)
+    {
+        try
+        {
+            await Task.Run(() => _dispatcher.SendAsync(new SyncFolderCommand(accountId, folderId)));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The cached messages stay listed, and the regular sync retries and reports a lasting problem.
+            _logger.LogWarning(ex, "Checking folder {FolderId} of account {AccountId} failed", folderId, accountId);
+        }
     }
 
     /// <summary>

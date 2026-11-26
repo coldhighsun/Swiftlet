@@ -25,8 +25,19 @@ public class SyncAccountCommandTests
         SyncCoordinator coordinator,
         SyncEvents events)
     {
+        return new SyncAccountCommandHandler(CreateService(db, factory), coordinator, events);
+    }
+
+    /// <summary>
+    /// Creates a synchronization service over its own context.
+    /// </summary>
+    /// <param name="db">The test database.</param>
+    /// <param name="factory">The IMAP factory.</param>
+    /// <returns>The service.</returns>
+    private static MailSyncService CreateService(TestDatabase db, FakeImapSessionFactory factory)
+    {
         var context = db.CreateVerifier();
-        var service = new MailSyncService(
+        return new MailSyncService(
             context.Accounts(),
             context.Folders(),
             context.Messages(),
@@ -34,7 +45,65 @@ public class SyncAccountCommandTests
             new FakeSyncSettings(),
             new MailSyncOptions(),
             NullLogger<MailSyncService>.Instance);
-        return new SyncAccountCommandHandler(service, coordinator, events);
+    }
+
+    /// <summary>
+    /// Checking one folder raises the event only when the cache changed.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task HandleFolder_OnlyAChange_RaisesAccountSynced()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, _) = await db.SeedAccountAsync(ct);
+        var factory = new FakeImapSessionFactory();
+        factory.Session.Folders.Add(TestData.Folder("INBOX", FolderRole.Inbox));
+        factory.Session.Messages["INBOX"] = [TestData.Remote(1)];
+        var events = new SyncEvents();
+        var coordinator = new SyncCoordinator();
+        await CreateHandler(db, factory, coordinator, events).Handle(new SyncAccountCommand(account.Id), ct);
+        var inbox = (await db.CreateFolderRepository().GetByAccountAsync(account.Id, ct)).Single();
+        var raised = new List<int>();
+        events.AccountSynced += (_, e) => raised.Add(e.NewMessages);
+        var handler = new SyncFolderCommandHandler(CreateService(db, factory), coordinator, events);
+
+        // Act
+        await handler.Handle(new SyncFolderCommand(account.Id, inbox.Id), ct);
+        var afterUnchanged = raised.Count;
+        factory.Session.Messages["INBOX"].Add(TestData.Remote(2));
+        await handler.Handle(new SyncFolderCommand(account.Id, inbox.Id), ct);
+
+        // Assert
+        afterUnchanged.Should().Be(0);
+        raised.Should().Equal(1);
+    }
+
+    /// <summary>
+    /// Checking one folder waits while the account is being synchronized, so messages are never stored twice.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task HandleFolder_AccountLockHeld_WaitsForIt()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, _) = await db.SeedAccountAsync(ct);
+        var coordinator = new SyncCoordinator();
+        var release = new TaskCompletionSource<bool>();
+        var holder = coordinator.RunExclusiveAsync(account.Id, () => release.Task, ct);
+        var handler = new SyncFolderCommandHandler(CreateService(db, new FakeImapSessionFactory()), coordinator, new SyncEvents());
+
+        // Act
+        var check = handler.Handle(new SyncFolderCommand(account.Id, Guid.NewGuid()), ct).AsTask();
+        var waited = coordinator.HasWaiters(account.Id) && !check.IsCompleted;
+        release.SetResult(true);
+        await Task.WhenAll(holder, check);
+
+        // Assert
+        waited.Should().BeTrue();
     }
 
     /// <summary>
