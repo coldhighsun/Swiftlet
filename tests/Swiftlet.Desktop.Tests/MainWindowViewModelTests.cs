@@ -2194,6 +2194,64 @@ public class MainWindowViewModelTests
     }
 
     /// <summary>
+    /// Verifies a sent message synchronizes the Sent folder at once, even right after it was checked.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task MessageSent_FolderCheckedAMomentAgo_SynchronizesSentFolderAgain()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        await SelectAsync(scenario, scenario.Sent);
+
+        await Task.Run(() => scenario.SyncEvents.RaiseSent(scenario.Account.Id), TestContext.Current.CancellationToken);
+        await Task.WhenAll(scenario.UiThread.Invocations);
+        await scenario.ViewModel.WhenIdleAsync();
+
+        var checks = scenario.Dispatcher.Sent<SyncFolderCommand>().Where(c => c.FolderId == scenario.Sent.Id).ToList();
+        checks.Should().HaveCount(2);
+        checks.Should().OnlyContain(c => c.AccountId == scenario.Account.Id);
+    }
+
+    /// <summary>
+    /// Verifies nothing is synchronized when the sending account has no cached Sent folder.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task MessageSent_NoSentFolder_SynchronizesNothing()
+    {
+        var scenario = new Scenario();
+        scenario.Dispatcher.On<GetFoldersQuery>(_ => new List<MailFolder> { scenario.Inbox });
+        await scenario.StartAsync();
+        var before = scenario.Dispatcher.Sent<SyncFolderCommand>().Count;
+
+        scenario.SyncEvents.RaiseSent(scenario.Account.Id);
+        await Task.WhenAll(scenario.UiThread.Invocations);
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.Dispatcher.Sent<SyncFolderCommand>().Should().HaveCount(before);
+    }
+
+    /// <summary>
+    /// After dispose a sent notification no longer synchronizes anything.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task MessageSent_AfterDispose_DoesNothing()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        var before = scenario.Dispatcher.Sent<SyncFolderCommand>().Count;
+
+        scenario.ViewModel.Dispose();
+        scenario.SyncEvents.RaiseSent(scenario.Account.Id);
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.SyncEvents.HasSubscribers.Should().BeFalse();
+        scenario.Dispatcher.Sent<SyncFolderCommand>().Should().HaveCount(before);
+    }
+
+    /// <summary>
     /// Selects the tree node of a folder and waits until the view model is idle.
     /// </summary>
     /// <param name="scenario">The scenario.</param>

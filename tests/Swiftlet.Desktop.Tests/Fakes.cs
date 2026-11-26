@@ -568,10 +568,22 @@ internal sealed class FakeSyncEvents : ISyncEvents
         AccountSynced?.Invoke(this, new AccountSyncedEventArgs(accountId, 1));
     }
 
+    /// <inheritdoc />
+    public event EventHandler<MessageSentEventArgs>? MessageSent;
+
+    /// <summary>
+    /// Raises <see cref="MessageSent"/> on the calling thread.
+    /// </summary>
+    /// <param name="accountId">The sending account.</param>
+    public void RaiseSent(Guid accountId)
+    {
+        MessageSent?.Invoke(this, new MessageSentEventArgs(accountId));
+    }
+
     /// <summary>
     /// Gets a value indicating whether anyone is subscribed.
     /// </summary>
-    public bool HasSubscribers => AccountSynced is not null && BackfillProgressed is not null;
+    public bool HasSubscribers => AccountSynced is not null || BackfillProgressed is not null || MessageSent is not null;
 }
 
 /// <summary>

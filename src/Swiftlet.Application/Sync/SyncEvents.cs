@@ -19,6 +19,18 @@ public sealed class AccountSyncedEventArgs(Guid accountId, int newMessages) : Ev
 }
 
 /// <summary>
+/// Event data raised after a message was sent.
+/// </summary>
+/// <param name="accountId">The sending account.</param>
+public sealed class MessageSentEventArgs(Guid accountId) : EventArgs
+{
+    /// <summary>
+    /// Gets the sending account.
+    /// </summary>
+    public Guid AccountId { get; } = accountId;
+}
+
+/// <summary>
 /// Event data raised while the history of an account is downloaded in the background.
 /// </summary>
 /// <param name="accountId">The account identifier.</param>
@@ -116,6 +128,11 @@ public interface ISyncEvents
     /// Raised while the background deletion works through pending messages. May be raised on a background thread.
     /// </summary>
     event EventHandler<DeletionProgressEventArgs>? DeletionProgressed;
+
+    /// <summary>
+    /// Raised after a message was delivered. May be raised on a background thread.
+    /// </summary>
+    event EventHandler<MessageSentEventArgs>? MessageSent;
 }
 
 /// <summary>
@@ -131,6 +148,37 @@ public sealed class SyncEvents : ISyncEvents
 
     /// <inheritdoc />
     public event EventHandler<DeletionProgressEventArgs>? DeletionProgressed;
+
+    /// <inheritdoc />
+    public event EventHandler<MessageSentEventArgs>? MessageSent;
+
+    /// <summary>
+    /// Raises <see cref="MessageSent"/>; a failing subscriber never affects the send or the other subscribers.
+    /// </summary>
+    /// <param name="accountId">The sending account.</param>
+    public void RaiseMessageSent(Guid accountId)
+    {
+        var handlers = MessageSent;
+        if (handlers is null)
+        {
+            return;
+        }
+
+        var args = new MessageSentEventArgs(accountId);
+        foreach (var handler in handlers.GetInvocationList().Cast<EventHandler<MessageSentEventArgs>>())
+        {
+            try
+            {
+                handler(this, args);
+            }
+#pragma warning disable CA1031 // Subscribers are arbitrary UI code; a delivered message must not be reported as a send failure.
+            catch (Exception)
+#pragma warning restore CA1031
+            {
+                // Intentionally ignored, as in RaiseAccountSynced.
+            }
+        }
+    }
 
     /// <summary>
     /// Raises <see cref="DeletionProgressed"/>; a failing subscriber never affects the deletion or the other subscribers.

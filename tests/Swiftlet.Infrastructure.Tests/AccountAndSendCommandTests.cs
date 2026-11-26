@@ -2,6 +2,7 @@ using AwesomeAssertions;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Application.Accounts;
 using Swiftlet.Application.Sending;
+using Swiftlet.Application.Sync;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Infrastructure.Persistence.Repositories;
 
@@ -127,7 +128,7 @@ public class AccountAndSendCommandTests
         var account = TestData.Account(email);
         await repository.AddAsync(account, ct);
         var sender = new RecordingMailSender();
-        var handler = new SendMessageCommandHandler(repository, sender);
+        var handler = new SendMessageCommandHandler(repository, sender, new SyncEvents());
         var message = new OutgoingMessage { To = ["you@example.com"], Subject = "Hi", TextBody = "Body" };
 
         await handler.Handle(new SendMessageCommand(account.Id, message, explicitSave), ct);
@@ -138,6 +139,50 @@ public class AccountAndSendCommandTests
     }
 
     /// <summary>
+    /// Verifies a delivered message is announced with its account.
+    /// </summary>
+    [Fact]
+    public async Task SendMessage_Delivered_RaisesMessageSent()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var repository = db.CreateAccountRepository();
+        var account = TestData.Account("me@qq.com");
+        await repository.AddAsync(account, ct);
+        var events = new SyncEvents();
+        var announced = new List<Guid>();
+        events.MessageSent += (_, e) => announced.Add(e.AccountId);
+        var handler = new SendMessageCommandHandler(repository, new RecordingMailSender(), events);
+
+        await handler.Handle(new SendMessageCommand(account.Id, new OutgoingMessage { To = ["you@example.com"] }), ct);
+
+        announced.Should().Equal(account.Id);
+    }
+
+    /// <summary>
+    /// Verifies a failed send is not announced.
+    /// </summary>
+    [Fact]
+    public async Task SendMessage_SenderFails_RaisesNothing()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var repository = db.CreateAccountRepository();
+        var account = TestData.Account("me@qq.com");
+        await repository.AddAsync(account, ct);
+        var events = new SyncEvents();
+        var announced = 0;
+        events.MessageSent += (_, _) => announced++;
+        var sender = new RecordingMailSender { Failure = new IOException("offline") };
+        var handler = new SendMessageCommandHandler(repository, sender, events);
+
+        var act = async () => await handler.Handle(new SendMessageCommand(account.Id, new OutgoingMessage()), ct);
+
+        await act.Should().ThrowAsync<IOException>();
+        announced.Should().Be(0);
+    }
+
+    /// <summary>
     /// Verifies sending from an unknown account fails.
     /// </summary>
     [Fact]
@@ -145,7 +190,7 @@ public class AccountAndSendCommandTests
     {
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
-        var handler = new SendMessageCommandHandler(db.CreateAccountRepository(), new RecordingMailSender());
+        var handler = new SendMessageCommandHandler(db.CreateAccountRepository(), new RecordingMailSender(), new SyncEvents());
 
         var act = async () => await handler.Handle(new SendMessageCommand(Guid.NewGuid(), new OutgoingMessage()), ct);
 

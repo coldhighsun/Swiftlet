@@ -616,6 +616,11 @@ internal sealed class RecordingMailSender : IMailSender
     /// </summary>
     public List<(MailAccount Account, OutgoingMessage Message, bool SaveToSent)> Sent { get; } = [];
 
+    /// <summary>
+    /// Gets or sets the error every send fails with, if any.
+    /// </summary>
+    public Exception? Failure { get; set; }
+
     /// <inheritdoc />
     public Task SendAsync(
         MailAccount account,
@@ -623,6 +628,11 @@ internal sealed class RecordingMailSender : IMailSender
         bool saveToSent,
         CancellationToken cancellationToken = default)
     {
+        if (Failure is not null)
+        {
+            return Task.FromException(Failure);
+        }
+
         Sent.Add((account, message, saveToSent));
         return Task.CompletedTask;
     }

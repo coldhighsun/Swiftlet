@@ -188,6 +188,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _syncEvents.AccountSynced += OnAccountSynced;
         _syncEvents.BackfillProgressed += OnBackfillProgressed;
         _syncEvents.DeletionProgressed += OnDeletionProgressed;
+        _syncEvents.MessageSent += OnMessageSent;
         SelectedMessages.CollectionChanged += (_, _) => DeleteSelectedCommand.NotifyCanExecuteChanged();
     }
 
@@ -204,6 +205,38 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _syncEvents.AccountSynced -= OnAccountSynced;
         _syncEvents.BackfillProgressed -= OnBackfillProgressed;
         _syncEvents.DeletionProgressed -= OnDeletionProgressed;
+        _syncEvents.MessageSent -= OnMessageSent;
+    }
+
+    /// <summary>
+    /// Synchronizes the Sent folder of an account that just sent a message, so the copy shows without waiting; may be called from any thread.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OnMessageSent(object? sender, MessageSentEventArgs e)
+    {
+        lock (_refreshGate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+        }
+
+        _ = ObserveAsync(_uiThread.InvokeAsync(() =>
+        {
+            var sentFolders = Accounts
+                .Where(a => a.Account.Id == e.AccountId)
+                .SelectMany(a => a.Folders)
+                .Where(f => f.Folder.Role == FolderRole.Sent);
+            foreach (var node in sentFolders)
+            {
+                // The folder changed just now, so an earlier check does not count.
+                StartFolderCheck(node.Folder);
+            }
+
+            return Task.CompletedTask;
+        }));
     }
 
     /// <summary>
@@ -989,13 +1022,21 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <param name="folder">The opened folder.</param>
     private void CheckFolderIfDue(MailFolder folder)
     {
-        var now = _timeProvider.GetUtcNow();
-        if (_folderChecks.TryGetValue(folder.Id, out var last) && now - last < FolderCheckInterval)
+        if (_folderChecks.TryGetValue(folder.Id, out var last) && _timeProvider.GetUtcNow() - last < FolderCheckInterval)
         {
             return;
         }
 
-        _folderChecks[folder.Id] = now;
+        StartFolderCheck(folder);
+    }
+
+    /// <summary>
+    /// Starts a server check of a folder now and remembers when it was started.
+    /// </summary>
+    /// <param name="folder">The folder to check.</param>
+    private void StartFolderCheck(MailFolder folder)
+    {
+        _folderChecks[folder.Id] = _timeProvider.GetUtcNow();
         _folderCheckTask = Task.WhenAll(_folderCheckTask, CheckFolderAsync(folder.AccountId, folder.Id));
     }
 

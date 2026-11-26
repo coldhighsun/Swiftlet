@@ -1,6 +1,7 @@
 using Mediator;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Application.Accounts;
+using Swiftlet.Application.Sync;
 using Swiftlet.Domain.Accounts;
 
 namespace Swiftlet.Application.Sending;
@@ -21,7 +22,8 @@ public sealed record SendMessageCommand(Guid AccountId, OutgoingMessage Message,
 /// </summary>
 /// <param name="accounts">The account repository.</param>
 /// <param name="sender">The mail sender.</param>
-public sealed class SendMessageCommandHandler(IAccountRepository accounts, IMailSender sender)
+/// <param name="events">Receives the notification when a message was delivered.</param>
+public sealed class SendMessageCommandHandler(IAccountRepository accounts, IMailSender sender, SyncEvents events)
     : ICommandHandler<SendMessageCommand, Unit>
 {
     /// <inheritdoc />
@@ -35,6 +37,7 @@ public sealed class SendMessageCommandHandler(IAccountRepository accounts, IMail
             ?? !(ProviderPresets.TryGet(account.EmailAddress, out var preset) && preset.SavesSentCopyAutomatically);
 
         await sender.SendAsync(account, command.Message, saveToSent, cancellationToken);
+        events.RaiseMessageSent(account.Id);
         return Unit.Value;
     }
 }
