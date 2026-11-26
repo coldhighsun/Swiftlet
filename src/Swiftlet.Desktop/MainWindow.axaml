@@ -118,9 +118,11 @@
                 </Grid>
               </TreeDataTemplate>
               <DataTemplate DataType="vm:UnifiedInboxNodeViewModel">
-                <Grid Classes="node" ColumnDefinitions="Auto,*">
+                <Grid Classes="node" ColumnDefinitions="Auto,*,Auto">
                   <PathIcon Data="{StaticResource Icon.AllInboxes}" />
                   <TextBlock Grid.Column="1" Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Column="2" Classes="caption badge" Text="{Binding UnreadText}" IsVisible="{Binding HasUnread}"
+                             VerticalAlignment="Center" />
                 </Grid>
               </DataTemplate>
               <DataTemplate DataType="vm:LabelNodeViewModel">
@@ -130,7 +132,7 @@
                 </Grid>
               </DataTemplate>
               <DataTemplate DataType="vm:FolderNodeViewModel">
-                <Grid Classes="node" ColumnDefinitions="Auto,*" Background="Transparent">
+                <Grid Classes="node" ColumnDefinitions="Auto,*,Auto" Background="Transparent">
                   <Grid.ContextMenu>
                     <ContextMenu>
                       <MenuItem Header="{loc:Loc Menu_Folder_Empty}" IsEnabled="{Binding CanEmpty}"
@@ -140,6 +142,8 @@
                   </Grid.ContextMenu>
                   <PathIcon Data="{Binding IconKey, Converter={x:Static conv:IconKeyConverter.Instance}}" />
                   <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Column="2" Classes="caption badge" Text="{Binding UnreadText}" IsVisible="{Binding HasUnread}"
+                             VerticalAlignment="Center" />
                 </Grid>
               </DataTemplate>
             </TreeView.DataTemplates>

@@ -173,6 +173,17 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyDictionary<Guid, int>> CountUnreadByFolderAsync(Guid accountId, CancellationToken cancellationToken = default)
+    {
+        var context = await contexts.GetAsync(accountId, cancellationToken);
+        return await context.Messages
+            .Where(m => !m.IsRead && !m.IsDeletePending)
+            .GroupBy(m => m.FolderId)
+            .Select(g => new { FolderId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(g => g.FolderId, g => g.Count, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<MailMessage>> GetUnifiedInboxAsync(
         int skip,
         int take,

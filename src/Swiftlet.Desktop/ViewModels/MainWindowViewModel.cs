@@ -661,6 +661,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             await _dispatcher.SendAsync(new DeleteMessagesCommand(keys));
             StatusText = _localizer.Format("Status_DeleteQueued", keys.Count);
         });
+        foreach (var accountId in keys.Select(k => k.AccountId).Distinct())
+        {
+            await RefreshUnreadAsync(accountId);
+        }
 
         // Fills the page up again, and brings the messages back if they could not be queued.
         await ReloadViewAsync();
@@ -699,6 +703,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         });
         if (queued)
         {
+            await RefreshUnreadAsync(node.Folder.AccountId);
             RemoveFromList([.. Messages.Where(m => m.Message.FolderId == node.Folder.Id)]);
             await ReloadViewAsync();
         }
@@ -1182,7 +1187,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             // Roll back the optimistic update; the message simply stays unread.
             item.IsRead = false;
             StatusText = _localizer.Format("Error_Format", _localizer["Error_MarkRead"], ex.Message);
+            return;
         }
+
+        await RefreshUnreadAsync(item.Message.AccountId);
     }
 
     /// <summary>
@@ -1375,6 +1383,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         await ReloadLabelsAsync();
+        foreach (var node in Accounts.ToList())
+        {
+            await RefreshUnreadAsync(node.Account.Id);
+        }
+
+        // Also covers removed accounts, for which nothing is queried.
+        UpdateUnifiedUnread();
 
         if (SelectedNode is null)
         {
@@ -1392,6 +1407,41 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             ListEmptyState = EmptyState.None;
         }
+    }
+
+    /// <summary>
+    /// Re-reads the unread counts of an account and shows them in the tree.
+    /// </summary>
+    /// <param name="accountId">The account.</param>
+    /// <returns>A task that completes when the counts are shown or the failure is logged.</returns>
+    private async Task RefreshUnreadAsync(Guid accountId)
+    {
+        try
+        {
+            var counts = await _dispatcher.SendAsync(new GetUnreadCountsQuery(accountId));
+            foreach (var folder in Accounts.Where(a => a.Account.Id == accountId).SelectMany(a => a.Folders))
+            {
+                folder.UnreadCount = counts.GetValueOrDefault(folder.Folder.Id);
+            }
+
+            UpdateUnifiedUnread();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The badges are a hint; the old ones stay, and the next reload tries again.
+            _logger.LogWarning(ex, "Counting unread messages of account {AccountId} failed", accountId);
+        }
+    }
+
+    /// <summary>
+    /// Shows the sum of the inbox counts on the unified inbox.
+    /// </summary>
+    private void UpdateUnifiedUnread()
+    {
+        UnifiedInbox.UnreadCount = Accounts
+            .SelectMany(a => a.Folders)
+            .Where(f => f.Folder.Role == FolderRole.Inbox)
+            .Sum(f => f.UnreadCount);
     }
 
     /// <summary>

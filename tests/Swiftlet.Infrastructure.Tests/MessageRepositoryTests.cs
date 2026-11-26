@@ -62,6 +62,39 @@ public class MessageRepositoryTests
     }
 
     /// <summary>
+    /// Verifies unread messages are counted per folder, leaving out read ones and those queued for deletion, and that a
+    /// folder without unread messages is not listed.
+    /// </summary>
+    [Fact]
+    public async Task CountUnreadByFolderAsync_MixedMessages_CountsUnreadNotPendingDelete()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var repository = db.CreateMessageRepository();
+        var other = Guid.NewGuid();
+        var unread = Build(account, folder, 1, "a", "b", DateTimeOffset.UtcNow);
+        var read = Build(account, folder, 2, "a", "b", DateTimeOffset.UtcNow);
+        read.SetRead(true);
+        var queued = Build(account, folder, 3, "a", "b", DateTimeOffset.UtcNow);
+        var second = Build(account, folder, 4, "a", "b", DateTimeOffset.UtcNow);
+        foreach (var message in (MailMessage[])[unread, read, queued, second])
+        {
+            await repository.AddAsync(message, ct);
+        }
+
+        await repository.MarkDeletePendingAsync(account.Id, [queued.Id], ct);
+
+        var counts = await repository.CountUnreadByFolderAsync(account.Id, ct);
+        var handled = await new Swiftlet.Application.Queries.GetUnreadCountsQueryHandler(repository)
+            .Handle(new Swiftlet.Application.Queries.GetUnreadCountsQuery(account.Id), ct);
+
+        counts.Should().ContainSingle().Which.Should().Be(new KeyValuePair<Guid, int>(folder.Id, 2));
+        counts.Should().NotContainKey(other);
+        handled.Should().BeEquivalentTo(counts);
+    }
+
+    /// <summary>
     /// Verifies the unique (folder, UID) constraint is observable through <c>ExistsAsync</c>.
     /// </summary>
     [Fact]

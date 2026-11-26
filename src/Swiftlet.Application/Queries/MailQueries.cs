@@ -70,6 +70,27 @@ public sealed class GetMessagesQueryHandler(IMessageRepository messages)
 }
 
 /// <summary>
+/// Counts the unread cached messages of an account per folder.
+/// </summary>
+/// <param name="AccountId">The account.</param>
+public sealed record GetUnreadCountsQuery(Guid AccountId) : IQuery<IReadOnlyDictionary<Guid, int>>;
+
+/// <summary>
+/// Handles <see cref="GetUnreadCountsQuery"/>.
+/// </summary>
+/// <param name="messages">The message repository.</param>
+public sealed class GetUnreadCountsQueryHandler(IMessageRepository messages)
+    : IQueryHandler<GetUnreadCountsQuery, IReadOnlyDictionary<Guid, int>>
+{
+    /// <inheritdoc />
+    public async ValueTask<IReadOnlyDictionary<Guid, int>> Handle(GetUnreadCountsQuery query, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        return await messages.CountUnreadByFolderAsync(query.AccountId, cancellationToken);
+    }
+}
+
+/// <summary>
 /// Gets a page of the unified inbox (the Inbox folders of all accounts), newest first.
 /// </summary>
 /// <param name="Skip">The number of messages to skip.</param>

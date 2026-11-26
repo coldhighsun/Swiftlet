@@ -46,6 +46,10 @@ public class MainWindowViewModelTests
             Dispatcher.On<GetMessagesByLabelQuery>(q => Messages.Where(m => m.Labels.Any(l => l.Id == q.LabelId)).ToList());
             Dispatcher.On<GetAccountsQuery>(_ => HasAccount ? new List<MailAccount> { Account } : []);
             Dispatcher.On<GetFoldersQuery>(q => q.AccountId == Account.Id ? new List<MailFolder> { Sent, Inbox } : []);
+            Dispatcher.On<GetUnreadCountsQuery>(_ => (IReadOnlyDictionary<Guid, int>)Messages
+                .Where(m => !m.IsRead)
+                .GroupBy(m => m.FolderId)
+                .ToDictionary(g => g.Key, g => g.Count()));
             Dispatcher.On<GetMessagesQuery>(q => q.FolderId == Inbox.Id ? Messages.OrderByDescending(m => m.SentAt).ToList() : []);
             Dispatcher.On<SearchMessagesQuery>(q => Messages.Where(m => m.Subject.Contains(q.Text, StringComparison.Ordinal)).ToList());
             Dispatcher.On<SetMessageReadCommand>(_ => Unit.Value);
@@ -281,6 +285,112 @@ public class MainWindowViewModelTests
         await scenario.ViewModel.DeleteSelectedCommand.ExecuteAsync(null);
 
         scenario.ViewModel.ListEmptyState.Should().Be(EmptyState.EmptyView);
+    }
+
+    /// <summary>
+    /// A reload shows the unread count on each folder and their inbox sum on the unified inbox.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Reload_WithUnread_SetsFolderAndUnifiedCounts()
+    {
+        var scenario = new Scenario();
+        scenario.Dispatcher.On<GetUnreadCountsQuery>(_ => (IReadOnlyDictionary<Guid, int>)new Dictionary<Guid, int>
+        {
+            [scenario.Inbox.Id] = 12,
+            [scenario.Sent.Id] = 3,
+        });
+
+        await scenario.StartAsync();
+
+        var folders = scenario.ViewModel.Accounts[0].Folders;
+        folders.Single(f => f.Folder.Id == scenario.Inbox.Id).UnreadCount.Should().Be(12);
+        folders.Single(f => f.Folder.Id == scenario.Sent.Id).UnreadCount.Should().Be(3);
+        scenario.ViewModel.UnifiedInbox.UnreadCount.Should().Be(12);
+    }
+
+    /// <summary>
+    /// Opening an unread message lowers the counts without waiting for a reload.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task SelectUnreadMessage_MarkedRead_CountsDropAtOnce()
+    {
+        var scenario = new Scenario();
+        scenario.Dispatcher.On<SetMessageReadCommand>(c =>
+        {
+            scenario.Messages.Single(m => m.Id == c.MessageId).SetRead(c.IsRead);
+            return Unit.Value;
+        });
+        await scenario.StartAsync();
+        scenario.ViewModel.UnifiedInbox.UnreadCount.Should().Be(2);
+
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.ViewModel.UnifiedInbox.UnreadCount.Should().Be(1);
+        scenario.ViewModel.Accounts[0].Folders.Single(f => f.Folder.Id == scenario.Inbox.Id).UnreadCount.Should().Be(1);
+    }
+
+    /// <summary>
+    /// Deleting unread messages lowers the counts.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task DeleteSelected_Unread_CountsDrop()
+    {
+        var scenario = new Scenario();
+        scenario.Dialogs.ConfirmResult = true;
+        scenario.Dispatcher.On<DeleteMessagesCommand>(c =>
+        {
+            scenario.Messages.Clear();
+            return c.Messages.Count;
+        });
+        await scenario.StartAsync();
+        foreach (var item in scenario.ViewModel.Messages)
+        {
+            scenario.ViewModel.SelectedMessages.Add(item);
+        }
+
+        await scenario.ViewModel.DeleteSelectedCommand.ExecuteAsync(null);
+
+        scenario.ViewModel.UnifiedInbox.UnreadCount.Should().Be(0);
+    }
+
+    /// <summary>
+    /// A failing count query only logs a warning; the tree and the status line are unaffected.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Reload_CountQueryFails_TreeStillLoads()
+    {
+        var scenario = new Scenario();
+        scenario.Dispatcher.On<GetUnreadCountsQuery>(_ => throw new IOException("db locked"));
+
+        await scenario.StartAsync();
+
+        scenario.ViewModel.Accounts.Single().Folders.Should().HaveCount(2);
+        scenario.ViewModel.Messages.Should().HaveCount(2);
+        scenario.ViewModel.StatusText.Should().BeEmpty();
+        scenario.Logger.Entries.Should().Contain(e => e.Level == LogLevel.Warning);
+    }
+
+    /// <summary>
+    /// The badge is empty at zero and capped for very large numbers.
+    /// </summary>
+    /// <param name="count">The number of unread messages.</param>
+    /// <param name="expected">The badge text.</param>
+    [Theory]
+    [InlineData(0, "")]
+    [InlineData(12, "12")]
+    [InlineData(999, "999")]
+    [InlineData(1000, "999+")]
+    public void UnreadText_Values_AreShortened(int count, string expected)
+    {
+        var node = new UnifiedInboxNodeViewModel(TestLocalizer.English()) { UnreadCount = count };
+
+        node.UnreadText.Should().Be(expected);
+        node.HasUnread.Should().Be(count > 0);
     }
 
     /// <summary>

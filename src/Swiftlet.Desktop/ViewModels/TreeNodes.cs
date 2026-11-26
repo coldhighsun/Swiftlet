@@ -51,12 +51,30 @@ public sealed class AccountNodeViewModel(MailAccount account)
 /// <param name="folder">The folder.</param>
 /// <param name="account">The owning account.</param>
 /// <param name="localizer">The localizer used for well-known folder names.</param>
-public sealed class FolderNodeViewModel(MailFolder folder, MailAccount account, ILocalizer localizer) : ObservableObject
+public sealed partial class FolderNodeViewModel(MailFolder folder, MailAccount account, ILocalizer localizer) : ObservableObject
 {
     /// <summary>
     /// Gets the folder.
     /// </summary>
     public MailFolder Folder { get; } = folder;
+
+    /// <summary>
+    /// Gets or sets the number of unread messages downloaded into the folder.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UnreadText))]
+    [NotifyPropertyChangedFor(nameof(HasUnread))]
+    public partial int UnreadCount { get; set; }
+
+    /// <summary>
+    /// Gets the badge text.
+    /// </summary>
+    public string UnreadText => UnreadBadge.Format(UnreadCount);
+
+    /// <summary>
+    /// Gets a value indicating whether the badge is shown.
+    /// </summary>
+    public bool HasUnread => UnreadCount > 0;
 
     /// <summary>
     /// Gets the owning account.
@@ -127,8 +145,26 @@ public sealed class FolderNodeViewModel(MailFolder folder, MailAccount account, 
 /// The tree node listing the inboxes of all accounts together.
 /// </summary>
 /// <param name="localizer">The localizer used for the node name.</param>
-public sealed class UnifiedInboxNodeViewModel(ILocalizer localizer) : ObservableObject
+public sealed partial class UnifiedInboxNodeViewModel(ILocalizer localizer) : ObservableObject
 {
+    /// <summary>
+    /// Gets or sets the number of unread messages downloaded into all inboxes.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UnreadText))]
+    [NotifyPropertyChangedFor(nameof(HasUnread))]
+    public partial int UnreadCount { get; set; }
+
+    /// <summary>
+    /// Gets the badge text.
+    /// </summary>
+    public string UnreadText => UnreadBadge.Format(UnreadCount);
+
+    /// <summary>
+    /// Gets a value indicating whether the badge is shown.
+    /// </summary>
+    public bool HasUnread => UnreadCount > 0;
+
     /// <summary>
     /// Gets the text shown in the tree.
     /// </summary>

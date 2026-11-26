@@ -1158,6 +1158,29 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies the tree shows the unread badge next to the inbox and none next to a folder without unread mail.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_UnreadMessages_ShowBadgeInTree()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var scenario = new MainWindowViewModelTests.Scenario();
+                await scenario.StartAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-unread");
+
+                var badges = window.GetVisualDescendants().OfType<TextBlock>()
+                    .Where(t => t.Classes.Contains("badge") && t.IsEffectivelyVisible).ToList();
+                badges.Select(t => t.Text).Should().Equal("2", "2");
+                badges.Select(t => t.DataContext).Should().Contain(scenario.ViewModel.UnifiedInbox);
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Reads the color of a solid brush.
     /// </summary>
     /// <param name="brush">The brush.</param>
