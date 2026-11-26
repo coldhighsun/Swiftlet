@@ -547,11 +547,19 @@ internal sealed class FakeImapSession : IImapSession
         return Task.FromResult(true);
     }
 
+    /// <summary>
+    /// Gets or sets a callback run inside <see cref="DisposeAsync"/>, to hold a caller while it closes the session.
+    /// </summary>
+    public Func<Task>? OnDisposeAsync { get; set; }
+
     /// <inheritdoc />
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         Disposed = true;
-        return ValueTask.CompletedTask;
+        if (OnDisposeAsync is not null)
+        {
+            await OnDisposeAsync();
+        }
     }
 }
 

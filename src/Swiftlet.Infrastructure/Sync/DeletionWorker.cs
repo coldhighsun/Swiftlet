@@ -47,6 +47,21 @@ public sealed class DeletionWorker(
     private readonly Dictionary<Guid, Task> _runs = [];
 
     /// <summary>
+    /// Guards <see cref="_active"/> and <see cref="_rerun"/>, so a request for another pass cannot slip past an ending run.
+    /// </summary>
+    private readonly Lock _gate = new();
+
+    /// <summary>
+    /// The accounts whose run still takes requests for another pass.
+    /// </summary>
+    private readonly HashSet<Guid> _active = [];
+
+    /// <summary>
+    /// The active accounts that need another pass, because new work may have arrived after the current one looked.
+    /// </summary>
+    private readonly HashSet<Guid> _rerun = [];
+
+    /// <summary>
     /// The earliest time each blocked account may start another run; written by the runs and read by the reconcile pass.
     /// </summary>
     private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, DateTimeOffset> _notBefore = new();
@@ -87,7 +102,8 @@ public sealed class DeletionWorker(
     }
 
     /// <summary>
-    /// Starts a run for every account that has none and is not waiting out a failure.
+    /// Starts a run for every account that has none and is not waiting out a failure, and asks every running one for another
+    /// pass, so a signal that arrives while a run is ending is not lost until the next poll.
     /// </summary>
     /// <param name="stoppingToken">The token that ends every run on shutdown.</param>
     /// <returns>A task that completes when the runs have been started.</returns>
@@ -107,12 +123,23 @@ public sealed class DeletionWorker(
         var now = timeProvider.GetUtcNow();
         foreach (var account in accounts)
         {
-            if (_runs.ContainsKey(account.Id) || (_notBefore.TryGetValue(account.Id, out var due) && due > now))
+            var accountId = account.Id;
+            lock (_gate)
             {
-                continue;
+                if (_active.Contains(accountId))
+                {
+                    _rerun.Add(accountId);
+                    continue;
+                }
+
+                if (IsBlocked(accountId, now))
+                {
+                    continue;
+                }
+
+                _active.Add(accountId);
             }
 
-            var accountId = account.Id;
             _runs[accountId] = Task.Run(() => RunAccountAsync(accountId, stoppingToken), CancellationToken.None);
         }
     }
@@ -127,12 +154,64 @@ public sealed class DeletionWorker(
     }
 
     /// <summary>
+    /// Determines whether an account is still waiting out a failure.
+    /// </summary>
+    /// <param name="accountId">The account identifier.</param>
+    /// <param name="now">The current time.</param>
+    /// <returns><see langword="true"/> if no pass may start yet.</returns>
+    private bool IsBlocked(Guid accountId, DateTimeOffset now)
+    {
+        return _notBefore.TryGetValue(accountId, out var due) && due > now;
+    }
+
+    /// <summary>
+    /// Makes passes over one account for as long as another one is requested.
+    /// </summary>
+    /// <param name="accountId">The account identifier.</param>
+    /// <param name="cancellationToken">The shutdown token.</param>
+    /// <returns>A task that completes when no further pass is wanted or allowed.</returns>
+    private async Task RunAccountAsync(Guid accountId, CancellationToken cancellationToken)
+    {
+        var released = false;
+        try
+        {
+            while (!released)
+            {
+                await DeletePendingAsync(accountId, cancellationToken);
+                lock (_gate)
+                {
+                    // Deciding to end and giving up the account happen in one step, so no request can fall in between.
+                    if (!_rerun.Remove(accountId)
+                        || cancellationToken.IsCancellationRequested
+                        || IsBlocked(accountId, timeProvider.GetUtcNow()))
+                    {
+                        _active.Remove(accountId);
+                        released = true;
+                    }
+                }
+            }
+        }
+        finally
+        {
+            // Only an unexpected error leaves the loop without releasing; a later reconcile must be able to start again.
+            if (!released)
+            {
+                lock (_gate)
+                {
+                    _active.Remove(accountId);
+                    _rerun.Remove(accountId);
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Deletes everything pending for one account, retrying for as long as the failures may pass.
     /// </summary>
     /// <param name="accountId">The account identifier.</param>
     /// <param name="cancellationToken">The shutdown token.</param>
     /// <returns>A task that completes when nothing is left, the account is blocked or the application shuts down.</returns>
-    private async Task RunAccountAsync(Guid accountId, CancellationToken cancellationToken)
+    private async Task DeletePendingAsync(Guid accountId, CancellationToken cancellationToken)
     {
         var deleted = 0;
         string? refusal = null;

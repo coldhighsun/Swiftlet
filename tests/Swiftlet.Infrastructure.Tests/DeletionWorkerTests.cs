@@ -151,6 +151,9 @@ public class DeletionWorkerTests
         {
             await WatcherHarness.WaitUntilAsync(() => h.Time.PendingTimerCount == 1, ct);
 
+            // The first run must be over before the test writes: both would use the same in-memory SQLite connection.
+            await h.Worker.WhenRunsCompleteAsync();
+
             // Act
             await h.AddPendingAsync(1, ct);
             h.Signal.Notify();
@@ -162,6 +165,38 @@ public class DeletionWorkerTests
         {
             await h.Worker.StopAsync(ct);
         }
+    }
+
+    /// <summary>
+    /// Verifies messages deleted while a run is ending are picked up by that run, not only by the next poll.
+    /// </summary>
+    [Fact]
+    public async Task Reconcile_WhileRunIsEnding_DeletesTheNewMessagesToo()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var h = await Harness.CreateAsync(1, ct);
+        var closing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        h.Factory.Session.OnDisposeAsync = () =>
+        {
+            closing.TrySetResult();
+            return release.Task;
+        };
+
+        // The run has found nothing left to delete and is held while it closes its connection.
+        await h.Worker.ReconcileAsync(ct);
+        await closing.Task.WaitAsync(TimeSpan.FromSeconds(10), ct);
+
+        // Act
+        await h.AddPendingAsync(1, ct);
+        await h.Worker.ReconcileAsync(ct);
+        release.SetResult();
+        await h.Worker.WhenRunsCompleteAsync();
+
+        // Assert
+        h.Factory.Session.DeleteCalls.Should().HaveCount(2);
+        h.Factory.Session.Messages["INBOX"].Should().BeEmpty();
     }
 
     /// <summary>
