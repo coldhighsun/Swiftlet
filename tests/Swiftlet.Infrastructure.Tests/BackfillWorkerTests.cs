@@ -255,7 +255,7 @@ public class BackfillWorkerTests
         await h.Worker.WhenPassesCompleteAsync();
 
         // Assert
-        (h.Factory.ConnectCount - connectsBefore).Should().Be(1);
+        (h.Factory.ConnectCount - connectsBefore).Should().Be(3, "one pass opens the primary and two download connections");
         finished.Should().Equal(230);
         (await h.CachedCountAsync("INBOX", ct)).Should().Be(250);
     }

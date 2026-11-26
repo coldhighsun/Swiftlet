@@ -375,6 +375,54 @@ public class MainWindowViewModelTests
     }
 
     /// <summary>
+    /// Verifies a manual sync runs the accounts side by side, names those still running and keeps one failure apart from the others.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task SyncCommand_SeveralAccounts_SyncsThemInParallel()
+    {
+        // Arrange
+        var scenario = new Scenario();
+        var second = TestData.Account("second@example.com");
+        scenario.Dispatcher.On<GetAccountsQuery>(_ => new List<MailAccount> { scenario.Account, second });
+        var first = new TaskCompletionSource<object?>();
+        var other = new TaskCompletionSource<object?>();
+        scenario.Dispatcher.OnAsync<SyncAccountCommand>((c, _) => c.AccountId == scenario.Account.Id ? first.Task : other.Task);
+        await scenario.StartAsync();
+        scenario.ViewModel.SelectedNode = null;
+
+        // Act
+        var sync = scenario.ViewModel.SyncCommand.ExecuteAsync(null);
+        var startedTogether = scenario.Dispatcher.Sent<SyncAccountCommand>().Count;
+        other.SetResult(new SyncResult(1, 3, []));
+        await WaitForAsync(() => !scenario.ViewModel.StatusText.Contains(second.EmailAddress, StringComparison.Ordinal));
+        var statusWhileFirstRuns = scenario.ViewModel.StatusText;
+        first.SetException(new IOException("offline"));
+        await sync;
+
+        // Assert
+        startedTogether.Should().Be(2);
+        statusWhileFirstRuns.Should().Contain(scenario.Account.EmailAddress);
+        scenario.ViewModel.StatusText.Should().Contain("3 封新邮件").And.Contain("offline");
+        scenario.ViewModel.IsBusy.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Waits until a condition that another thread makes true holds.
+    /// </summary>
+    /// <param name="condition">The condition.</param>
+    /// <returns>A task that completes when the condition holds.</returns>
+    private static async Task WaitForAsync(Func<bool> condition)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        while (!condition())
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(5), timeout.Token);
+        }
+    }
+
+    /// <summary>
     /// Verifies folder-level sync failures are surfaced.
     /// </summary>
     [Fact]

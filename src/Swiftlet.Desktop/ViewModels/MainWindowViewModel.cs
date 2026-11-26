@@ -1098,7 +1098,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Synchronizes the given accounts one after another and reloads the view.
+    /// Synchronizes the given accounts side by side and reloads the view.
     /// </summary>
     /// <param name="targets">The accounts to synchronize.</param>
     /// <returns>A task that completes when all accounts have been attempted.</returns>
@@ -1112,31 +1112,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         IsBusy = true;
         try
         {
-            var newMessages = 0;
-            var problems = new List<string>();
-            foreach (var account in targets)
-            {
-                StatusText = _localizer.Format("Status_Syncing", account.EmailAddress);
-                try
-                {
-                    var result = await _dispatcher.SendAsync(new SyncAccountCommand(account.Id));
-                    newMessages += result.NewMessages;
-                    if (result.FailedFolders.Count > 0)
-                    {
-                        problems.Add(_localizer.Format("Status_AccountFoldersFailed", account.EmailAddress, result.FailedFolders.Count));
-                    }
-                }
-                catch (OAuthReauthenticationRequiredException)
-                {
-                    // Not a transient failure: the stored sign-in is gone or revoked, so point the user at the fix.
-                    problems.Add(_localizer.Format("Status_ReauthenticationRequired", account.EmailAddress));
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    // One unreachable account must not prevent the others from synchronizing.
-                    problems.Add($"{account.EmailAddress}: {ex.Message}");
-                }
-            }
+            var running = targets.ToList();
+            ShowRunningSyncs(running);
+
+            // WhenAll keeps the order of the accounts, so the problems are listed in a stable order.
+            var outcomes = await Task.WhenAll(targets.Select(account => SyncOneAccountAsync(account, running)));
+            var newMessages = outcomes.Sum(o => o.NewMessages);
+            var problems = outcomes.Select(o => o.Problem).OfType<string>().ToList();
 
             await GuardedAsync("Error_Refresh", ReloadAccountsAsync);
             _loadTask = LoadMessagesAsync(SelectedNode, keepLoaded: true);
@@ -1148,6 +1130,55 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         finally
         {
             IsBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// Synchronizes one account of a manual sync and updates the status line when it is done.
+    /// </summary>
+    /// <param name="account">The account.</param>
+    /// <param name="running">The accounts still being synchronized; the finished account is removed.</param>
+    /// <returns>The number of new messages and the problem to report, if any.</returns>
+    private async Task<(int NewMessages, string? Problem)> SyncOneAccountAsync(MailAccount account, List<MailAccount> running)
+    {
+        try
+        {
+            var result = await _dispatcher.SendAsync(new SyncAccountCommand(account.Id));
+            var problem = result.FailedFolders.Count > 0
+                ? _localizer.Format("Status_AccountFoldersFailed", account.EmailAddress, result.FailedFolders.Count)
+                : null;
+            return (result.NewMessages, problem);
+        }
+        catch (OAuthReauthenticationRequiredException)
+        {
+            // Not a transient failure: the stored sign-in is gone or revoked, so point the user at the fix.
+            return (0, _localizer.Format("Status_ReauthenticationRequired", account.EmailAddress));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // One unreachable account must not prevent the others from synchronizing.
+            return (0, $"{account.EmailAddress}: {ex.Message}");
+        }
+        finally
+        {
+            // Without a UI thread (tests) two accounts may finish at the same moment.
+            lock (running)
+            {
+                running.Remove(account);
+                ShowRunningSyncs(running);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Names the accounts still being synchronized in the status line.
+    /// </summary>
+    /// <param name="running">The accounts.</param>
+    private void ShowRunningSyncs(List<MailAccount> running)
+    {
+        if (running.Count > 0)
+        {
+            StatusText = _localizer.Format("Status_Syncing", string.Join(", ", running.Select(a => a.EmailAddress)));
         }
     }
 

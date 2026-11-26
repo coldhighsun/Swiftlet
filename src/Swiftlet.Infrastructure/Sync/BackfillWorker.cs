@@ -18,6 +18,7 @@ namespace Swiftlet.Infrastructure.Sync;
 /// <param name="coordinator">Serializes the batches with the regular syncs of the same account.</param>
 /// <param name="events">Receives the progress notifications.</param>
 /// <param name="settings">The user-configurable sync behavior, read before every batch.</param>
+/// <param name="options">The synchronization limits.</param>
 /// <param name="timeProvider">The clock.</param>
 /// <param name="logger">The logger.</param>
 public sealed class BackfillWorker(
@@ -26,6 +27,7 @@ public sealed class BackfillWorker(
     SyncCoordinator coordinator,
     SyncEvents events,
     ISyncSettings settings,
+    MailSyncOptions options,
     TimeProvider timeProvider,
     ILogger<BackfillWorker> logger) : BackgroundService
 {
@@ -204,8 +206,13 @@ public sealed class BackfillWorker(
             return false;
         }
 
-        // One connection serves every batch, so the (possibly OAuth) sign-in is not repeated per batch.
+        // The connections serve every batch, so the (possibly OAuth) sign-in is not repeated per batch.
         await using var session = await imapFactory.ConnectAsync(account, cancellationToken);
+        await using var connections = new BackfillConnections(
+            session,
+            options.ConnectionsPerAccount - 1,
+            token => imapFactory.ConnectAsync(account, token),
+            logger);
         var downloaded = 0;
         var complete = true;
         foreach (var folder in targets)
@@ -220,7 +227,7 @@ public sealed class BackfillWorker(
                         await using var scope = scopeFactory.CreateAsyncScope();
                         return await scope.ServiceProvider.GetRequiredService<MailBackfillService>()
                             .BackfillBatchAsync(
-                                session,
+                                connections,
                                 account.Id,
                                 folder.Id,
                                 (stored, remaining) =>

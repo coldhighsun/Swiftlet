@@ -80,7 +80,7 @@ public sealed class MailBackfillService(
         [
             .. all
                 .Where(f => f.Role != FolderRole.AllMail || settings.DownloadAllMail)
-                .OrderBy(f => Priority(f.Role))
+                .OrderBy(f => FolderSyncOrder.Priority(f.Role))
                 .ThenBy(f => f.FullName, StringComparer.Ordinal),
         ];
     }
@@ -123,6 +123,30 @@ public sealed class MailBackfillService(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);
+        await using var connections = new BackfillConnections(session);
+        return await BackfillBatchAsync(connections, accountId, folderId, onStored, cancellationToken);
+    }
+
+    /// <summary>
+    /// Downloads and stores the next batch of older messages of a folder over several connections at once.
+    /// Downloads overlap, but messages are committed strictly from the newest to the oldest, so the cursor never leaves a gap.
+    /// The caller must hold the account's <see cref="SyncCoordinator"/> lock so no regular sync changes the folder meanwhile.
+    /// </summary>
+    /// <param name="connections">The connections of the pass.</param>
+    /// <param name="accountId">The account identifier.</param>
+    /// <param name="folderId">The folder identifier.</param>
+    /// <param name="onStored">Called after messages were committed, with the number stored so far in this batch and how many older messages the folder still holds; optional.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The batch result.</returns>
+    public async Task<BackfillBatchResult> BackfillBatchAsync(
+        BackfillConnections connections,
+        Guid accountId,
+        Guid folderId,
+        Action<int, int>? onStored,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(connections);
+        var session = connections.Primary;
 
         var folder = await folders.GetAsync(accountId, folderId, cancellationToken);
         // History of a folder that is being emptied would only be downloaded to be deleted again.
@@ -176,7 +200,14 @@ public sealed class MailBackfillService(
                 onStored?.Invoke(storedCount, page.Remaining + page.Headers.Count - handled);
             }
 
-            foreach (var header in page.Headers.OrderByDescending(h => h.Uid))
+            var ordered = page.Headers.OrderByDescending(h => h.Uid).ToList();
+            var missing = ordered.Where(h => h.MessageId is null || !known.ContainsKey(h.MessageId)).ToList();
+
+            // Further connections are only worth opening when there is more than one message to download.
+            var helpers = missing.Count > 1 ? await connections.GetHelpersAsync(cancellationToken) : [];
+            await using var downloader = new ParallelDownloader(connections, helpers, folder.FullName, missing, logger, cancellationToken);
+
+            foreach (var header in ordered)
             {
                 handled++;
 
@@ -188,7 +219,7 @@ public sealed class MailBackfillService(
                 }
 
                 await FlushCopiesAsync();
-                var downloaded = await session.FetchMessagesAsync(folder.FullName, [header], cancellationToken);
+                var downloaded = await downloader.TakeNextAsync(cancellationToken);
                 if (downloaded.Count == 0)
                 {
                     continue;
@@ -227,22 +258,5 @@ public sealed class MailBackfillService(
 
         logger.LogWarning("Backfill of {Folder} found only vanished messages {Pages} times in a row; giving up for now.", folder.FullName, MaxEmptyPages);
         return new BackfillBatchResult(BackfillOutcome.Stalled, 0, 0);
-    }
-
-    /// <summary>
-    /// Gets the backfill order of a role: inbox first, then sent mail, then everything else.
-    /// </summary>
-    /// <param name="role">The folder role.</param>
-    /// <returns>The sort rank.</returns>
-    private static int Priority(FolderRole role)
-    {
-        return role switch
-        {
-            FolderRole.Inbox => 0,
-            FolderRole.Sent => 1,
-            FolderRole.AllMail => 3,
-            FolderRole.Trash or FolderRole.Junk => 4,
-            _ => 2,
-        };
     }
 }

@@ -561,15 +561,38 @@ internal sealed class FakeImapSessionFactory : IImapSessionFactory
     public Exception? Failure { get; set; }
 
     /// <summary>
+    /// Gets or sets a replacement for <see cref="Session"/> given the number of the connection attempt (starting at 1); it may throw.
+    /// </summary>
+    public Func<int, IImapSession>? CreateSession { get; set; }
+
+    /// <summary>
+    /// The number of connection attempts; updated with <see cref="Interlocked"/> because parallel connections share this fake.
+    /// </summary>
+    private int _connectCount;
+
+    /// <summary>
     /// Gets the number of connection attempts.
     /// </summary>
-    public int ConnectCount { get; private set; }
+    public int ConnectCount => Volatile.Read(ref _connectCount);
 
     /// <inheritdoc />
     public Task<IImapSession> ConnectAsync(MailAccount account, CancellationToken cancellationToken = default)
     {
-        ConnectCount++;
-        return Failure is null ? Task.FromResult<IImapSession>(Session) : Task.FromException<IImapSession>(Failure);
+        var attempt = Interlocked.Increment(ref _connectCount);
+        if (Failure is not null)
+        {
+            return Task.FromException<IImapSession>(Failure);
+        }
+
+        try
+        {
+            return Task.FromResult(CreateSession?.Invoke(attempt) ?? Session);
+        }
+        catch (IOException ex)
+        {
+            // A refused connection must surface through the task, like a real one.
+            return Task.FromException<IImapSession>(ex);
+        }
     }
 }
 

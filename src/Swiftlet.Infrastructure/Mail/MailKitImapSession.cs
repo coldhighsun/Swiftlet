@@ -184,7 +184,13 @@ internal sealed class MailKitImapSession(ImapClient client, ILogger<MailKitImapS
 
         logger.LogDebug("Downloading {Count} listed messages in {Folder}", headers.Count, folderFullName);
         var folder = await client.GetFolderAsync(folderFullName, cancellationToken);
-        await folder.OpenAsync(FolderAccess.ReadOnly, cancellationToken);
+
+        // MailKit sends SELECT again even for the folder that is already selected; the backfill asks for one message at a
+        // time, so that would cost a round trip per message. Not unit-testable without a real IMAP server.
+        if (!folder.IsOpen)
+        {
+            await folder.OpenAsync(FolderAccess.ReadOnly, cancellationToken);
+        }
 
         var result = new List<RemoteMessage>(headers.Count);
         foreach (var header in headers)
