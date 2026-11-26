@@ -3,6 +3,7 @@
         xmlns:vm="using:Swiftlet.Desktop.ViewModels"
         xmlns:loc="using:Swiftlet.Desktop.Localization"
         x:Class="Swiftlet.Desktop.StartupWindow"
+        Icon="avares://Swiftlet.Desktop/Assets/swiftlet.ico"
         x:DataType="vm:StartupViewModel"
         Title="{loc:Loc Startup_Title}" Width="480" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterScreen">

@@ -29,6 +29,16 @@ public class ThemeTests
     ];
 
     /// <summary>
+    /// Every icon the windows may refer to.
+    /// </summary>
+    private static readonly string[] IconNames =
+    [
+        "Compose", "Reply", "Forward", "Star", "StarFilled", "Tag", "Browser", "Delete", "Sync", "Search", "Settings",
+        "AddAccount", "Attach", "Download", "Close", "Inbox", "AllInboxes", "Sent", "Drafts", "Trash", "Junk", "Archive",
+        "AllMail", "Folder", "Mail", "Logo",
+    ];
+
+    /// <summary>
     /// Verifies both theme variants define every token.
     /// </summary>
     [Fact]
@@ -135,6 +145,44 @@ public class ThemeTests
                 presenter.Background.Should().BeAssignableTo<ISolidColorBrush>().Which.Color
                     .Should().Be(Color("Brush.Accent", ThemeVariant.Dark));
                 window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies every icon the windows may refer to is a drawable geometry.
+    /// </summary>
+    [Fact]
+    public async Task Icons_EveryKey_ResolvesToGeometry()
+    {
+        await UiSmokeTests.Session.Dispatch(
+            () =>
+            {
+                foreach (var name in IconNames)
+                {
+                    Avalonia.Application.Current!.TryGetResource($"Icon.{name}", ThemeVariant.Light, out var value)
+                        .Should().BeTrue($"Icon.{name} must exist");
+                    value.Should().BeAssignableTo<Geometry>().Which.Bounds.Width.Should().BeGreaterThan(0, name);
+                }
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the application icon is shipped as an asset and every window uses it.
+    /// </summary>
+    [Fact]
+    public async Task AppIcon_Asset_IsUsedByWindows()
+    {
+        await UiSmokeTests.Session.Dispatch(
+            () =>
+            {
+                using var stream = Avalonia.Platform.AssetLoader.Open(new Uri("avares://Swiftlet.Desktop/Assets/swiftlet.ico"));
+                new WindowIcon(stream).Should().NotBeNull();
+                foreach (var window in (Window[])[new MainWindow(), new ComposeWindow(), new AddAccountWindow(), new SettingsWindow(), new LabelManagerWindow(), new StartupWindow()])
+                {
+                    window.Icon.Should().NotBeNull(window.GetType().Name);
+                }
             },
             TestContext.Current.CancellationToken);
     }

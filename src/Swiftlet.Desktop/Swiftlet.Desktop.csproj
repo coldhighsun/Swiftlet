@@ -3,8 +3,12 @@
     <OutputType>WinExe</OutputType>
     <NeutralLanguage>en</NeutralLanguage>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets/swiftlet.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
+  <ItemGroup>
+    <AvaloniaResource Include="Assets/**" />
+  </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Swiftlet.Desktop.Tests" />
   </ItemGroup>

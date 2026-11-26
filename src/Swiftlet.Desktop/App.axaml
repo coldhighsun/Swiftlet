@@ -6,6 +6,7 @@
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
         <ResourceInclude Source="avares://Swiftlet.Desktop/Styles/Colors.axaml" />
+        <ResourceInclude Source="avares://Swiftlet.Desktop/Styles/Icons.axaml" />
       </ResourceDictionary.MergedDictionaries>
       <CornerRadius x:Key="ControlCornerRadius">8</CornerRadius>
     </ResourceDictionary>

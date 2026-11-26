@@ -4,6 +4,7 @@
         xmlns:loc="using:Swiftlet.Desktop.Localization"
         xmlns:accounts="using:Swiftlet.Domain.Accounts"
         x:Class="Swiftlet.Desktop.ComposeWindow"
+        Icon="avares://Swiftlet.Desktop/Assets/swiftlet.ico"
         x:DataType="vm:ComposeViewModel"
         Title="{Binding Title}" Width="780" Height="660" MinWidth="520" MinHeight="420"
         WindowStartupLocation="CenterOwner">
