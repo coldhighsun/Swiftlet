@@ -71,6 +71,23 @@
     <Setter Property="Background" Value="{DynamicResource Brush.AccentSubtle}" />
   </Style>
 
+  <Style Selector="ListBox.messages ListBoxItem">
+    <Setter Property="Padding" Value="0" />
+  </Style>
+  <Style Selector="ListBox.messages ListBoxItem /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="BorderThickness" Value="3,0,0,0" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="0" />
+  </Style>
+  <Style Selector="ListBox.messages ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Brush.AccentSubtle}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}" />
+  </Style>
+  <Style Selector="ListBox.messages ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Brush.AccentSubtle}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}" />
+  </Style>
+
   <Style Selector="Button.danger /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Foreground" Value="{DynamicResource Brush.Danger}" />
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.Danger}" />

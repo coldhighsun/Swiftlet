@@ -889,6 +889,70 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies a row shows the unread dot only while unread, the short time, and label chips tinted with the label color.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_MessageRow_ShowsUnreadDotListTimeAndChips()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Messages[0].AddLabel(scenario.Work);
+                await scenario.StartAsync();
+                scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+                await scenario.ViewModel.WhenIdleAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-rows");
+
+                var rows = window.GetVisualDescendants().OfType<ListBoxItem>().ToList();
+                rows.Should().HaveCount(2);
+                for (var i = 0; i < rows.Count; i++)
+                {
+                    var item = scenario.ViewModel.Messages[i];
+                    var dot = rows[i].GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("unreadDot"));
+                    dot.IsEffectivelyVisible.Should().Be(item.IsUnread);
+                    rows[i].GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).Should().Contain(item.ListTimeText);
+                }
+
+                scenario.ViewModel.Messages.Select(m => m.IsUnread).Should().Contain(true).And.Contain(false);
+                var chip = window.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("chip"));
+                Color(chip.Background).Should().Be(Avalonia.Media.Color.Parse("#26E53935"));
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the selected row has the subtle accent background and an accent bar, and the list has no grey fill.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_SelectedMessageRow_UsesSubtleAccentAndBar()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var scenario = new MainWindowViewModelTests.Scenario();
+                await scenario.StartAsync();
+                scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+                await scenario.ViewModel.WhenIdleAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-selected-row");
+
+                var list = window.GetVisualDescendants().OfType<ListBox>().Single();
+                Color(list.Background).A.Should().Be(0);
+                var row = list.GetVisualDescendants().OfType<ListBoxItem>().Single(i => i.IsSelected);
+                var presenter = row.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>()
+                    .First(c => c.Name == "PART_ContentPresenter");
+                Color(presenter.Background).Should().Be(Token(window, "Brush.AccentSubtle"));
+                Color(presenter.BorderBrush).Should().Be(Token(window, "Brush.Accent"));
+                presenter.BorderThickness.Left.Should().Be(3);
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Reads the color of a solid brush.
     /// </summary>
     /// <param name="brush">The brush.</param>
