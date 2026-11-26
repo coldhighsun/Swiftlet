@@ -141,7 +141,7 @@
   <data name="Toolbar_Settings" xml:space="preserve"><value>设置</value></data>
   <data name="Settings_Title" xml:space="preserve"><value>设置</value></data>
   <data name="Settings_RemoveServerDeleted" xml:space="preserve"><value>删除服务器上已删除的邮件的本地副本</value></data>
-  <data name="Settings_RemoveServerDeletedHint" xml:space="preserve"><value>只会删除本地副本，不会改动服务器上的邮件。在其他应用或网页端删除的邮件，也会从 Swiftlet 中消失。默认关闭。</value></data>
+  <data name="Settings_RemoveServerDeletedHint" xml:space="preserve"><value>只会删除本地副本，不会改动服务器上的邮件。在其他应用或网页端删除的邮件，也会从 Swiftlet 中消失。默认开启。</value></data>
   <data name="Settings_DownloadHistory" xml:space="preserve"><value>在后台下载完整的邮件历史</value></data>
   <data name="Settings_DownloadHistoryHint" xml:space="preserve"><value>最新的邮件会先显示；更早的邮件随后分批下载，不会阻塞新邮件。邮箱特别大时可关闭以节省空间和流量。已删除和垃圾邮件文件夹最后下载。</value></data>
   <data name="Settings_DownloadAllMail" xml:space="preserve"><value>同时下载 Gmail 的“所有邮件”文件夹</value></data>

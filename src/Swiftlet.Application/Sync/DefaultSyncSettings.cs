@@ -3,12 +3,12 @@ using Swiftlet.Application.Abstractions;
 namespace Swiftlet.Application.Sync;
 
 /// <summary>
-/// The fallback sync settings used until the host registers its own store; never removes local messages.
+/// The fallback sync settings used until the host registers its own store; follows server deletions.
 /// </summary>
 internal sealed class DefaultSyncSettings : ISyncSettings
 {
     /// <inheritdoc />
-    public bool RemoveServerDeletedMessages => false;
+    public bool RemoveServerDeletedMessages => true;
 
     /// <inheritdoc />
     public bool DownloadFullHistory => true;

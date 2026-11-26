@@ -141,7 +141,7 @@
   <data name="Toolbar_Settings" xml:space="preserve"><value>Settings</value></data>
   <data name="Settings_Title" xml:space="preserve"><value>Settings</value></data>
   <data name="Settings_RemoveServerDeleted" xml:space="preserve"><value>Remove local messages that were deleted on the server</value></data>
-  <data name="Settings_RemoveServerDeletedHint" xml:space="preserve"><value>Only your local copy is removed; nothing changes on the server. Messages you delete in another app or on the web will then disappear from Swiftlet too. Off by default.</value></data>
+  <data name="Settings_RemoveServerDeletedHint" xml:space="preserve"><value>Only your local copy is removed; nothing changes on the server. Messages you delete in another app or on the web will then disappear from Swiftlet too. On by default.</value></data>
   <data name="Settings_DownloadHistory" xml:space="preserve"><value>Download the full mail history in the background</value></data>
   <data name="Settings_DownloadHistoryHint" xml:space="preserve"><value>The newest messages appear first; older mail is downloaded in small batches afterwards without blocking new mail. Turn this off on very large mailboxes to save space and traffic. Trash and Junk are downloaded last.</value></data>
   <data name="Settings_DownloadAllMail" xml:space="preserve"><value>Also download Gmail's "All Mail" folder</value></data>

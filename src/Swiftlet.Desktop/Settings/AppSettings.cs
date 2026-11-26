@@ -72,7 +72,7 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
         _path = path;
         var file = Read();
         _language = file.Language;
-        _removeServerDeletedMessages = file.RemoveServerDeletedMessages ?? false;
+        _removeServerDeletedMessages = file.SyncServerDeletions ?? true;
         _downloadFullHistory = file.DownloadFullHistory ?? true;
         _downloadAllMail = file.DownloadAllMail ?? true;
     }
@@ -81,12 +81,12 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     /// The shape of the settings file; a missing member keeps its default so older files still load.
     /// </summary>
     /// <param name="Language">The saved language preference.</param>
-    /// <param name="RemoveServerDeletedMessages">Whether messages deleted on the server are removed locally.</param>
+    /// <param name="SyncServerDeletions">Whether messages deleted on the server are removed locally. Earlier versions stored this as "removeServerDeletedMessages" with an off default, so that key is deliberately not read.</param>
     /// <param name="DownloadFullHistory">Whether the full message history is downloaded in the background.</param>
     /// <param name="DownloadAllMail">Whether the "All Mail" folder is downloaded too.</param>
     private sealed record SettingsFile(
         string? Language,
-        bool? RemoveServerDeletedMessages,
+        bool? SyncServerDeletions,
         bool? DownloadFullHistory = null,
         bool? DownloadAllMail = null);
 

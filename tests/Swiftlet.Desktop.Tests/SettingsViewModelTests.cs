@@ -20,16 +20,16 @@ public class SettingsViewModelTests
         {
             var store = new AppSettings(path);
             var viewModel = new SettingsViewModel(store, TestLocalizer.English(), new FakeRemoteImageRules());
-            viewModel.RemoveServerDeletedMessages.Should().BeFalse();
-
-            viewModel.RemoveServerDeletedMessages = true;
-
-            store.RemoveServerDeletedMessages.Should().BeTrue();
-            new AppSettings(path).RemoveServerDeletedMessages.Should().BeTrue();
+            viewModel.RemoveServerDeletedMessages.Should().BeTrue();
 
             viewModel.RemoveServerDeletedMessages = false;
+
             store.RemoveServerDeletedMessages.Should().BeFalse();
             new AppSettings(path).RemoveServerDeletedMessages.Should().BeFalse();
+
+            viewModel.RemoveServerDeletedMessages = true;
+            store.RemoveServerDeletedMessages.Should().BeTrue();
+            new AppSettings(path).RemoveServerDeletedMessages.Should().BeTrue();
         }
         finally
         {

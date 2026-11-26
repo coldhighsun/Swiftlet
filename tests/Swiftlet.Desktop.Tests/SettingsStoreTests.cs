@@ -42,7 +42,7 @@ public class SettingsStoreTests : IDisposable
         var store = new AppSettings(StorePath);
 
         store.Load().Should().Be("system");
-        store.RemoveServerDeletedMessages.Should().BeFalse();
+        store.RemoveServerDeletedMessages.Should().BeTrue();
     }
 
     /// <summary>
@@ -57,7 +57,7 @@ public class SettingsStoreTests : IDisposable
         var store = new AppSettings(StorePath);
 
         store.Load().Should().Be("system");
-        store.RemoveServerDeletedMessages.Should().BeFalse();
+        store.RemoveServerDeletedMessages.Should().BeTrue();
     }
 
     /// <summary>
@@ -69,11 +69,11 @@ public class SettingsStoreTests : IDisposable
         var store = new AppSettings(StorePath);
         store.Save("zh-Hans");
 
-        store.SetRemoveServerDeletedMessages(true);
+        store.SetRemoveServerDeletedMessages(false);
 
         var reloaded = new AppSettings(StorePath);
         reloaded.Load().Should().Be("zh-Hans");
-        reloaded.RemoveServerDeletedMessages.Should().BeTrue();
+        reloaded.RemoveServerDeletedMessages.Should().BeFalse();
     }
 
     /// <summary>
@@ -86,12 +86,12 @@ public class SettingsStoreTests : IDisposable
         store.Save("zh-Hans");
         File.WriteAllText(StorePath, "{ not json");
 
-        store.SetRemoveServerDeletedMessages(true);
+        store.SetRemoveServerDeletedMessages(false);
 
         store.Load().Should().Be("zh-Hans");
         var reloaded = new AppSettings(StorePath);
         reloaded.Load().Should().Be("zh-Hans");
-        reloaded.RemoveServerDeletedMessages.Should().BeTrue();
+        reloaded.RemoveServerDeletedMessages.Should().BeFalse();
     }
 
     /// <summary>
@@ -101,20 +101,20 @@ public class SettingsStoreTests : IDisposable
     public void SaveLanguage_KeepsSetting()
     {
         var store = new AppSettings(StorePath);
-        store.SetRemoveServerDeletedMessages(true);
+        store.SetRemoveServerDeletedMessages(false);
 
         store.Save("en");
 
         var reloaded = new AppSettings(StorePath);
         reloaded.Load().Should().Be("en");
-        reloaded.RemoveServerDeletedMessages.Should().BeTrue();
+        reloaded.RemoveServerDeletedMessages.Should().BeFalse();
     }
 
     /// <summary>
-    /// Verifies a file written before the setting existed loads with the setting off.
+    /// Verifies a file written before the setting existed loads with the setting on.
     /// </summary>
     [Fact]
-    public void OldFileWithOnlyLanguage_LoadsWithSettingOff()
+    public void OldFileWithOnlyLanguage_LoadsWithSettingOn()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(StorePath)!);
         File.WriteAllText(StorePath, """{"language":"zh-Hans"}""");
@@ -122,7 +122,7 @@ public class SettingsStoreTests : IDisposable
         var store = new AppSettings(StorePath);
 
         store.Load().Should().Be("zh-Hans");
-        store.RemoveServerDeletedMessages.Should().BeFalse();
+        store.RemoveServerDeletedMessages.Should().BeTrue();
     }
 
     /// <summary>
@@ -140,8 +140,8 @@ public class SettingsStoreTests : IDisposable
         provider.GetRequiredService<ISyncSettings>().Should().BeSameAs(store);
         provider.GetRequiredService<ILanguagePreferenceStore>().Should().BeSameAs(store);
         provider.GetRequiredService<IAppSettings>().Should().BeSameAs(store);
-        store.SetRemoveServerDeletedMessages(true);
-        provider.GetRequiredService<ISyncSettings>().RemoveServerDeletedMessages.Should().BeTrue();
+        store.SetRemoveServerDeletedMessages(false);
+        provider.GetRequiredService<ISyncSettings>().RemoveServerDeletedMessages.Should().BeFalse();
     }
 
     /// <summary>
@@ -151,12 +151,12 @@ public class SettingsStoreTests : IDisposable
     public void DownloadFullHistory_NoValueStored_DefaultsToOn()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(StorePath)!);
-        File.WriteAllText(StorePath, "{\"language\":\"en\",\"removeServerDeletedMessages\":true}");
+        File.WriteAllText(StorePath, "{\"language\":\"en\",\"syncServerDeletions\":false}");
 
         var store = new AppSettings(StorePath);
 
         store.DownloadFullHistory.Should().BeTrue();
-        store.RemoveServerDeletedMessages.Should().BeTrue();
+        store.RemoveServerDeletedMessages.Should().BeFalse();
     }
 
     /// <summary>
@@ -167,13 +167,13 @@ public class SettingsStoreTests : IDisposable
     {
         var store = new AppSettings(StorePath);
         store.Save("zh-Hans");
-        store.SetRemoveServerDeletedMessages(true);
+        store.SetRemoveServerDeletedMessages(false);
 
         store.SetDownloadFullHistory(false);
 
         var reloaded = new AppSettings(StorePath);
         reloaded.DownloadFullHistory.Should().BeFalse();
-        reloaded.RemoveServerDeletedMessages.Should().BeTrue();
+        reloaded.RemoveServerDeletedMessages.Should().BeFalse();
         reloaded.Load().Should().Be("zh-Hans");
     }
 
@@ -187,7 +187,7 @@ public class SettingsStoreTests : IDisposable
         store.SetDownloadFullHistory(false);
 
         store.Save("en");
-        store.SetRemoveServerDeletedMessages(true);
+        store.SetRemoveServerDeletedMessages(false);
 
         new AppSettings(StorePath).DownloadFullHistory.Should().BeFalse();
     }
@@ -207,6 +207,33 @@ public class SettingsStoreTests : IDisposable
         var reloaded = new AppSettings(StorePath);
         reloaded.DownloadAllMail.Should().BeFalse();
         reloaded.DownloadFullHistory.Should().BeFalse();
-        reloaded.RemoveServerDeletedMessages.Should().BeFalse();
+        reloaded.RemoveServerDeletedMessages.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies the "off" that earlier versions wrote while saving any other setting does not keep the new default off.
+    /// </summary>
+    [Fact]
+    public void Load_LegacyRemoveServerDeletedFalse_IsIgnored()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(StorePath)!);
+        File.WriteAllText(StorePath, """{"language":"en","removeServerDeletedMessages":false}""");
+
+        var store = new AppSettings(StorePath);
+
+        store.RemoveServerDeletedMessages.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies the fallback used without a settings store follows server deletions too.
+    /// </summary>
+    [Fact]
+    public void AddApplication_WithoutSettingsStore_FollowsServerDeletions()
+    {
+        var services = new ServiceCollection();
+        services.AddApplication();
+        using var provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<ISyncSettings>().RemoveServerDeletedMessages.Should().BeTrue();
     }
 }
