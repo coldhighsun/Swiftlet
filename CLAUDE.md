@@ -6,7 +6,7 @@ This file lets Claude Code pick the project up in a fresh session; it also holds
 ## First steps when taking over
 
 1. Run `git log --oneline` and `git status` to see where the project stands and whether anything is uncommitted.
-2. Run `dotnet build Swiftlet.slnx`, then run the tests project by project (see below). The baseline is **865 tests** (Domain 45 / Application 66 / Infrastructure 457 / Desktop 297) with a 0-warning build; on Windows one Unix-only test is skipped.
+2. Run `dotnet build Swiftlet.slnx`, then run the tests project by project (see below). The baseline is **942 tests** (Domain 45 / Application 66 / Infrastructure 458 / Desktop 373) with a 0-warning build; on Windows one Unix-only test is skipped.
 3. Read "Remaining work" at the end of this file. **M5a (unified inbox + labels + server-side delete) and M5.5 (read/starred flag sync) are done.** **Account management (delete + OAuth re-sign-in), IMAP IDLE, history backfill, parallel sync and the immediate flag push are implemented.** The next step is not chosen yet; candidates are verifying against real providers or M6. Ask the user before starting. The rules feature and the local trash were cancelled by the user: do not build them.
 4. Storage is split per account (see **Database** below). There are no EF migrations and no code that moves data out of an old single-file database: the local dev database `%LocalAppData%\Swiftlet\swiftlet.db` created by an earlier version must be deleted once and the accounts added again, otherwise the global store has the wrong schema. Inside an account database, `SqliteSchemaInitializer` still adds the column `Messages.IsFlagSyncPending` in place.
 
@@ -66,6 +66,14 @@ Key design points (understand these before changing code):
 - **List paging**: `MainWindowViewModel` loads 50 messages per page (`PageSize`) for folder, unified inbox, label and search views; the message `ListBox` calls `LoadMoreAsync` when scrolled within one screen of its end (`MainWindow.OnMessageListScrollChanged`), which appends the next page with `skip = Messages.Count` (`FetchPageAsync` is shared by load, search and load-more). A refresh of the same view re-fetches `max(PageSize, Messages.Count)` messages so loaded pages are not cut back; selecting another node or searching starts again at page one. `SearchMessagesQuery` / `IMessageRepository.SearchAsync` take `skip`. Cross-account views fetch `skip+take` rows per account and merge in memory, so very deep pages get slower (keyset paging not built). The scroll trigger has not been tried in a real window.
 - **Labels**: `Label` is global (not per account), many-to-many with messages through `MessageLabels` in the global store, stored locally only. The tree has an "All inboxes" node (first) and one node per label for filtering the list.
 
+## UI design (required reading when changing the UI)
+
+- Tokens: `src/Swiftlet.Desktop/Styles/Colors.axaml` defines the same `Brush.*` keys for the light and dark theme; `Styles/Controls.axaml` holds the shared style classes (`caption`, `secondary`, `section`, `title`, `error`, `card`, `icon`, `danger`, `flat`, `messages`); `Styles/Icons.axaml` holds the `Icon.*` geometries (Fluent System Icons, MIT, see `THIRD-PARTY-NOTICES.md`; `Icon.Logo` is our own, and `Assets/swiftlet.ico` was rendered from `Assets/swiftlet.svg`). Windows refer to tokens with `{DynamicResource Brush.*}`; no fixed colors and no `Opacity` for secondary text (`ThemeTests` scans for it and checks text contrast of 4.5:1). Exception: the HTML mail body stays white, and white initials on avatar colors.
+- Font sizes 12/14/16/20, spacing 4/8/12/16/24, corners 4 (chips, check boxes), 8 (controls), 12 (cards). Template values beat plain styles in Avalonia, so set a control property on the control or use a `:pseudoclass` selector.
+- Every button has a text `Content` or `AutomationProperties.Name`; icon-only buttons also have a tooltip. Tests find buttons with `UiQueries.Caption`.
+- Main window: sidebar (logo, compose, tree, add account, settings), message list (search, sync), reading pane (message actions, shown only with a selected message). The list explains an empty result through `MainWindowViewModel.ListEmptyState`, set only after a load or search succeeded. Unread badges come from `GetUnreadCountsQuery` (downloaded mail only), refreshed after account reloads, mark-as-read, delete and empty folder.
+- The theme (`system` / `light` / `dark`) is saved in `settings.json` and applied by `IThemeApplier`; the language and theme pickers are in the Settings window.
+
 ## Localization (required reading when changing the UI)
 
 - Resources: `src/Swiftlet.Desktop/Resources/Strings.resx` (English, the default) and `Strings.zh-Hans.resx`. Keys look like `Toolbar_Compose`.
@@ -92,6 +100,7 @@ The user's global rules match this section; it is repeated here so it applies on
 - **New or changed functionality must come with tests**; new code without test coverage is not done.
 - Test projects must reference `Microsoft.NET.Test.Sdk` and `xunit.runner.visualstudio`.
 - Database tests use `TestDatabase` (in-memory SQLite + FTS5); sync, OAuth and similar tests use `Fake*` objects in Infrastructure.Tests' `Fakes.cs` and `OAuthTestSupport.cs`; the OAuth authorization tests really start a server on the loopback address and simulate the browser callback.
+- Asynchronous UI test bodies must run through `UiSmokeTests.DispatchAsync`: an async lambda passed straight to `HeadlessUnitTestSession.Dispatch` is only started, so failed assertions are lost.
 - UI tests live in `Desktop.Tests/UiSmokeTests.cs` and load real windows with Avalonia Headless. They share one global `LocalizationManager.Instance`, tests in the same class run serially, and every test must set the language at its start.
 
 ## Git and collaboration
@@ -141,8 +150,10 @@ All tests are unit tests with fake objects. The code has **never connected to a 
 - Fast path for remote changes against real servers: how soon a read or delete in webmail shows locally, whether servers push flag changes during IDLE, and how long a backfill batch takes to make way. A sync that is already running (all folders) still makes a push-triggered sync wait, and the IDLE connection resumes only after the whole sync. Server-side deletions show only with `RemoveServerDeletedMessages` on (the default). Never tried on a real server: the folder check on open (one extra login per opened folder, its wait behind a running account sync), and the UID SEARCH that confirms an emptied folder.
 - Parallel sync and backfill against real servers: per-account connection limits and throttling (QQ/163 in particular; sync 3 + backfill 3 + IDLE 1 plus short-lived ones), whether the two extra logins on every IDLE-triggered or timer sync trigger login rate limits, the actual speed-up, UI responsiveness during a manual sync of several accounts (handler continuations run on the UI thread), and the skipped re-SELECT in `FetchMessagesAsync`. Only fakes were tested.
 
+- The redesigned UI in a real window (it was only rendered headlessly): the label flyout and the image drop-down, which now open over the native web view, column resizing, the narrowest window, switching the theme while running, the application icon in the taskbar, Chinese font fallback, and macOS / Linux.
+
 ## Remaining work
 
 - **M6**: search `from:` / `subject:` prefix syntax and search scope options (all accounts / current account / current folder), new-mail notifications, tray icon, settings page additions (sync interval, theme, notification switch), packaging (MSIX or Inno Setup, `.app`, AppImage/deb), three-platform GitHub Actions CI.
-- **Gaps**: account editing (settings of an existing account, including the sync interval), CONDSTORE/incremental flag pull for big folders (the pull fetches the whole cached UID range each sync), drafts, reply all, forwarding with attachments, recipient parsing (display names containing commas), moving messages between folders, per-folder unread counts, manual light/dark theme switch, EF migrations, README.
+- **Gaps**: account editing (settings of an existing account, including the sync interval), CONDSTORE/incremental flag pull for big folders (the pull fetches the whole cached UID range each sync), drafts, reply all, forwarding with attachments, recipient parsing (display names containing commas), moving messages between folders, EF migrations, README.
 - **Provider presets**: Microsoft 365 work/school accounts need `smtp.office365.com` (the Outlook preset only has `smtp-mail.outlook.com`); whether QQ / 163 / 126 / Yahoo / iCloud save a sent copy themselves is unknown (set to false, which may duplicate Sent mail).
