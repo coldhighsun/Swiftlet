@@ -188,6 +188,27 @@ public class ThemeTests
     }
 
     /// <summary>
+    /// Verifies check boxes stay square: the rounder control radius would make them look like radio buttons.
+    /// </summary>
+    [Fact]
+    public async Task Controls_CheckBox_KeepsSquareCorners()
+    {
+        await UiSmokeTests.Session.Dispatch(
+            () =>
+            {
+                var box = new CheckBox { Content = "x" };
+                var window = new Window { Content = box };
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                box.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "NormalRectangle")
+                    .CornerRadius.Should().Be(new Avalonia.CornerRadius(4));
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Reads the color of a token.
     /// </summary>
     /// <param name="token">The resource key.</param>

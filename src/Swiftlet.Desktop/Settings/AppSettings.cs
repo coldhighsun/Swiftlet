@@ -26,6 +26,17 @@ public interface IAppSettings : ISyncSettings
     /// </summary>
     /// <param name="value">The new value.</param>
     void SetDownloadAllMail(bool value);
+
+    /// <summary>
+    /// Gets the saved theme preference, one of the <see cref="ThemePreference"/> values.
+    /// </summary>
+    string Theme { get; }
+
+    /// <summary>
+    /// Changes the theme preference and saves the choice.
+    /// </summary>
+    /// <param name="value">One of the <see cref="ThemePreference"/> values.</param>
+    void SetTheme(string value);
 }
 
 /// <summary>
@@ -64,6 +75,11 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     private string? _language;
 
     /// <summary>
+    /// The in-memory theme preference.
+    /// </summary>
+    private volatile string _theme;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="AppSettings"/> class and reads the file once.
     /// </summary>
     /// <param name="path">The settings file path.</param>
@@ -75,6 +91,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
         _removeServerDeletedMessages = file.SyncServerDeletions ?? true;
         _downloadFullHistory = file.DownloadFullHistory ?? true;
         _downloadAllMail = file.DownloadAllMail ?? true;
+        _theme = ThemePreference.Normalize(
+            file.Theme is { ValueKind: JsonValueKind.String } theme ? theme.GetString() : null);
     }
 
     /// <summary>
@@ -84,11 +102,13 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     /// <param name="SyncServerDeletions">Whether messages deleted on the server are removed locally. Earlier versions stored this as "removeServerDeletedMessages" with an off default, so that key is deliberately not read.</param>
     /// <param name="DownloadFullHistory">Whether the full message history is downloaded in the background.</param>
     /// <param name="DownloadAllMail">Whether the "All Mail" folder is downloaded too.</param>
+    /// <param name="Theme">The theme preference; read as raw JSON so a wrongly typed value does not discard the whole file.</param>
     private sealed record SettingsFile(
         string? Language,
         bool? SyncServerDeletions,
         bool? DownloadFullHistory = null,
-        bool? DownloadAllMail = null);
+        bool? DownloadAllMail = null,
+        JsonElement? Theme = null);
 
     /// <inheritdoc />
     public bool RemoveServerDeletedMessages => _removeServerDeletedMessages;
@@ -98,6 +118,9 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
 
     /// <inheritdoc />
     public bool DownloadAllMail => _downloadAllMail;
+
+    /// <inheritdoc />
+    public string Theme => _theme;
 
     /// <inheritdoc />
     public string Load()
@@ -113,7 +136,7 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     {
         lock (_gate)
         {
-            Write(new SettingsFile(preference, _removeServerDeletedMessages, _downloadFullHistory, _downloadAllMail));
+            Write(Snapshot() with { Language = preference });
             _language = preference;
         }
     }
@@ -123,7 +146,7 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     {
         lock (_gate)
         {
-            Write(new SettingsFile(_language, value, _downloadFullHistory, _downloadAllMail));
+            Write(Snapshot() with { SyncServerDeletions = value });
             _removeServerDeletedMessages = value;
         }
     }
@@ -133,7 +156,7 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     {
         lock (_gate)
         {
-            Write(new SettingsFile(_language, _removeServerDeletedMessages, value, _downloadAllMail));
+            Write(Snapshot() with { DownloadFullHistory = value });
             _downloadFullHistory = value;
         }
     }
@@ -143,9 +166,34 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     {
         lock (_gate)
         {
-            Write(new SettingsFile(_language, _removeServerDeletedMessages, _downloadFullHistory, value));
+            Write(Snapshot() with { DownloadAllMail = value });
             _downloadAllMail = value;
         }
+    }
+
+    /// <inheritdoc />
+    public void SetTheme(string value)
+    {
+        var theme = ThemePreference.Normalize(value);
+        lock (_gate)
+        {
+            Write(Snapshot() with { Theme = JsonSerializer.SerializeToElement(theme) });
+            _theme = theme;
+        }
+    }
+
+    /// <summary>
+    /// Builds the file content from the values in memory; call it while holding <see cref="_gate"/>.
+    /// </summary>
+    /// <returns>The content.</returns>
+    private SettingsFile Snapshot()
+    {
+        return new SettingsFile(
+            _language,
+            _removeServerDeletedMessages,
+            _downloadFullHistory,
+            _downloadAllMail,
+            JsonSerializer.SerializeToElement(_theme));
     }
 
     /// <summary>

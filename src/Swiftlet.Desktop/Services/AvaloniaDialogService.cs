@@ -93,7 +93,14 @@ public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogSe
         var viewModel = services.GetRequiredService<SettingsViewModel>();
         var window = new SettingsWindow { DataContext = viewModel };
         viewModel.CloseRequested += (_, _) => window.Close();
-        await window.ShowDialog(owner);
+        try
+        {
+            await window.ShowDialog(owner);
+        }
+        finally
+        {
+            viewModel.Detach();
+        }
     }
 
     /// <inheritdoc />

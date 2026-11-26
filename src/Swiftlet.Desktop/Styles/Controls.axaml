@@ -49,6 +49,11 @@
     <Setter Property="Foreground" Value="{DynamicResource Brush.OnAccent}" />
   </Style>
 
+  <!-- The 8px control radius would turn the small check box into a circle. -->
+  <Style Selector="CheckBox">
+    <Setter Property="CornerRadius" Value="4" />
+  </Style>
+
   <Style Selector="Button.icon">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Padding" Value="8" />

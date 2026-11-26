@@ -368,6 +368,20 @@ internal sealed class FakeAppSettings : IAppSettings
     /// <inheritdoc />
     public bool DownloadAllMail { get; set; } = true;
 
+    /// <inheritdoc />
+    public string Theme { get; set; } = ThemePreference.System;
+
+    /// <inheritdoc />
+    public void SetTheme(string value)
+    {
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+
+        Theme = value;
+    }
+
     /// <summary>
     /// Gets the values passed to <see cref="SetDownloadAllMail"/>.
     /// </summary>
@@ -412,6 +426,23 @@ internal sealed class FakeAppSettings : IAppSettings
 
         SetCalls.Add(value);
         RemoveServerDeletedMessages = value;
+    }
+}
+
+/// <summary>
+/// Records the themes it was asked to apply.
+/// </summary>
+internal sealed class FakeThemeApplier : IThemeApplier
+{
+    /// <summary>
+    /// Gets the preferences applied, in order.
+    /// </summary>
+    public List<string> Applied { get; } = [];
+
+    /// <inheritdoc />
+    public void Apply(string preference)
+    {
+        Applied.Add(preference);
     }
 }
 

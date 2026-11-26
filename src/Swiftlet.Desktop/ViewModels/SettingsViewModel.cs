@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.Input;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Desktop.Localization;
+using Swiftlet.Desktop.Services;
 using Swiftlet.Desktop.Settings;
 using Swiftlet.Infrastructure.Persistence.Encryption;
 
@@ -29,17 +30,31 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly IRemoteImageRules _remoteImageRules;
 
     /// <summary>
+    /// Applies a newly chosen theme; <see langword="null"/> when there is no running application to change.
+    /// </summary>
+    private readonly IThemeApplier? _themeApplier;
+
+    /// <summary>
+    /// The protection of the local data; <see langword="null"/> when unknown.
+    /// </summary>
+    private readonly IDatabaseProtection? _protection;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="SettingsViewModel"/> class.
     /// </summary>
     /// <param name="settings">The settings store.</param>
     /// <param name="localizer">The localizer.</param>
     /// <param name="remoteImageRules">The saved rules that allow remote images for senders.</param>
     /// <param name="protection">The protection of the local data; optional.</param>
+    /// <param name="themeApplier">Applies a newly chosen theme; optional.</param>
+    /// <param name="languageSelector">The language picker shown in the window; optional.</param>
     public SettingsViewModel(
         IAppSettings settings,
         ILocalizer localizer,
         IRemoteImageRules remoteImageRules,
-        IDatabaseProtection? protection = null)
+        IDatabaseProtection? protection = null,
+        IThemeApplier? themeApplier = null,
+        LanguageSelectorViewModel? languageSelector = null)
     {
         _settings = settings;
         _localizer = localizer;
@@ -48,19 +63,101 @@ public sealed partial class SettingsViewModel : ObservableObject
         DownloadFullHistory = settings.DownloadFullHistory;
         DownloadAllMail = settings.DownloadAllMail;
         RefreshRemoteImageRules();
-        DatabaseStatusText = protection?.Status switch
-        {
-            DatabaseProtectionStatus.Encrypted => localizer["Settings_DatabaseEncrypted"],
-            DatabaseProtectionStatus.NotEncryptedNoKeychain => localizer["Settings_DatabaseNoKeychain"],
-            DatabaseProtectionStatus.PartlyEncrypted => localizer["Settings_DatabasePartly"],
-            _ => null,
-        };
+        _protection = protection;
+        _themeApplier = themeApplier;
+        LanguageSelector = languageSelector;
+        ThemeOptions =
+        [
+            new ThemeOptionViewModel(ThemePreference.System, () => localizer["Settings_ThemeSystem"]),
+            new ThemeOptionViewModel(ThemePreference.Light, () => localizer["Settings_ThemeLight"]),
+            new ThemeOptionViewModel(ThemePreference.Dark, () => localizer["Settings_ThemeDark"]),
+        ];
+        SelectedTheme = ThemeOptions.First(o => o.Code == settings.Theme);
+        localizer.LanguageChanged += OnLanguageChanged;
     }
+
+    /// <summary>
+    /// Gets the language picker, or <see langword="null"/> when the language cannot be chosen.
+    /// </summary>
+    public LanguageSelectorViewModel? LanguageSelector { get; }
+
+    /// <summary>
+    /// Gets the available themes.
+    /// </summary>
+    public IReadOnlyList<ThemeOptionViewModel> ThemeOptions { get; }
+
+    /// <summary>
+    /// Gets or sets the selected theme.
+    /// </summary>
+    [ObservableProperty]
+    public partial ThemeOptionViewModel SelectedTheme { get; set; }
 
     /// <summary>
     /// Gets the text saying whether the local data is encrypted, or <see langword="null"/> when unknown.
     /// </summary>
-    public string? DatabaseStatusText { get; }
+    public string? DatabaseStatusText => _protection?.Status switch
+    {
+        DatabaseProtectionStatus.Encrypted => _localizer["Settings_DatabaseEncrypted"],
+        DatabaseProtectionStatus.NotEncryptedNoKeychain => _localizer["Settings_DatabaseNoKeychain"],
+        DatabaseProtectionStatus.PartlyEncrypted => _localizer["Settings_DatabasePartly"],
+        _ => null,
+    };
+
+    /// <summary>
+    /// Stops listening to the localizer, which outlives the window; call it when the window has closed.
+    /// </summary>
+    public void Detach()
+    {
+        _localizer.LanguageChanged -= OnLanguageChanged;
+    }
+
+    /// <summary>
+    /// Saves and applies a newly selected theme.
+    /// </summary>
+    /// <param name="value">The new selection.</param>
+    partial void OnSelectedThemeChanged(ThemeOptionViewModel value)
+    {
+        if (value is null || value.Code == _settings.Theme)
+        {
+            return;
+        }
+
+        ErrorText = null;
+        try
+        {
+            _settings.SetTheme(value.Code);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The file could not be written; show it and put the picker back so it matches what is stored.
+            ErrorText = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
+            SelectedTheme = ThemeOptions.First(o => o.Code == _settings.Theme);
+            return;
+        }
+
+        _themeApplier?.Apply(value.Code);
+    }
+
+    /// <summary>
+    /// Re-reads the texts built by this view model after the language changed.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        foreach (var option in ThemeOptions)
+        {
+            option.RefreshLanguage();
+        }
+
+        OnPropertyChanged(nameof(DatabaseStatusText));
+        UpdateRemoteImageRuleCount();
+    }
+
+    /// <summary>
+    /// How many saved rules match the filter.
+    /// </summary>
+    private int _ruleTotal;
 
     /// <summary>
     /// The largest number of rules shown at once; the filter box narrows longer lists.
@@ -270,7 +367,16 @@ public sealed partial class SettingsViewModel : ObservableObject
             RemoteImageRules.Add(rule);
         }
 
-        RemoteImageRuleCountText = _localizer.Format("Settings_RemoteImagesCount", rules.Count, total);
+        _ruleTotal = total;
+        UpdateRemoteImageRuleCount();
+    }
+
+    /// <summary>
+    /// Describes how many rules are listed out of those that match.
+    /// </summary>
+    private void UpdateRemoteImageRuleCount()
+    {
+        RemoteImageRuleCountText = _localizer.Format("Settings_RemoteImagesCount", RemoteImageRules.Count, _ruleTotal);
     }
 
     /// <summary>

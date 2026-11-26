@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
+using Swiftlet.Desktop.Settings;
 using Swiftlet.Desktop.ViewModels;
 using Swiftlet.Infrastructure.Persistence;
 using Swiftlet.Infrastructure.Persistence.Encryption;
@@ -46,6 +47,13 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
+
+            // The saved theme is applied before the first window, so nothing flashes in the other one.
+            if (services.GetService<IAppSettings>() is { } settings)
+            {
+                services.GetService<IThemeApplier>()?.Apply(settings.Theme);
+            }
+
             desktop.MainWindow = startup is null || startup.IsStarted
                 ? CreateMainWindow()
                 : CreateStartupWindow(desktop, startup);

@@ -178,4 +178,11 @@
   <data name="Settings_DatabaseNoKeychain" xml:space="preserve"><value>本地邮件数据未加密：没有可用的系统钥匙串。</value></data>
   <data name="Settings_DatabasePartly" xml:space="preserve"><value>部分本地邮件数据尚未加密，下次启动会再试。</value></data>
   <data name="Startup_KeyStoreMissing" xml:space="preserve"><value>邮件数据已加密，但没有找到系统钥匙串。请确认钥匙串已启动并解锁，然后退出并重新启动 Swiftlet。</value></data>
+  <data name="Settings_Theme" xml:space="preserve"><value>主题</value></data>
+  <data name="Settings_ThemeSystem" xml:space="preserve"><value>跟随系统</value></data>
+  <data name="Settings_ThemeLight" xml:space="preserve"><value>浅色</value></data>
+  <data name="Settings_ThemeDark" xml:space="preserve"><value>深色</value></data>
+  <data name="Settings_SectionGeneral" xml:space="preserve"><value>通用</value></data>
+  <data name="Settings_SectionSync" xml:space="preserve"><value>同步</value></data>
+  <data name="Settings_SectionData" xml:space="preserve"><value>数据安全</value></data>
 </root>

@@ -341,4 +341,183 @@ public class SettingsViewModelTests
         viewModel.DownloadAllMail.Should().BeTrue();
         viewModel.ErrorText.Should().Contain("disk full");
     }
+
+    /// <summary>
+    /// Verifies a settings file without a theme follows the system.
+    /// </summary>
+    [Fact]
+    public void AppSettings_ThemeMissing_IsSystem()
+    {
+        WithSettingsFile(null, path => new AppSettings(path).Theme.Should().Be(ThemePreference.System));
+    }
+
+    /// <summary>
+    /// Verifies a saved theme survives a restart.
+    /// </summary>
+    [Fact]
+    public void AppSettings_ThemeSaved_SurvivesReload()
+    {
+        WithSettingsFile(null, path =>
+        {
+            new AppSettings(path).SetTheme(ThemePreference.Dark);
+
+            new AppSettings(path).Theme.Should().Be(ThemePreference.Dark);
+        });
+    }
+
+    /// <summary>
+    /// Verifies an unknown or wrongly typed theme value follows the system and keeps the other settings.
+    /// </summary>
+    /// <param name="json">The settings file content.</param>
+    [Theory]
+    [InlineData("{\"language\":\"en\",\"theme\":\"neon\"}")]
+    [InlineData("{\"language\":\"en\",\"theme\":5}")]
+    [InlineData("{\"language\":\"en\",\"theme\":{}}")]
+    public void AppSettings_ThemeUnusable_IsSystemAndKeepsOtherSettings(string json)
+    {
+        WithSettingsFile(json, path =>
+        {
+            var settings = new AppSettings(path);
+
+            settings.Theme.Should().Be(ThemePreference.System);
+            settings.Load().Should().Be("en");
+        });
+    }
+
+    /// <summary>
+    /// Verifies saving another setting does not lose the theme.
+    /// </summary>
+    [Fact]
+    public void AppSettings_SaveOtherSettings_KeepsTheme()
+    {
+        WithSettingsFile(null, path =>
+        {
+            var settings = new AppSettings(path);
+            settings.SetTheme(ThemePreference.Dark);
+
+            settings.Save("en");
+            settings.SetDownloadAllMail(false);
+            settings.SetDownloadFullHistory(false);
+            settings.SetRemoveServerDeletedMessages(false);
+
+            new AppSettings(path).Theme.Should().Be(ThemePreference.Dark);
+        });
+    }
+
+    /// <summary>
+    /// Verifies the view model starts from the stored theme and a new choice is saved and applied.
+    /// </summary>
+    [Fact]
+    public void SelectedTheme_Changed_SavesAndApplies()
+    {
+        var settings = new FakeAppSettings { Theme = ThemePreference.Light };
+        var applier = new FakeThemeApplier();
+        var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules(), themeApplier: applier);
+        viewModel.SelectedTheme.Code.Should().Be(ThemePreference.Light);
+        applier.Applied.Should().BeEmpty();
+
+        viewModel.SelectedTheme = viewModel.ThemeOptions.Single(o => o.Code == ThemePreference.Dark);
+
+        settings.Theme.Should().Be(ThemePreference.Dark);
+        applier.Applied.Should().Equal(ThemePreference.Dark);
+    }
+
+    /// <summary>
+    /// Verifies a failed theme save is reported, the choice returns to the stored one and nothing is applied.
+    /// </summary>
+    [Fact]
+    public void SelectedTheme_SaveFails_RevertsAndShowsError()
+    {
+        var settings = new FakeAppSettings { Failure = new IOException("disk full") };
+        var applier = new FakeThemeApplier();
+        var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules(), themeApplier: applier);
+
+        viewModel.SelectedTheme = viewModel.ThemeOptions.Single(o => o.Code == ThemePreference.Dark);
+
+        viewModel.SelectedTheme.Code.Should().Be(ThemePreference.System);
+        viewModel.ErrorText.Should().Contain("disk full");
+        applier.Applied.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies the texts built by the view model follow a language switch made in the window itself.
+    /// </summary>
+    [Fact]
+    public void LanguageSwitched_TextsOfTheWindow_AreRelabelled()
+    {
+        var localizer = TestLocalizer.English();
+        var protection = new FakeDatabaseProtection { Status = DatabaseProtectionStatus.Encrypted };
+        var viewModel = new SettingsViewModel(new FakeAppSettings(), localizer, new FakeRemoteImageRules(), protection);
+        var changed = new List<string?>();
+        viewModel.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        localizer.SetPreference("zh-Hans");
+
+        viewModel.ThemeOptions.Select(o => o.DisplayName).Should().Equal("跟随系统", "浅色", "深色");
+        viewModel.DatabaseStatusText.Should().Be("本地邮件数据已加密。");
+        viewModel.RemoteImageRuleCountText.Should().Be("显示 0 / 共 0 条");
+        changed.Should().Contain(nameof(SettingsViewModel.DatabaseStatusText));
+    }
+
+    /// <summary>
+    /// Verifies a closed window's view model no longer listens to the long-lived localizer.
+    /// </summary>
+    [Fact]
+    public void Detach_LanguageSwitchedAfterwards_ChangesNothing()
+    {
+        var localizer = TestLocalizer.English();
+        var viewModel = new SettingsViewModel(new FakeAppSettings(), localizer, new FakeRemoteImageRules());
+
+        viewModel.Detach();
+        localizer.SetPreference("zh-Hans");
+
+        viewModel.RemoteImageRuleCountText.Should().Be("Showing 0 of 0");
+    }
+
+    /// <summary>
+    /// Verifies the applier changes the theme of the running application.
+    /// </summary>
+    [Fact]
+    public async Task ThemeApplier_EachPreference_SetsRequestedVariant()
+    {
+        await UiSmokeTests.Session.Dispatch(
+            () =>
+            {
+                var applier = new Swiftlet.Desktop.Services.AvaloniaThemeApplier();
+                var application = Avalonia.Application.Current!;
+
+                applier.Apply(ThemePreference.Dark);
+                application.RequestedThemeVariant.Should().Be(Avalonia.Styling.ThemeVariant.Dark);
+                applier.Apply(ThemePreference.Light);
+                application.RequestedThemeVariant.Should().Be(Avalonia.Styling.ThemeVariant.Light);
+                applier.Apply(ThemePreference.System);
+                application.RequestedThemeVariant.Should().Be(Avalonia.Styling.ThemeVariant.Default);
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Runs a test against a settings file in its own temporary directory.
+    /// </summary>
+    /// <param name="content">The initial file content, or <see langword="null"/> for no file.</param>
+    /// <param name="test">The test body, given the file path.</param>
+    private static void WithSettingsFile(string? content, Action<string> test)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"swiftlet-test-{Guid.NewGuid():N}");
+        var path = Path.Combine(directory, "settings.json");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            if (content is not null)
+            {
+                File.WriteAllText(path, content);
+            }
+
+            test(path);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
 }

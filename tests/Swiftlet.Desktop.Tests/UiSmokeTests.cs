@@ -509,13 +509,20 @@ public class UiSmokeTests
             () =>
             {
                 LocalizationManager.Instance.SetPreference(language);
-                var viewModel = new SettingsViewModel(new FakeAppSettings(), LocalizationManager.Instance, new FakeRemoteImageRules());
+                var selector = new LanguageSelectorViewModel(
+                    LocalizationManager.Instance,
+                    new FakeLanguageStore(),
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger<LanguageSelectorViewModel>.Instance);
+                var viewModel = new SettingsViewModel(
+                    new FakeAppSettings(), LocalizationManager.Instance, new FakeRemoteImageRules(), languageSelector: selector);
                 var window = new SettingsWindow { DataContext = viewModel };
                 Render(window, $"settings-{language}", language);
 
                 window.Title.Should().Be(title);
                 var boxes = window.GetVisualDescendants().OfType<CheckBox>().ToList();
                 boxes.Should().HaveCount(3);
+                window.GetVisualDescendants().OfType<ComboBox>().Where(c => c.IsEffectivelyVisible)
+                    .Select(c => c.SelectedItem).Should().Equal(selector.SelectedOption, viewModel.SelectedTheme);
                 var box = boxes.Single(b => b.Content as string == checkbox);
                 box.IsChecked.Should().BeFalse();
                 boxes.Where(b => b != box).Should().OnlyContain(b => b.IsChecked == true, "the history downloads are on by default");
