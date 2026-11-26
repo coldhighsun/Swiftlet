@@ -47,6 +47,26 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Asks the view model for the next page of messages when the list is scrolled to within one screen of its end.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private async void OnMessageListScrollChanged(object? sender, ScrollChangedEventArgs e)
+    {
+        if (e.Source is not ScrollViewer scroller || DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        var remaining = scroller.Extent.Height - scroller.Offset.Y - scroller.Viewport.Height;
+        if (remaining <= scroller.Viewport.Height)
+        {
+            // LoadMoreAsync reports failures in the status line itself; the event handler boundary only needs the call.
+            await viewModel.LoadMoreAsync();
+        }
+    }
+
+    /// <summary>
     /// Stops the periodic refresh and the sync-triggered refreshes.
     /// </summary>
     /// <param name="sender">The event sender.</param>

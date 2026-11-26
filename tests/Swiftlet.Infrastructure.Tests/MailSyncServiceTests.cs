@@ -619,8 +619,8 @@ public class MailSyncServiceTests
 
         result.NewMessages.Should().Be(1);
         var messages = db.CreateMessageRepository();
-        (await messages.SearchAsync("renumbered", account.Id, 10, ct)).Should().HaveCount(1);
-        (await messages.SearchAsync("old", account.Id, 10, ct)).Should().BeEmpty();
+        (await messages.SearchAsync("renumbered", account.Id, 0, 10, ct)).Should().HaveCount(1);
+        (await messages.SearchAsync("old", account.Id, 0, 10, ct)).Should().BeEmpty();
     }
 
     /// <summary>
@@ -686,7 +686,7 @@ public class MailSyncServiceTests
         await CreateService(db, factory).SyncAsync(account.Id, ct);
 
         await using var verify = db.CreateVerifier();
-        var found = await verify.Messages().SearchAsync("quarterly numbers", null, 10, ct);
+        var found = await verify.Messages().SearchAsync("quarterly numbers", null, 0, 10, ct);
         var cached = found.Should().ContainSingle().Subject;
         cached.IsRead.Should().BeTrue();
         cached.Attachments.Should().ContainSingle().Which.FileName.Should().Be("q3.xlsx");

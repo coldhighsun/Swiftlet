@@ -342,6 +342,7 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
     public async Task<IReadOnlyList<MailMessage>> SearchAsync(
         string query,
         Guid? accountId,
+        int skip,
         int take,
         CancellationToken cancellationToken = default)
     {
@@ -356,10 +357,11 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
         foreach (var id in accountIds)
         {
             var context = await contexts.GetAsync(id, cancellationToken);
-            results.AddRange(await SearchAccountAsync(context, terms, take, cancellationToken));
+            // Every account returns its newest skip+take matches; the page is cut from the merged list.
+            results.AddRange(await SearchAccountAsync(context, terms, skip + take, cancellationToken));
         }
 
-        var page = results.OrderByDescending(m => m.SentAt).Take(take).ToList();
+        var page = results.OrderByDescending(m => m.SentAt).Skip(skip).Take(take).ToList();
         await AttachLabelsAsync(page, cancellationToken);
         return page;
     }

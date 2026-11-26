@@ -24,9 +24,9 @@ namespace Swiftlet.Desktop.ViewModels;
 public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 {
     /// <summary>
-    /// The maximum number of messages shown per folder or search.
+    /// The number of messages loaded per page of a folder, unified inbox, label or search view.
     /// </summary>
-    private const int PageSize = 200;
+    private const int PageSize = 50;
 
     /// <summary>
     /// The request dispatcher.
@@ -62,6 +62,21 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// The most recent message list load.
     /// </summary>
     private Task _loadTask = Task.CompletedTask;
+
+    /// <summary>
+    /// The trimmed search text of the results currently listed, or <see langword="null"/> when a folder, unified inbox or label view is shown.
+    /// </summary>
+    private string? _shownSearchText;
+
+    /// <summary>
+    /// Whether the local database may hold more messages for the current view than the ones listed.
+    /// </summary>
+    private bool _hasMore;
+
+    /// <summary>
+    /// Whether a next page is being loaded, so repeated scroll events do not request it twice.
+    /// </summary>
+    private bool _isLoadingMore;
 
     /// <summary>
     /// The most recent selection side effect (marking as read).
@@ -404,7 +419,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         await GuardedAsync("Error_Refresh", ReloadAccountsAsync);
         if (string.IsNullOrWhiteSpace(SearchText))
         {
-            _loadTask = LoadMessagesAsync(SelectedNode);
+            _loadTask = LoadMessagesAsync(SelectedNode, keepLoaded: true);
             await _loadTask;
         }
     }
@@ -428,12 +443,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         var version = ++_loadVersion;
         await GuardedAsync("Error_Search", async () =>
         {
-            var results = await _dispatcher.SendAsync(new SearchMessagesQuery(text, ScopeAccountId(SelectedNode), PageSize));
+            var results = await FetchPageAsync(SelectedNode, text, 0, PageSize);
             if (version != _loadVersion)
             {
                 return;
             }
 
+            _shownSearchText = text;
+            _hasMore = results.Count >= PageSize;
             ReplaceMessages(results);
             StatusText = _localizer.Format("Status_SearchResults", results.Count);
         });
@@ -902,7 +919,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             }
 
             await GuardedAsync("Error_Refresh", ReloadAccountsAsync);
-            _loadTask = LoadMessagesAsync(SelectedNode);
+            _loadTask = LoadMessagesAsync(SelectedNode, keepLoaded: true);
             await _loadTask;
             StatusText = problems.Count == 0
                 ? _localizer.Format("Status_SyncDone", newMessages)
@@ -1023,29 +1040,108 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// Loads the messages for a tree selection and shows them.
     /// </summary>
     /// <param name="node">The selected node.</param>
+    /// <param name="keepLoaded">
+    /// <see langword="true"/> for a refresh of the same view: the pages already loaded by scrolling are fetched again, so the list is not cut back to the first page.
+    /// </param>
     /// <returns>A task that completes when the list has been replaced.</returns>
-    private async Task LoadMessagesAsync(object? node)
+    private async Task LoadMessagesAsync(object? node, bool keepLoaded = false)
     {
         var version = ++_loadVersion;
+        _shownSearchText = null;
         if (node is not (FolderNodeViewModel or UnifiedInboxNodeViewModel or LabelNodeViewModel))
         {
+            _hasMore = false;
             ReplaceMessages([]);
             return;
         }
 
+        var take = keepLoaded ? Math.Max(PageSize, Messages.Count) : PageSize;
         await GuardedAsync("Error_LoadMessages", async () =>
         {
-            var messages = node switch
-            {
-                UnifiedInboxNodeViewModel => await _dispatcher.SendAsync(new GetUnifiedInboxQuery(0, PageSize)),
-                LabelNodeViewModel label => await _dispatcher.SendAsync(new GetMessagesByLabelQuery(label.Label.Id, 0, PageSize)),
-                _ => await _dispatcher.SendAsync(new GetMessagesQuery(((FolderNodeViewModel)node).Folder.AccountId, ((FolderNodeViewModel)node).Folder.Id, 0, PageSize)),
-            };
+            var messages = await FetchPageAsync(node, null, 0, take);
             if (version == _loadVersion)
             {
+                _hasMore = messages.Count >= take;
                 ReplaceMessages(messages);
             }
         });
+    }
+
+    /// <summary>
+    /// Loads the next page of the current view and appends it to the list; does nothing when everything is listed or a load is running.
+    /// </summary>
+    /// <returns>A task that completes when the page has been appended.</returns>
+    [RelayCommand]
+    public async Task LoadMoreAsync()
+    {
+        if (!_hasMore || _isLoadingMore)
+        {
+            return;
+        }
+
+        var node = SelectedNode;
+        var search = _shownSearchText;
+        var version = _loadVersion;
+        var skip = Messages.Count;
+        _isLoadingMore = true;
+        try
+        {
+            await GuardedAsync("Error_LoadMessages", async () =>
+            {
+                var page = await FetchPageAsync(node, search, skip, PageSize);
+
+                // A newer load (another folder, a search, a refresh) owns the list now; its result replaces this page.
+                if (version != _loadVersion)
+                {
+                    return;
+                }
+
+                _hasMore = page.Count >= PageSize;
+                var listed = Messages.Select(m => m.Id).ToHashSet();
+                foreach (var message in page.Where(m => listed.Add(m.Id)))
+                {
+                    Messages.Add(CreateItem(message));
+                }
+            });
+        }
+        finally
+        {
+            _isLoadingMore = false;
+        }
+    }
+
+    /// <summary>
+    /// Fetches one page of the messages of a view.
+    /// </summary>
+    /// <param name="node">The selected node.</param>
+    /// <param name="searchText">The search text, or <see langword="null"/> to list the node's messages.</param>
+    /// <param name="skip">The number of messages to skip.</param>
+    /// <param name="take">The maximum number of messages to return.</param>
+    /// <returns>The messages, newest first.</returns>
+    private async Task<IReadOnlyList<MailMessage>> FetchPageAsync(object? node, string? searchText, int skip, int take)
+    {
+        if (searchText is not null)
+        {
+            return await _dispatcher.SendAsync(new SearchMessagesQuery(searchText, ScopeAccountId(node), skip, take));
+        }
+
+        return node switch
+        {
+            UnifiedInboxNodeViewModel => await _dispatcher.SendAsync(new GetUnifiedInboxQuery(skip, take)),
+            LabelNodeViewModel label => await _dispatcher.SendAsync(new GetMessagesByLabelQuery(label.Label.Id, skip, take)),
+            FolderNodeViewModel folder => await _dispatcher.SendAsync(new GetMessagesQuery(folder.Folder.AccountId, folder.Folder.Id, skip, take)),
+            _ => [],
+        };
+    }
+
+    /// <summary>
+    /// Creates the list item of a message.
+    /// </summary>
+    /// <param name="message">The message.</param>
+    /// <returns>The new item.</returns>
+    private MessageItemViewModel CreateItem(MailMessage message)
+    {
+        return new MessageItemViewModel(message, SaveAttachmentAsync, _localizer, RememberRemoteImagesAsync);
     }
 
     /// <summary>
@@ -1072,7 +1168,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             }
             else
             {
-                target.Add(new MessageItemViewModel(message, SaveAttachmentAsync, _localizer, RememberRemoteImagesAsync));
+                target.Add(CreateItem(message));
             }
         }
 

@@ -116,8 +116,8 @@ public class DeleteAccountTests
         db.Factory.DeletedAccounts.Should().Equal(first.Id);
         db.Factory.OpenAccounts.Should().Equal(second.Id);
         var search = verify.Messages();
-        (await search.SearchAsync("deletedsubject", null, 10, ct)).Should().BeEmpty();
-        (await search.SearchAsync("keptsubject", null, 10, ct)).Should().HaveCount(1);
+        (await search.SearchAsync("deletedsubject", null, 0, 10, ct)).Should().BeEmpty();
+        (await search.SearchAsync("keptsubject", null, 0, 10, ct)).Should().HaveCount(1);
     }
 
     /// <summary>

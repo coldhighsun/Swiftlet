@@ -118,12 +118,14 @@ public interface IMessageRepository
     /// </summary>
     /// <param name="query">The user-entered search text; all terms must match.</param>
     /// <param name="accountId">Restricts the search to one account, or <see langword="null"/> for all accounts.</param>
+    /// <param name="skip">The number of results to skip.</param>
     /// <param name="take">The maximum number of results.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The matching messages.</returns>
     Task<IReadOnlyList<MailMessage>> SearchAsync(
         string query,
         Guid? accountId,
+        int skip,
         int take,
         CancellationToken cancellationToken = default);
 

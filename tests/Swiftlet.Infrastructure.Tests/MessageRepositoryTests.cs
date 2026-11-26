@@ -90,7 +90,7 @@ public class MessageRepositoryTests
         await repository.AddAsync(Build(account, folder, 1, "Quarterly report", "revenue grew", DateTimeOffset.UtcNow), ct);
         await repository.AddAsync(Build(account, folder, 2, "Lunch plans", "revenue lunch", DateTimeOffset.UtcNow), ct);
 
-        var result = await repository.SearchAsync("report revenue", null, 10, ct);
+        var result = await repository.SearchAsync("report revenue", null, 0, 10, ct);
 
         result.Should().ContainSingle().Which.Subject.Should().Be("Quarterly report");
     }
@@ -107,8 +107,37 @@ public class MessageRepositoryTests
         var repository = db.CreateMessageRepository();
         await repository.AddAsync(Build(account, folder, 1, "项目周报", "本周完成了邮件同步模块", DateTimeOffset.UtcNow), ct);
 
-        (await repository.SearchAsync("同步模块", null, 10, ct)).Should().HaveCount(1);
-        (await repository.SearchAsync("周报", null, 10, ct)).Should().HaveCount(1);
+        (await repository.SearchAsync("同步模块", null, 0, 10, ct)).Should().HaveCount(1);
+        (await repository.SearchAsync("周报", null, 0, 10, ct)).Should().HaveCount(1);
+    }
+
+    /// <summary>
+    /// Verifies skip and take cut non-overlapping pages from the merged, newest-first results of several accounts.
+    /// </summary>
+    [Fact]
+    public async Task SearchAsync_SkipAndTake_PagesAcrossAccountsNewestFirst()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account1, folder1) = await db.SeedAccountAsync(ct);
+        var (account2, folder2) = await db.SeedAccountAsync(ct);
+        var repository = db.CreateMessageRepository();
+        var now = DateTimeOffset.UtcNow;
+        for (var i = 1; i <= 5; i++)
+        {
+            await repository.AddAsync(Build(account1, folder1, (uint)i, $"invoice a{i}", "text", now.AddMinutes(i * 2)), ct);
+            await repository.AddAsync(Build(account2, folder2, (uint)i, $"invoice b{i}", "text", now.AddMinutes((i * 2) + 1)), ct);
+        }
+
+        var first = await repository.SearchAsync("invoice", null, 0, 4, ct);
+        var second = await repository.SearchAsync("invoice", null, 4, 4, ct);
+        var third = await repository.SearchAsync("invoice", null, 8, 4, ct);
+        var beyond = await repository.SearchAsync("invoice", null, 20, 4, ct);
+
+        first.Select(m => m.Subject).Should().Equal("invoice b5", "invoice a5", "invoice b4", "invoice a4");
+        second.Select(m => m.Subject).Should().Equal("invoice b3", "invoice a3", "invoice b2", "invoice a2");
+        third.Select(m => m.Subject).Should().Equal("invoice b1", "invoice a1");
+        beyond.Should().BeEmpty();
     }
 
     /// <summary>
@@ -125,8 +154,8 @@ public class MessageRepositoryTests
         await repository.AddAsync(Build(account1, folder1, 1, "invoice", "text", DateTimeOffset.UtcNow), ct);
         await repository.AddAsync(Build(account2, folder2, 1, "invoice", "text", DateTimeOffset.UtcNow), ct);
 
-        (await repository.SearchAsync("invoice", null, 10, ct)).Should().HaveCount(2);
-        (await repository.SearchAsync("invoice", account1.Id, 10, ct)).Should().ContainSingle()
+        (await repository.SearchAsync("invoice", null, 0, 10, ct)).Should().HaveCount(2);
+        (await repository.SearchAsync("invoice", account1.Id, 0, 10, ct)).Should().ContainSingle()
             .Which.AccountId.Should().Be(account1.Id);
     }
 
@@ -142,7 +171,7 @@ public class MessageRepositoryTests
         var repository = db.CreateMessageRepository();
         await repository.AddAsync(Build(account, folder, 1, "hello world", "text", DateTimeOffset.UtcNow), ct);
 
-        var result = await repository.SearchAsync("\"hello* OR (world", null, 10, ct);
+        var result = await repository.SearchAsync("\"hello* OR (world", null, 0, 10, ct);
 
         result.Should().BeEmpty();
     }
@@ -160,8 +189,8 @@ public class MessageRepositoryTests
         await repository.AddAsync(Build(account, folder, 1, "周报", "100% done", DateTimeOffset.UtcNow), ct);
         await repository.AddAsync(Build(account, folder, 2, "other", "nothing", DateTimeOffset.UtcNow), ct);
 
-        (await repository.SearchAsync("周报", null, 10, ct)).Should().ContainSingle();
-        (await repository.SearchAsync("%", null, 10, ct)).Should().ContainSingle()
+        (await repository.SearchAsync("周报", null, 0, 10, ct)).Should().ContainSingle();
+        (await repository.SearchAsync("%", null, 0, 10, ct)).Should().ContainSingle()
             .Which.BodyText.Should().Contain("100%");
     }
 
@@ -177,13 +206,13 @@ public class MessageRepositoryTests
         var repository = db.CreateMessageRepository();
         var message = Build(account, folder, 1, "disappearing", "text", DateTimeOffset.UtcNow);
         await repository.AddAsync(message, ct);
-        (await repository.SearchAsync("disappearing", null, 10, ct)).Should().HaveCount(1);
+        (await repository.SearchAsync("disappearing", null, 0, 10, ct)).Should().HaveCount(1);
 
         var accountContext = await db.AccountContextAsync(account.Id, ct);
         accountContext.Messages.Remove(message);
         await accountContext.SaveChangesAsync(ct);
 
-        (await repository.SearchAsync("disappearing", null, 10, ct)).Should().BeEmpty();
+        (await repository.SearchAsync("disappearing", null, 0, 10, ct)).Should().BeEmpty();
     }
 
     /// <summary>
@@ -196,7 +225,7 @@ public class MessageRepositoryTests
         await using var db = await TestDatabase.CreateAsync(ct);
         var repository = db.CreateMessageRepository();
 
-        (await repository.SearchAsync("   ", null, 10, ct)).Should().BeEmpty();
+        (await repository.SearchAsync("   ", null, 0, 10, ct)).Should().BeEmpty();
     }
 
     /// <summary>
@@ -354,11 +383,11 @@ public class MessageRepositoryTests
         var repository = db.CreateMessageRepository();
         var message = Build(account, folder, 1, "vanishing", "text", DateTimeOffset.UtcNow);
         await repository.AddAsync(message, ct);
-        (await repository.SearchAsync("vanishing", null, 10, ct)).Should().HaveCount(1);
+        (await repository.SearchAsync("vanishing", null, 0, 10, ct)).Should().HaveCount(1);
 
         await repository.DeleteAsync(account.Id, message.Id, ct);
 
-        (await repository.SearchAsync("vanishing", null, 10, ct)).Should().BeEmpty();
+        (await repository.SearchAsync("vanishing", null, 0, 10, ct)).Should().BeEmpty();
     }
 
     /// <summary>
@@ -380,7 +409,7 @@ public class MessageRepositoryTests
         await repository.SaveLabelsAsync(message, ct);
 
         await using var verifyContext = db.CreateVerifier();
-        var result = await verifyContext.Messages().SearchAsync("labelled", null, 10, ct);
+        var result = await verifyContext.Messages().SearchAsync("labelled", null, 0, 10, ct);
 
         result.Should().ContainSingle().Which.Labels.Should().ContainSingle();
     }
@@ -552,7 +581,7 @@ public class MessageRepositoryTests
             .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM MessageLabels")
             .SingleAsync(ct);
         links.Should().Be(0);
-        (await repository.SearchAsync("second", null, 10, ct)).Should().BeEmpty();
+        (await repository.SearchAsync("second", null, 0, 10, ct)).Should().BeEmpty();
     }
 
     /// <summary>
@@ -781,7 +810,7 @@ public class MessageRepositoryTests
             ],
             ct);
 
-        var result = await repository.SearchAsync("budget", null, 10, ct);
+        var result = await repository.SearchAsync("budget", null, 0, 10, ct);
 
         result.Select(m => (m.Subject, m.FolderId)).Should().BeEquivalentTo(
             new[]
@@ -806,7 +835,7 @@ public class MessageRepositoryTests
         var repository = db.CreateMessageRepository();
         await repository.AddRangeAsync([BuildWithId(account, inbox, 1, "zz", "d@x"), BuildWithId(account, allMail, 4, "zz", "d@x")], ct);
 
-        var result = await repository.SearchAsync("zz", null, 10, ct);
+        var result = await repository.SearchAsync("zz", null, 0, 10, ct);
 
         result.Should().ContainSingle().Which.FolderId.Should().Be(inbox.Id);
     }

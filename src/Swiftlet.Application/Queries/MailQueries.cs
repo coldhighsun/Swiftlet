@@ -119,8 +119,9 @@ public sealed class GetMessagesByLabelQueryHandler(IMessageRepository messages)
 /// </summary>
 /// <param name="Text">The search text.</param>
 /// <param name="AccountId">Restricts the search to one account, or <see langword="null"/> for all.</param>
+/// <param name="Skip">The number of results to skip.</param>
 /// <param name="Take">The maximum number of results.</param>
-public sealed record SearchMessagesQuery(string Text, Guid? AccountId, int Take) : IQuery<IReadOnlyList<MailMessage>>;
+public sealed record SearchMessagesQuery(string Text, Guid? AccountId, int Skip, int Take) : IQuery<IReadOnlyList<MailMessage>>;
 
 /// <summary>
 /// Handles <see cref="SearchMessagesQuery"/>.
@@ -133,6 +134,6 @@ public sealed class SearchMessagesQueryHandler(IMessageRepository messages)
     public async ValueTask<IReadOnlyList<MailMessage>> Handle(SearchMessagesQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
-        return await messages.SearchAsync(query.Text, query.AccountId, query.Take, cancellationToken);
+        return await messages.SearchAsync(query.Text, query.AccountId, query.Skip, query.Take, cancellationToken);
     }
 }

@@ -1637,4 +1637,176 @@ public class MainWindowViewModelTests
         scenario.ViewModel.StatusText.Should().Be(before);
         scenario.SyncEvents.HasSubscribers.Should().BeFalse();
     }
+
+    /// <summary>
+    /// Creates a scenario whose Inbox holds many messages and whose folder and search queries honour skip and take.
+    /// </summary>
+    /// <param name="count">The number of Inbox messages.</param>
+    /// <returns>The scenario, not yet started.</returns>
+    private static Scenario PagedScenario(int count)
+    {
+        var scenario = new Scenario();
+        scenario.Messages.Clear();
+        for (var i = 1; i <= count; i++)
+        {
+            scenario.Messages.Add(TestData.Message(scenario.Account, scenario.Inbox, (uint)i, $"Paged {i}"));
+        }
+
+        scenario.Dispatcher.On<GetMessagesQuery>(q => q.FolderId == scenario.Inbox.Id
+            ? scenario.Messages.OrderByDescending(m => m.SentAt).Skip(q.Skip).Take(q.Take).ToList()
+            : []);
+        scenario.Dispatcher.On<GetUnifiedInboxQuery>(q => scenario.Messages.OrderByDescending(m => m.SentAt).Skip(q.Skip).Take(q.Take).ToList());
+        scenario.Dispatcher.On<SearchMessagesQuery>(q => scenario.Messages
+            .Where(m => m.Subject.Contains(q.Text, StringComparison.Ordinal))
+            .OrderByDescending(m => m.SentAt).Skip(q.Skip).Take(q.Take).ToList());
+        return scenario;
+    }
+
+    /// <summary>
+    /// Verifies scrolling past a full page appends the next pages until everything is listed, then stops asking.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task LoadMoreAsync_FullPages_AppendsUntilEverythingIsListed()
+    {
+        var scenario = PagedScenario(120);
+        await scenario.StartAsync();
+        scenario.ViewModel.Messages.Should().HaveCount(50);
+
+        await scenario.ViewModel.LoadMoreAsync();
+        scenario.ViewModel.Messages.Should().HaveCount(100);
+        await scenario.ViewModel.LoadMoreAsync();
+        scenario.ViewModel.Messages.Should().HaveCount(120);
+        var queries = scenario.Dispatcher.Sent<GetMessagesQuery>().Count;
+        await scenario.ViewModel.LoadMoreAsync();
+
+        scenario.Dispatcher.Sent<GetMessagesQuery>().Should().HaveCount(queries);
+        scenario.Dispatcher.Sent<GetMessagesQuery>().Select(q => q.Skip).Should().Equal(0, 50, 100);
+        scenario.ViewModel.Messages.Select(m => m.Id).Should().OnlyHaveUniqueItems();
+        scenario.ViewModel.Messages[^1].Subject.Should().Be("Paged 1");
+    }
+
+    /// <summary>
+    /// Verifies a first page shorter than the page size never triggers another request.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task LoadMoreAsync_ShortFirstPage_SendsNoQuery()
+    {
+        var scenario = PagedScenario(5);
+        await scenario.StartAsync();
+        var queries = scenario.Dispatcher.Sent<GetMessagesQuery>().Count;
+
+        await scenario.ViewModel.LoadMoreAsync();
+
+        scenario.Dispatcher.Sent<GetMessagesQuery>().Should().HaveCount(queries);
+        scenario.ViewModel.Messages.Should().HaveCount(5);
+    }
+
+    /// <summary>
+    /// Verifies a refresh re-fetches every page loaded so far instead of cutting the list back to the first page.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task RefreshAsync_AfterLoadMore_KeepsLoadedPages()
+    {
+        var scenario = PagedScenario(120);
+        await scenario.StartAsync();
+        await scenario.ViewModel.LoadMoreAsync();
+
+        await scenario.ViewModel.RefreshAsync();
+
+        scenario.Dispatcher.Sent<GetMessagesQuery>().Last().Take.Should().Be(100);
+        scenario.ViewModel.Messages.Should().HaveCount(100);
+        await scenario.ViewModel.LoadMoreAsync();
+        scenario.ViewModel.Messages.Should().HaveCount(120);
+    }
+
+    /// <summary>
+    /// Verifies the next page of search results is requested with the search text and a skip.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task LoadMoreAsync_ShowingSearchResults_PagesTheSearch()
+    {
+        var scenario = PagedScenario(120);
+        await scenario.StartAsync();
+        scenario.ViewModel.SearchText = "Paged";
+        await scenario.ViewModel.SearchCommand.ExecuteAsync(null);
+
+        await scenario.ViewModel.LoadMoreAsync();
+
+        var last = scenario.Dispatcher.Sent<SearchMessagesQuery>().Last();
+        last.Text.Should().Be("Paged");
+        last.Skip.Should().Be(50);
+        scenario.ViewModel.Messages.Should().HaveCount(100);
+    }
+
+    /// <summary>
+    /// Verifies selecting another node starts again from the first page.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task SelectedNode_ChangedAfterLoadMore_ReloadsFirstPageOnly()
+    {
+        var scenario = PagedScenario(120);
+        await scenario.StartAsync();
+        await scenario.ViewModel.LoadMoreAsync();
+
+        scenario.ViewModel.SelectedNode = scenario.ViewModel.TreeRoots[0];
+        await scenario.ViewModel.WhenIdleAsync();
+
+        var query = scenario.Dispatcher.Sent<GetUnifiedInboxQuery>().Last();
+        query.Skip.Should().Be(0);
+        query.Take.Should().Be(50);
+        scenario.ViewModel.Messages.Should().HaveCount(50);
+    }
+
+    /// <summary>
+    /// Verifies a failed page load keeps the listed messages, reports the error and can be retried.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task LoadMoreAsync_QueryFails_KeepsListAndAllowsRetry()
+    {
+        var scenario = PagedScenario(120);
+        await scenario.StartAsync();
+        var fail = true;
+        scenario.Dispatcher.On<GetMessagesQuery>(q => fail
+            ? throw new InvalidOperationException("db locked")
+            : scenario.Messages.OrderByDescending(m => m.SentAt).Skip(q.Skip).Take(q.Take).ToList());
+
+        await scenario.ViewModel.LoadMoreAsync();
+
+        scenario.ViewModel.Messages.Should().HaveCount(50);
+        scenario.ViewModel.StatusText.Should().Contain("db locked");
+        fail = false;
+        await scenario.ViewModel.LoadMoreAsync();
+        scenario.ViewModel.Messages.Should().HaveCount(100);
+    }
+
+    /// <summary>
+    /// Verifies repeated scroll events while a page is loading send only one request.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task LoadMoreAsync_WhileLoading_SendsOnlyOneQuery()
+    {
+        var scenario = PagedScenario(120);
+        await scenario.StartAsync();
+        var gate = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        scenario.Dispatcher.OnAsync<GetMessagesQuery>(async (q, _) =>
+        {
+            await gate.Task;
+            return scenario.Messages.OrderByDescending(m => m.SentAt).Skip(q.Skip).Take(q.Take).ToList();
+        });
+
+        var first = scenario.ViewModel.LoadMoreAsync();
+        var second = scenario.ViewModel.LoadMoreAsync();
+        gate.SetResult(null);
+        await Task.WhenAll(first, second);
+
+        scenario.Dispatcher.Sent<GetMessagesQuery>().Count(q => q.Skip == 50).Should().Be(1);
+        scenario.ViewModel.Messages.Should().HaveCount(100);
+    }
 }

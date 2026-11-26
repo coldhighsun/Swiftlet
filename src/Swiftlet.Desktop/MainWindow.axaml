@@ -114,7 +114,8 @@
       <GridSplitter Grid.Column="1" Width="4" />
 
       <ListBox Grid.Column="2" ItemsSource="{Binding Messages}" SelectedItem="{Binding SelectedMessage}"
-               ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+               ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+               ScrollViewer.ScrollChanged="OnMessageListScrollChanged">
         <ListBox.ContextMenu>
           <ContextMenu>
             <MenuItem Header="{loc:Loc Toolbar_Delete}" Command="{Binding DeleteSelectedCommand}" />
