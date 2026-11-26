@@ -37,6 +37,9 @@ public static class DependencyInjection
         services.AddScoped<MailBackfillService>();
         services.AddSingleton<DeletionSignal>();
         services.AddScoped<PendingDeletionService>();
+        services.AddSingleton<FlagCoordinator>();
+        services.AddSingleton<FlagPushSignal>();
+        services.AddScoped<PendingFlagService>();
         return services;
     }
 }

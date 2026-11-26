@@ -4,7 +4,7 @@ using Swiftlet.Domain.Messages;
 namespace Swiftlet.Application.Messages;
 
 /// <summary>
-/// Marks a cached message as read or unread. The change is applied locally at once and written to the server by the next sync.
+/// Marks a cached message as read or unread. The change is applied locally at once and written to the server in the background.
 /// </summary>
 /// <param name="AccountId">The account that owns the message.</param>
 /// <param name="MessageId">The message identifier.</param>
@@ -15,7 +15,9 @@ public sealed record SetMessageReadCommand(Guid AccountId, Guid MessageId, bool 
 /// Handles <see cref="SetMessageReadCommand"/>.
 /// </summary>
 /// <param name="messages">The message repository.</param>
-public sealed class SetMessageReadCommandHandler(IMessageRepository messages) : ICommandHandler<SetMessageReadCommand, Unit>
+/// <param name="signal">Wakes the background flag push; optional.</param>
+public sealed class SetMessageReadCommandHandler(IMessageRepository messages, FlagPushSignal? signal = null)
+    : ICommandHandler<SetMessageReadCommand, Unit>
 {
     /// <inheritdoc />
     public async ValueTask<Unit> Handle(SetMessageReadCommand command, CancellationToken cancellationToken)
@@ -25,12 +27,13 @@ public sealed class SetMessageReadCommandHandler(IMessageRepository messages) : 
             ?? throw new InvalidOperationException($"Message {command.MessageId} was not found.");
         message.SetRead(command.IsRead);
         await messages.SaveChangesAsync(cancellationToken);
+        signal?.Notify(command.AccountId);
         return Unit.Value;
     }
 }
 
 /// <summary>
-/// Flags or unflags (stars) a cached message. The change is applied locally at once and written to the server by the next sync.
+/// Flags or unflags (stars) a cached message. The change is applied locally at once and written to the server in the background.
 /// </summary>
 /// <param name="AccountId">The account that owns the message.</param>
 /// <param name="MessageId">The message identifier.</param>
@@ -41,7 +44,8 @@ public sealed record SetMessageFlaggedCommand(Guid AccountId, Guid MessageId, bo
 /// Handles <see cref="SetMessageFlaggedCommand"/>.
 /// </summary>
 /// <param name="messages">The message repository.</param>
-public sealed class SetMessageFlaggedCommandHandler(IMessageRepository messages)
+/// <param name="signal">Wakes the background flag push; optional.</param>
+public sealed class SetMessageFlaggedCommandHandler(IMessageRepository messages, FlagPushSignal? signal = null)
     : ICommandHandler<SetMessageFlaggedCommand, Unit>
 {
     /// <inheritdoc />
@@ -52,6 +56,7 @@ public sealed class SetMessageFlaggedCommandHandler(IMessageRepository messages)
             ?? throw new InvalidOperationException($"Message {command.MessageId} was not found.");
         message.SetFlagged(command.IsFlagged);
         await messages.SaveChangesAsync(cancellationToken);
+        signal?.Notify(command.AccountId);
         return Unit.Value;
     }
 }

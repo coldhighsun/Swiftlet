@@ -38,6 +38,7 @@ public sealed record MailSyncOptions(
 /// <param name="settings">The user-configurable sync behavior, read on every run.</param>
 /// <param name="options">The synchronization limits.</param>
 /// <param name="logger">The logger.</param>
+/// <param name="flags">Serializes the flag work of a folder with the immediate flag push; optional.</param>
 public sealed class MailSyncService(
     IAccountRepository accounts,
     IFolderRepository folders,
@@ -45,8 +46,14 @@ public sealed class MailSyncService(
     IImapSessionFactory imapFactory,
     ISyncSettings settings,
     MailSyncOptions options,
-    ILogger<MailSyncService> logger)
+    ILogger<MailSyncService> logger,
+    FlagCoordinator? flags = null)
 {
+    /// <summary>
+    /// The flag locks; a private set when no other flag writer exists.
+    /// </summary>
+    private readonly FlagCoordinator _flags = flags ?? new FlagCoordinator();
+
     /// <summary>
     /// Synchronizes an account.
     /// </summary>
@@ -263,25 +270,34 @@ public sealed class MailSyncService(
         var uidValidity = await session.GetUidValidityAsync(folder.FullName, cancellationToken);
 
         // The entity is changed inside the gate too: a save of another worker would otherwise pick up a half-finished change.
-        var invalidated = await run.Database.RunAsync(
+        // The flag lock keeps the immediate push away from cached UIDs while they are being discarded or pushed here.
+        var invalidated = await _flags.RunExclusiveAsync(
+            folder.Id,
             async () =>
             {
-                var changed = folder.UpdateUidValidity(uidValidity);
-                await folders.SaveChangesAsync(cancellationToken);
-                if (changed)
+                var discarded = await run.Database.RunAsync(
+                    async () =>
+                    {
+                        var changed = folder.UpdateUidValidity(uidValidity);
+                        await folders.SaveChangesAsync(cancellationToken);
+                        if (changed)
+                        {
+                            logger.LogInformation("UIDVALIDITY of {Folder} changed; discarding cached messages.", folder.FullName);
+                            await messages.DeleteByFolderAsync(folder.AccountId, folder.Id, cancellationToken);
+                        }
+
+                        return changed;
+                    },
+                    cancellationToken);
+                if (!discarded)
                 {
-                    logger.LogInformation("UIDVALIDITY of {Folder} changed; discarding cached messages.", folder.FullName);
-                    await messages.DeleteByFolderAsync(folder.AccountId, folder.Id, cancellationToken);
+                    // Local flag changes go up before anything is pulled, so a pull never reverts them.
+                    await PushPendingFlagsAsync(session, run.Database, folder, cancellationToken);
                 }
 
-                return changed;
+                return discarded;
             },
             cancellationToken);
-        if (!invalidated)
-        {
-            // Local flag changes go up before anything is pulled, so a pull never reverts them.
-            await PushPendingFlagsAsync(session, run.Database, folder, cancellationToken);
-        }
 
         var afterUid = await run.Database.RunAsync(
             () => messages.GetMaxUidAsync(folder.AccountId, folder.Id, cancellationToken),
@@ -305,7 +321,11 @@ public sealed class MailSyncService(
             run.AddNewMessages(created.Count);
         }
 
-        var pulled = !invalidated && await PullFlagsAsync(session, run.Database, folder, cancellationToken);
+        // Under the flag lock: flags read before an immediate push must not be applied after it.
+        var pulled = !invalidated && await _flags.RunExclusiveAsync(
+            folder.Id,
+            () => PullFlagsAsync(session, run.Database, folder, cancellationToken),
+            cancellationToken);
         return (created.Count, invalidated || created.Count > 0 || pulled);
     }
 

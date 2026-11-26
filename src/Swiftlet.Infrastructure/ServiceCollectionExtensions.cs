@@ -66,6 +66,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<InboxWatcher>();
         services.AddHostedService<BackfillWorker>();
         services.AddHostedService<DeletionWorker>();
+        services.AddHostedService<FlagPushWorker>();
         return services;
     }
 }
