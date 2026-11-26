@@ -94,6 +94,23 @@ public sealed class StartupViewModelTests
     }
 
     /// <summary>
+    /// Verifies a keychain missing since the start only offers to quit, because retrying cannot find it.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_KeyStoreMissing_AsksForRestartWithoutRetry()
+    {
+        Next(DatabaseProtectionProblem.KeyStoreMissing);
+        var viewModel = Create();
+
+        await viewModel.RunCommand.ExecuteAsync(null);
+
+        viewModel.CanRetry.Should().BeFalse();
+        viewModel.CanContinueUnencrypted.Should().BeFalse();
+        viewModel.CanReset.Should().BeFalse();
+        viewModel.Message.Should().Contain("start Swiftlet again");
+    }
+
+    /// <summary>
     /// Verifies the reason of a failed conversion is explained.
     /// </summary>
     /// <param name="failure">The failure.</param>

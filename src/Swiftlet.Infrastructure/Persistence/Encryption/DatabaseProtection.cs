@@ -54,7 +54,7 @@ public sealed class DatabaseProtection(
     /// <summary>
     /// Reads and creates the key.
     /// </summary>
-    private readonly DatabaseKeyProvider _keys = new(secrets);
+    private readonly DatabaseKeyProvider _keys = new(secrets, Path.Combine(dataDirectory, "database.key-name"));
 
     /// <summary>
     /// Converts plain databases.
@@ -386,7 +386,7 @@ public sealed class DatabaseProtection(
         {
             if (unreadable.Count > 0)
             {
-                result = new DatabaseProtectionResult(DatabaseProtectionProblem.KeyStoreUnavailable);
+                result = new DatabaseProtectionResult(DatabaseProtectionProblem.KeyStoreMissing);
             }
         }
         else if (damaged || (unreadable.Count > 0 && (key is null || unreadable.Any(f => f.AccountId is null))))

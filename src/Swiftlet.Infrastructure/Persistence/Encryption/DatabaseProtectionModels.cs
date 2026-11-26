@@ -21,6 +21,11 @@ public enum DatabaseProtectionProblem
     KeyStoreUnavailable,
 
     /// <summary>
+    /// Encrypted data exists, but this run found no system keychain when it started.
+    /// </summary>
+    KeyStoreMissing,
+
+    /// <summary>
     /// The key is missing, damaged, or does not open the global store.
     /// </summary>
     KeyLost,

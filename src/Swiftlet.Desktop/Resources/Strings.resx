@@ -164,7 +164,7 @@
   <data name="Startup_InUse" xml:space="preserve"><value>The mail data is in use by another program.</value></data>
   <data name="Startup_ConversionFailed" xml:space="preserve"><value>The mail data could not be encrypted: {0}</value></data>
   <data name="Startup_KeyStoreUnavailable" xml:space="preserve"><value>The system keychain is not available. Unlock it, then try again.</value></data>
-  <data name="Startup_KeyLost" xml:space="preserve"><value>The key of the local mail data is missing or does not fit. Resetting removes the accounts and labels from this app; mail on the server is not affected.</value></data>
+  <data name="Startup_KeyLost" xml:space="preserve"><value>The key of the local mail data is missing or does not fit. If the system keychain is locked, unlock it and try again. Resetting puts the unreadable data aside; accounts and labels may have to be added again. Mail on the server is not affected.</value></data>
   <data name="Startup_AccountUnreadable" xml:space="preserve"><value>The local mail data of {0} cannot be read. Resetting downloads the mail again; its labels are lost.</value></data>
   <data name="Startup_Busy" xml:space="preserve"><value>Another Swiftlet window is preparing the mail data.</value></data>
   <data name="Startup_DatabaseError" xml:space="preserve"><value>The mail data could not be opened: {0}</value></data>
@@ -177,4 +177,5 @@
   <data name="Settings_DatabaseEncrypted" xml:space="preserve"><value>Local mail data is encrypted.</value></data>
   <data name="Settings_DatabaseNoKeychain" xml:space="preserve"><value>Local mail data is not encrypted: no system keychain is available.</value></data>
   <data name="Settings_DatabasePartly" xml:space="preserve"><value>Part of the local mail data is not encrypted yet; the next start tries again.</value></data>
+  <data name="Startup_KeyStoreMissing" xml:space="preserve"><value>The mail data is encrypted, but no system keychain was found. Make sure the keychain is running and unlocked, then quit and start Swiftlet again.</value></data>
 </root>

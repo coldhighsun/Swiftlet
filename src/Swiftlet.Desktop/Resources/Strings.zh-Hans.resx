@@ -164,7 +164,7 @@
   <data name="Startup_InUse" xml:space="preserve"><value>邮件数据正被其他程序占用。</value></data>
   <data name="Startup_ConversionFailed" xml:space="preserve"><value>邮件数据加密失败：{0}</value></data>
   <data name="Startup_KeyStoreUnavailable" xml:space="preserve"><value>无法使用系统钥匙串。请解锁后重试。</value></data>
-  <data name="Startup_KeyLost" xml:space="preserve"><value>本地邮件数据的密钥丢失或不匹配。重置后需要重新添加账号和标签；服务器上的邮件不受影响。</value></data>
+  <data name="Startup_KeyLost" xml:space="preserve"><value>本地邮件数据的密钥丢失或不匹配。如果系统钥匙串处于锁定状态，请先解锁再重试。重置会把读不出的数据移到一边，之后可能需要重新添加账号和标签；服务器上的邮件不受影响。</value></data>
   <data name="Startup_AccountUnreadable" xml:space="preserve"><value>无法读取 {0} 的本地邮件数据。重置后邮件会重新下载，本地标签丢失。</value></data>
   <data name="Startup_Busy" xml:space="preserve"><value>另一个 Swiftlet 正在处理邮件数据。</value></data>
   <data name="Startup_DatabaseError" xml:space="preserve"><value>无法打开邮件数据：{0}</value></data>
@@ -177,4 +177,5 @@
   <data name="Settings_DatabaseEncrypted" xml:space="preserve"><value>本地邮件数据已加密。</value></data>
   <data name="Settings_DatabaseNoKeychain" xml:space="preserve"><value>本地邮件数据未加密：没有可用的系统钥匙串。</value></data>
   <data name="Settings_DatabasePartly" xml:space="preserve"><value>部分本地邮件数据尚未加密，下次启动会再试。</value></data>
+  <data name="Startup_KeyStoreMissing" xml:space="preserve"><value>邮件数据已加密，但没有找到系统钥匙串。请确认钥匙串已启动并解锁，然后退出并重新启动 Swiftlet。</value></data>
 </root>

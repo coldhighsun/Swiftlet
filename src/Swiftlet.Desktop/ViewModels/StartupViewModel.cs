@@ -212,6 +212,7 @@ public sealed partial class StartupViewModel(
                 _ => localizer.Format("Startup_ConversionFailed", result.Detail),
             },
             DatabaseProtectionProblem.KeyStoreUnavailable => localizer["Startup_KeyStoreUnavailable"],
+            DatabaseProtectionProblem.KeyStoreMissing => localizer["Startup_KeyStoreMissing"],
             DatabaseProtectionProblem.KeyLost => localizer["Startup_KeyLost"],
             DatabaseProtectionProblem.AccountUnreadable => localizer.Format("Startup_AccountUnreadable", await NameOfAsync(result.AccountId)),
             DatabaseProtectionProblem.Busy => localizer["Startup_Busy"],
@@ -221,7 +222,9 @@ public sealed partial class StartupViewModel(
         _result = result;
         Message = message;
         IsBusy = false;
-        CanRetry = true;
+
+        // Which secret store exists is decided when the process starts, so only a new start can find a missing keychain.
+        CanRetry = result.Problem != DatabaseProtectionProblem.KeyStoreMissing;
         CanContinueUnencrypted = result.Problem == DatabaseProtectionProblem.ConversionFailed;
         CanReset = result.Problem is DatabaseProtectionProblem.KeyLost or DatabaseProtectionProblem.AccountUnreadable;
     }

@@ -38,6 +38,39 @@ public sealed class DatabaseProtectionTests : IDisposable
     }
 
     /// <summary>
+    /// A keychain that, while locked, answers that nothing is stored, but still accepts writes.
+    /// </summary>
+    /// <param name="inner">The store behind it.</param>
+    private sealed class ForgetfulSecretStore(InMemorySecretStore inner) : ISecretStore
+    {
+        /// <inheritdoc />
+        public Task<string?> GetAsync(string key, CancellationToken cancellationToken = default)
+        {
+            return key.Length > 0 && Written.Contains(key)
+                ? inner.GetAsync(key, cancellationToken)
+                : Task.FromResult<string?>(null);
+        }
+
+        /// <summary>
+        /// Gets the names written through this instance.
+        /// </summary>
+        public HashSet<string> Written { get; } = [];
+
+        /// <inheritdoc />
+        public Task SetAsync(string key, string value, CancellationToken cancellationToken = default)
+        {
+            Written.Add(key);
+            return inner.SetAsync(key, value, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public Task RemoveAsync(string key, CancellationToken cancellationToken = default)
+        {
+            return inner.RemoveAsync(key, cancellationToken);
+        }
+    }
+
+    /// <summary>
     /// A migrator that always fails.
     /// </summary>
     private sealed class FailingMigrator : IDatabaseEncryptionMigrator
@@ -119,7 +152,17 @@ public sealed class DatabaseProtectionTests : IDisposable
     /// <param name="key">The key.</param>
     private void StoreKey(string key = EncryptionTestDirectory.Key)
     {
-        _secrets.Values[DatabaseKeyProvider.SecretKey] = key;
+        File.WriteAllText(_directory.File("database.key-name"), "database:key:test");
+        _secrets.Values["database:key:test"] = key;
+    }
+
+    /// <summary>
+    /// Gets the key the application currently uses.
+    /// </summary>
+    /// <returns>The key.</returns>
+    private string StoredKey()
+    {
+        return _secrets.Values[File.ReadAllLines(_directory.File("database.key-name"))[^1]];
     }
 
     /// <summary>
@@ -133,7 +176,7 @@ public sealed class DatabaseProtectionTests : IDisposable
         var result = await protection.PrepareAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         result.Problem.Should().Be(DatabaseProtectionProblem.None);
-        var key = _secrets.Values[DatabaseKeyProvider.SecretKey];
+        var key = StoredKey();
         protection.GetConnectionString(Global).Should().Contain($"raw:{key}");
         protection.GetConnectionString(Account(_first)).Should().Contain($"raw:{key}");
         protection.Status.Should().Be(DatabaseProtectionStatus.Encrypted);
@@ -156,7 +199,7 @@ public sealed class DatabaseProtectionTests : IDisposable
 
         result.Problem.Should().Be(DatabaseProtectionProblem.None);
         progress.Reports.Should().Equal(new DatabaseConversionProgress(1, 3), new DatabaseConversionProgress(2, 3), new DatabaseConversionProgress(3, 3));
-        var key = _secrets.Values[DatabaseKeyProvider.SecretKey];
+        var key = StoredKey();
         foreach (var path in new[] { Global, Account(_first), Account(_second) })
         {
             (await DatabaseProbe.ProbeAsync(path, key, ct)).Should().Be(DatabaseFileState.Encrypted);
@@ -209,7 +252,7 @@ public sealed class DatabaseProtectionTests : IDisposable
 
         var result = await Create(keychain: false).PrepareAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        result.Problem.Should().Be(DatabaseProtectionProblem.KeyStoreUnavailable);
+        result.Problem.Should().Be(DatabaseProtectionProblem.KeyStoreMissing);
     }
 
     /// <summary>
@@ -232,7 +275,8 @@ public sealed class DatabaseProtectionTests : IDisposable
     [Fact]
     public async Task PrepareAsync_KeyCannotBeDecrypted_ReportsKeyLost()
     {
-        EncryptionTestDirectory.CreateDatabase(Global, EncryptionTestDirectory.Key);
+        // The name file makes the application ask the store.
+        StoreKey();
         var protection = Create(secrets: new ThrowingSecretStore(new CryptographicException("wrong user")));
 
         var result = await protection.PrepareAsync(cancellationToken: TestContext.Current.CancellationToken);
@@ -246,6 +290,8 @@ public sealed class DatabaseProtectionTests : IDisposable
     [Fact]
     public async Task PrepareAsync_KeyStoreThrows_ReportsKeyStoreUnavailable()
     {
+        // The name file makes the application ask the store.
+        StoreKey();
         var protection = Create(secrets: new ThrowingSecretStore(new InvalidOperationException("locked")));
 
         var result = await protection.PrepareAsync(cancellationToken: TestContext.Current.CancellationToken);
@@ -330,7 +376,7 @@ public sealed class DatabaseProtectionTests : IDisposable
         var kept = Directory.GetFiles(_directory.Root, "swiftlet.db.unreadable-*").Should().ContainSingle().Subject;
         (await File.ReadAllBytesAsync(kept, ct)).Should().Equal(original);
         Directory.GetFiles(_directory.File("accounts"), "*.unreadable-*").Should().ContainSingle();
-        _secrets.Values.Should().ContainKey(DatabaseKeyProvider.SecretKey);
+        StoredKey().Should().NotBeEmpty();
         (await protection.PrepareAsync(cancellationToken: ct)).Problem.Should().Be(DatabaseProtectionProblem.None);
     }
 
@@ -347,7 +393,25 @@ public sealed class DatabaseProtectionTests : IDisposable
         await Create().ResetAllAsync(ct);
 
         File.Exists(Global).Should().BeFalse();
-        _secrets.Values[DatabaseKeyProvider.SecretKey].Should().Be(EncryptionTestDirectory.Key);
+        StoredKey().Should().Be(EncryptionTestDirectory.Key);
+    }
+
+    /// <summary>
+    /// Verifies a keychain that wrongly reports no key does not lose it through a reset.
+    /// </summary>
+    [Fact]
+    public async Task ResetAllAsync_KeyReadsAsMissing_DoesNotOverwriteStoredKey()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        StoreKey();
+        EncryptionTestDirectory.CreateDatabase(Global, EncryptionTestDirectory.Key);
+        var protection = Create(secrets: new ForgetfulSecretStore(_secrets));
+        (await protection.PrepareAsync(cancellationToken: ct)).Problem.Should().Be(DatabaseProtectionProblem.KeyLost);
+
+        await protection.ResetAllAsync(ct);
+
+        _secrets.Values["database:key:test"].Should().Be(EncryptionTestDirectory.Key);
+        (await File.ReadAllLinesAsync(_directory.File("database.key-name"), ct)).Should().Contain("database:key:test").And.HaveCount(2);
     }
 
     /// <summary>
@@ -356,6 +420,8 @@ public sealed class DatabaseProtectionTests : IDisposable
     [Fact]
     public async Task ResetAllAsync_KeyStoreUnavailable_ThrowsAndKeepsFiles()
     {
+        // The name file makes the application ask the store.
+        StoreKey();
         EncryptionTestDirectory.CreateDatabase(Global, EncryptionTestDirectory.Key);
         var protection = Create(secrets: new ThrowingSecretStore(new InvalidOperationException("locked")));
 
@@ -430,7 +496,7 @@ public sealed class DatabaseProtectionTests : IDisposable
             (await context.Folders.CountAsync(ct)).Should().Be(0);
         }
 
-        (await DatabaseProbe.ProbeAsync(Account(_first), _secrets.Values[DatabaseKeyProvider.SecretKey], ct))
+        (await DatabaseProbe.ProbeAsync(Account(_first), StoredKey(), ct))
             .Should().Be(DatabaseFileState.Encrypted);
     }
 
