@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Ai;
 using Swiftlet.Application.Logging;
 using Swiftlet.Application.Messages;
 using Swiftlet.Application.Sync;
@@ -45,6 +46,8 @@ public static class DependencyInjection
         services.AddSingleton<FlagCoordinator>();
         services.AddSingleton<FlagPushSignal>();
         services.AddScoped<PendingFlagService>();
+        services.TryAddSingleton<IAiSettings, DisabledAiSettings>();
+        services.AddScoped<AiKeyStore>();
         return services;
     }
 }

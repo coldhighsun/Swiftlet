@@ -36,7 +36,11 @@ copyright notice shown.
 | [SQLite3 Multiple Ciphers](https://utelle.github.io/SQLite3MultipleCiphers/): `SQLite3MC.PCLRaw.bundle`, `SQLite3MC.PCLRaw.lib`, `SQLite3MC.PCLRaw.provider` | 2.7.1 | Copyright (c) 2023-2026 Ulrich Telle, et al. |
 | [Entity Framework Core](https://docs.microsoft.com/ef/core/): `Microsoft.EntityFrameworkCore`, `.Abstractions`, `.Relational`, `.Sqlite.Core`; `Microsoft.Data.Sqlite.Core` | 11.0.0 | © Microsoft Corporation. All rights reserved. |
 | [ASP.NET Core](https://asp.net/): `Microsoft.AspNetCore.Cryptography.Internal`, `Microsoft.AspNetCore.DataProtection`, `Microsoft.AspNetCore.DataProtection.Abstractions` | 11.0.0 | © Microsoft Corporation. All rights reserved. |
-| [.NET libraries](https://dot.net/): `Microsoft.Extensions.*` (caching, configuration, dependency injection, dependency model, diagnostics, file providers, file system globbing, hosting, logging, options), `System.Diagnostics.EventLog`, `System.Security.Cryptography.Pkcs`, `System.Security.Cryptography.ProtectedData`, `System.Security.Cryptography.Xml` | 11.0.0 | © Microsoft Corporation. All rights reserved. |
+| [.NET libraries](https://dot.net/): `Microsoft.Extensions.*` (AI, caching, configuration, dependency injection, dependency model, diagnostics, file providers, file system globbing, hosting, logging, options), `System.Diagnostics.EventLog`, `System.Security.Cryptography.Pkcs`, `System.Security.Cryptography.ProtectedData`, `System.Security.Cryptography.Xml` | 11.0.0 | © Microsoft Corporation. All rights reserved. |
+| `Microsoft.Extensions.AI`: `.Abstractions`, `.OpenAI` | 11.0.1 | © Microsoft Corporation. All rights reserved. |
+| `System.ClientModel` | 1.16.0 | © Microsoft Corporation. All rights reserved. |
+| `System.Memory.Data` | 10.0.10 | © Microsoft Corporation. All rights reserved. |
+| [OpenAI .NET](https://github.com/openai/openai-dotnet): `OpenAI` | 2.15.0 | Copyright (c) 2026 OpenAI |
 
 The CommunityToolkit, ASP.NET Core, .NET, SkiaSharp and HarfBuzzSharp packages
 ship their own third-party notice files inside the NuGet package; those notices
@@ -48,6 +52,7 @@ The [Apache License 2.0 text](#apache-license-20) applies to each of these.
 
 | Packages | Version | Copyright |
 |---|---|---|
+| [Anthropic .NET SDK](https://github.com/anthropics/anthropic-sdk-csharp): `Anthropic` | 13.14.0 | Copyright 2023 Anthropic, PBC. |
 | [Magick.NET](https://github.com/dlemstra/Magick.NET): `Magick.NET-Q8-AnyCPU`, `Magick.NET.Core` | 15.1.1 | Copyright 2013-2026 Dirk Lemstra |
 | [Serilog](https://serilog.net/) | 4.4.0 | Copyright © Serilog Contributors |
 | [Serilog.Extensions.Hosting](https://github.com/serilog/serilog-extensions-hosting) | 11.0.0 | Microsoft, Serilog Contributors |
