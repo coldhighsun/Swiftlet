@@ -139,12 +139,17 @@ public sealed partial class TrayViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Shows the main window.
+    /// Shows the main window; while there is unread mail it also leads to the new messages.
     /// </summary>
+    /// <returns>A task that completes when the window is shown and the new mail is selected.</returns>
     [RelayCommand]
-    private void Open()
+    private async Task OpenAsync()
     {
         _showWindow();
+        if (Indicator != TrayIndicator.None)
+        {
+            await _main.ShowNewMailAsync();
+        }
     }
 
     /// <summary>

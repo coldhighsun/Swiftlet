@@ -178,10 +178,10 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
             services.GetRequiredService<ILocalizer>(),
             services.GetRequiredService<IUiThread>(),
             new AvaloniaNewMailPresenter(),
-            () =>
+            shown =>
             {
-                viewModel.SelectedNode = viewModel.UnifiedInbox;
                 _activator?.BringToFront();
+                _ = viewModel.ShowMessageAsync(shown);
             },
             viewModel.RefreshAfterLocalChange,
             services.GetService<ILogger<NewMailNotifier>>());

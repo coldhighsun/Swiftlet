@@ -434,6 +434,26 @@ public class NewMailTests
     }
 
     /// <summary>
+    /// Verifies clicking the pop-up asks for the message that was shown, not the first one.
+    /// </summary>
+    [Fact]
+    public void Notifier_OpenAfterNext_ShowsTheCurrentMessage()
+    {
+        var scenario = new Scenario();
+        var arrival = Arrival("me@example.com", ("first", 1), ("second", 2));
+        scenario.Events.RaiseNewMail(arrival);
+        var popup = scenario.Presenter.Shown[0];
+        var firstSubject = popup.Subject;
+        popup.NextCommand.Execute(null);
+        popup.Subject.Should().NotBe(firstSubject);
+        var expected = arrival.Messages.Single(m => m.Subject == popup.Subject).MessageId;
+
+        popup.OpenCommand.Execute(null);
+
+        scenario.OpenedWith.Should().Be(expected);
+    }
+
+    /// <summary>
     /// Verifies a disposed notifier removes the pop-up and stops listening.
     /// </summary>
     [Fact]
@@ -509,7 +529,7 @@ public class NewMailTests
         public Scenario()
         {
             Notifier = new NewMailNotifier(
-                Events, Settings, Dispatcher(), TestLocalizer.English(), UiThread, Presenter, () => Opened++, () => Changed++);
+                Events, Settings, Dispatcher(), TestLocalizer.English(), UiThread, Presenter, id => { Opened++; OpenedWith = id; }, () => Changed++);
         }
 
         /// <summary>
@@ -541,6 +561,11 @@ public class NewMailTests
         /// Gets how often the mail was opened.
         /// </summary>
         public int Opened { get; private set; }
+
+        /// <summary>
+        /// Gets the message the last click asked to show.
+        /// </summary>
+        public Guid? OpenedWith { get; private set; }
 
         /// <summary>
         /// Gets how often a change of cached mail was reported.

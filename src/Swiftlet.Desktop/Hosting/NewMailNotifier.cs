@@ -44,9 +44,9 @@ public sealed class NewMailNotifier : IDisposable
     private readonly INewMailPresenter _presenter;
 
     /// <summary>
-    /// Shows the mail when the pop-up is clicked.
+    /// Shows the mail when the pop-up is clicked; gets the message that was shown, if any.
     /// </summary>
-    private readonly Action _open;
+    private readonly Action<Guid?> _open;
 
     /// <summary>
     /// Told after an action of the pop-up changed a cached message.
@@ -77,7 +77,7 @@ public sealed class NewMailNotifier : IDisposable
     /// <param name="localizer">The localizer.</param>
     /// <param name="uiThread">The UI thread marshaller.</param>
     /// <param name="presenter">Puts the pop-up on screen.</param>
-    /// <param name="open">Shows the mail when the pop-up is clicked.</param>
+    /// <param name="open">Shows the mail when the pop-up is clicked; gets the message that was shown, if any.</param>
     /// <param name="changed">Told after an action of the pop-up changed a cached message.</param>
     /// <param name="logger">The logger; optional.</param>
     public NewMailNotifier(
@@ -87,7 +87,7 @@ public sealed class NewMailNotifier : IDisposable
         ILocalizer localizer,
         IUiThread uiThread,
         INewMailPresenter presenter,
-        Action open,
+        Action<Guid?> open,
         Action changed,
         ILogger<NewMailNotifier>? logger = null)
     {
@@ -180,8 +180,9 @@ public sealed class NewMailNotifier : IDisposable
     /// <param name="e">The event arguments.</param>
     private void OnOpenRequested(object? sender, EventArgs e)
     {
+        var shown = (sender as NewMailViewModel)?.CurrentMessageId;
         Dismiss();
-        _open();
+        _open(shown);
     }
 
     /// <summary>

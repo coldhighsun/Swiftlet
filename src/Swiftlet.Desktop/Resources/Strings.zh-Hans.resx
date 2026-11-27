@@ -249,6 +249,7 @@
   <data name="Notification_NoTrash" xml:space="preserve"><value>该账户没有回收站，请到主窗口删除</value></data>
   <data name="Notification_ActionFailed" xml:space="preserve"><value>操作失败，请重试。</value></data>
   <data name="Notification_Open" xml:space="preserve"><value>查看新邮件</value></data>
+  <data name="Reader_NewMail" xml:space="preserve"><value>新邮件</value></data>
   <data name="Tray_Open" xml:space="preserve"><value>打开 Swiftlet</value></data>
   <data name="Tray_Compose" xml:space="preserve"><value>写邮件</value></data>
   <data name="Tray_SyncAll" xml:space="preserve"><value>同步全部账户</value></data>

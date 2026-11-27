@@ -31,6 +31,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private const int PageSize = 50;
 
     /// <summary>
+    /// How many announced messages are kept for the tray; the list shows one page, so more could not be located anyway.
+    /// </summary>
+    private const int MaxRememberedArrivals = PageSize;
+
+    /// <summary>
     /// How long after checking a folder against the server opening it again does not check it again.
     /// </summary>
     private static readonly TimeSpan FolderCheckInterval = TimeSpan.FromSeconds(30);
@@ -151,6 +156,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private bool _syncRefreshPending;
 
     /// <summary>
+    /// Guards <see cref="_arrivals"/>, which new mail notifications fill from background threads.
+    /// </summary>
+    private readonly Lock _arrivalGate = new();
+
+    /// <summary>
+    /// The new messages announced since the window last showed them, in arrival order.
+    /// </summary>
+    private readonly List<NewMailSummary> _arrivals = [];
+
+    /// <summary>
     /// Whether the view model was disposed.
     /// </summary>
     private bool _disposed;
@@ -199,6 +214,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _syncEvents.DeletionProgressed += OnDeletionProgressed;
         _syncEvents.MessageSent += OnMessageSent;
         _syncEvents.SyncStatusChanged += OnSyncStatusChanged;
+        _syncEvents.NewMailArrived += OnNewMailArrived;
         SelectedMessages.CollectionChanged += (_, _) =>
         {
             DeleteSelectedCommand.NotifyCanExecuteChanged();
@@ -221,6 +237,43 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _syncEvents.DeletionProgressed -= OnDeletionProgressed;
         _syncEvents.MessageSent -= OnMessageSent;
         _syncEvents.SyncStatusChanged -= OnSyncStatusChanged;
+        _syncEvents.NewMailArrived -= OnNewMailArrived;
+    }
+
+    /// <summary>
+    /// Remembers newly arrived messages, so the tray can lead the user to them; may be called from any thread.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OnNewMailArrived(object? sender, NewMailEventArgs e)
+    {
+        lock (_arrivalGate)
+        {
+            foreach (var message in e.Messages.Where(m => _arrivals.All(a => a.MessageId != m.MessageId)))
+            {
+                _arrivals.Add(message);
+            }
+
+            // Mail nobody looked at for a long time is not worth stepping through one by one.
+            if (_arrivals.Count > MaxRememberedArrivals)
+            {
+                _arrivals.RemoveRange(0, _arrivals.Count - MaxRememberedArrivals);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Takes the messages announced since the last call, newest first.
+    /// </summary>
+    /// <returns>The message identifiers.</returns>
+    private List<Guid> TakeArrivals()
+    {
+        lock (_arrivalGate)
+        {
+            var ids = _arrivals.OrderByDescending(a => a.SentAt).Select(a => a.MessageId).ToList();
+            _arrivals.Clear();
+            return ids;
+        }
     }
 
     /// <summary>
@@ -536,6 +589,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public partial MessageItemViewModel? SelectedMessage { get; set; }
 
     /// <summary>
+    /// Gets or sets the stepper through the new messages the tray led to, or <see langword="null"/> when there is none to step through.
+    /// </summary>
+    [ObservableProperty]
+    public partial NewMailNavigator? NewMail { get; set; }
+
+    /// <summary>
     /// Gets a value indicating whether no message is selected, so the reading pane shows its placeholder.
     /// </summary>
     public bool IsNoMessageSelected => SelectedMessage is null;
@@ -592,6 +651,77 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         await _selectionTask;
         await _folderCheckTask;
         await _unreadTask;
+    }
+
+    /// <summary>
+    /// Shows the unified inbox, reloaded and without a search, and ends any new mail stepping.
+    /// </summary>
+    /// <returns><see langword="false"/> when the user chose another node while the list loaded.</returns>
+    private async Task<bool> ShowUnifiedInboxAsync()
+    {
+        NewMail = null;
+        if (SelectedNode == UnifiedInbox)
+        {
+            // Selecting the node again would not reload, so what OnSelectedNodeChanged does is repeated here.
+            SearchText = string.Empty;
+            Filter.Reset(UnifiedInbox);
+            _loadTask = LoadMessagesAsync(UnifiedInbox);
+        }
+        else
+        {
+            SelectedNode = UnifiedInbox;
+        }
+
+        await _loadTask;
+        return SelectedNode == UnifiedInbox;
+    }
+
+    /// <summary>
+    /// Shows the unified inbox and selects one message in it; used when the pop-up is clicked.
+    /// A message that is not among the listed ones (older than the first page) leaves the selection empty.
+    /// </summary>
+    /// <param name="messageId">The message to select, or <see langword="null"/> to only show the inbox.</param>
+    /// <returns>A task that completes when the message is selected.</returns>
+    public async Task ShowMessageAsync(Guid? messageId)
+    {
+        if (!await ShowUnifiedInboxAsync() || messageId is not { } id)
+        {
+            return;
+        }
+
+        SelectedMessage = Messages.FirstOrDefault(m => m.Id == id);
+    }
+
+    /// <summary>
+    /// Shows the unified inbox and selects the newest message that arrived since the window last led to new mail; when
+    /// several arrived, the reading pane offers stepping through exactly those. Used when the tray icon is opened.
+    /// </summary>
+    /// <returns>A task that completes when the message is selected or the failure is reported.</returns>
+    public async Task ShowNewMailAsync()
+    {
+        var ids = TakeArrivals();
+        if (!await ShowUnifiedInboxAsync())
+        {
+            return;
+        }
+
+        _logger.LogInformation("Showing new mail from the tray: {Count} announced", ids.Count);
+        var navigator = new NewMailNavigator(
+            ids,
+            id => Messages.Any(m => m.Id == id),
+            id => SelectedMessage = Messages.FirstOrDefault(m => m.Id == id),
+            _localizer);
+        if (ids.Count > 1 && navigator.Count > 1)
+        {
+            // Selecting a message of the set keeps the navigator; selecting any other one drops it.
+            NewMail = navigator;
+            navigator.ShowFirst();
+            return;
+        }
+
+        // A single arrival, or none known (unread mail from before the start): the newest unread message is the best guess.
+        var target = ids.Count == 1 ? Messages.FirstOrDefault(m => m.Id == ids[0]) : null;
+        SelectedMessage = target ?? Messages.FirstOrDefault(m => m.IsUnread);
     }
 
     /// <summary>
@@ -1324,6 +1454,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     partial void OnSelectedNodeChanged(object? value)
     {
         LogSelectedNode(value);
+        NewMail = null;
         SearchText = string.Empty;
         Filter.Reset(value);
         _loadTask = LoadMessagesAsync(value);
@@ -1395,6 +1526,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         AccountPage?.Refresh();
+        NewMail?.Refresh();
     }
 
     /// <summary>
@@ -1409,6 +1541,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         RebuildLabelChoices();
+        FollowNewMail(value);
         var sideEffects = new List<Task>();
         if (value is { IsRead: false })
         {
@@ -1429,6 +1562,28 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (sideEffects.Count > 0)
         {
             _selectionTask = Task.WhenAll(sideEffects);
+        }
+    }
+
+    /// <summary>
+    /// Keeps the new mail stepper in line with the selection: a message of its set moves the position, anything else ends it.
+    /// </summary>
+    /// <param name="selected">The newly selected message, if any.</param>
+    private void FollowNewMail(MessageItemViewModel? selected)
+    {
+        if (NewMail is not { } navigator || selected is null)
+        {
+            // Clearing the selection (a refresh dropped the message) leaves the set alone.
+            return;
+        }
+
+        if (navigator.Contains(selected.Id))
+        {
+            navigator.Follow(selected.Id);
+        }
+        else
+        {
+            NewMail = null;
         }
     }
 
@@ -2087,6 +2242,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             else
             {
                 Messages.Insert(i, target[i]);
+            }
+        }
+
+        // Stepping needs at least two of the new messages to be listed; fewer (deleted, moved, searched away) ends it.
+        if (NewMail is { } navigator)
+        {
+            if (navigator.Count < 2)
+            {
+                NewMail = null;
+            }
+            else
+            {
+                navigator.Refresh();
             }
         }
     }

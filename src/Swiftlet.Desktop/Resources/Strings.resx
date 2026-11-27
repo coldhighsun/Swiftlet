@@ -249,6 +249,7 @@
   <data name="Notification_NoTrash" xml:space="preserve"><value>This account has no Trash folder, so delete in the main window</value></data>
   <data name="Notification_ActionFailed" xml:space="preserve"><value>That did not work. Try again.</value></data>
   <data name="Notification_Open" xml:space="preserve"><value>Show new mail</value></data>
+  <data name="Reader_NewMail" xml:space="preserve"><value>New mail</value></data>
   <data name="Tray_Open" xml:space="preserve"><value>Open Swiftlet</value></data>
   <data name="Tray_Compose" xml:space="preserve"><value>Compose</value></data>
   <data name="Tray_SyncAll" xml:space="preserve"><value>Sync all accounts</value></data>

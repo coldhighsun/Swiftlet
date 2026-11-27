@@ -133,6 +133,11 @@ public sealed partial class NewMailViewModel : ObservableObject, IDisposable
         : _localizer.Format("Notification_NewMessages", _queue.Count);
 
     /// <summary>
+    /// Gets the identifier of the shown message, or <see langword="null"/> when none is shown.
+    /// </summary>
+    public Guid? CurrentMessageId => Current?.Message.MessageId;
+
+    /// <summary>
     /// Gets the sender of the shown message.
     /// </summary>
     public string Sender => Current is not { } entry

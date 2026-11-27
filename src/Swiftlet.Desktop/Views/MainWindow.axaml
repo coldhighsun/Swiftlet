@@ -371,6 +371,21 @@
       <Border x:Name="ReaderPane" Grid.Column="4" Background="{DynamicResource Brush.Surface}" BorderThickness="1,0,0,0"
               BorderBrush="{DynamicResource Brush.Border}" IsVisible="{Binding !IsAccountPageShown}">
         <DockPanel>
+          <Border x:Name="NewMailBar" DockPanel.Dock="Top" Padding="12,4" Background="{DynamicResource Brush.AccentSubtle}"
+                  BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Brush.Border}" IsVisible="{Binding NewMail, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <StackPanel Orientation="Horizontal" Spacing="8" DataContext="{Binding NewMail}">
+              <TextBlock Classes="caption" VerticalAlignment="Center" Text="{loc:Loc Reader_NewMail}" />
+              <Button x:Name="NewMailPreviousButton" Classes="icon" Command="{Binding PreviousCommand}"
+                      ToolTip.Tip="{loc:Loc Notification_Previous}" AutomationProperties.Name="{loc:Loc Notification_Previous}">
+                <PathIcon Data="{StaticResource Icon.ChevronLeft}" />
+              </Button>
+              <TextBlock Classes="caption" VerticalAlignment="Center" Text="{Binding PositionText}" />
+              <Button x:Name="NewMailNextButton" Classes="icon" Command="{Binding NextCommand}"
+                      ToolTip.Tip="{loc:Loc Notification_Next}" AutomationProperties.Name="{loc:Loc Notification_Next}">
+                <PathIcon Data="{StaticResource Icon.ChevronRight}" />
+              </Button>
+            </StackPanel>
+          </Border>
           <WrapPanel x:Name="ReaderActions" DockPanel.Dock="Top" Margin="8" IsVisible="{Binding !IsNoMessageSelected}">
             <Button Classes="icon" Command="{Binding ReplyCommand}"
                     ToolTip.Tip="{loc:Loc Toolbar_Reply}" AutomationProperties.Name="{loc:Loc Toolbar_Reply}">
