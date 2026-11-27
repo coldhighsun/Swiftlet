@@ -1,2 +1,5 @@
 # Sample databases of the tests; line ending conversion would corrupt them.
 *.db binary
+# Shell scripts run on macOS and Linux, which do not accept CRLF.
+*.sh text eol=lf
+*.png binary

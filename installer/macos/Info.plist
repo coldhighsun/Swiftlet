@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Template: build-dmg.sh replaces @VERSION@. -->
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>
+  <string>Swiftlet</string>
+  <key>CFBundleDisplayName</key>
+  <string>Swiftlet</string>
+  <key>CFBundleIdentifier</key>
+  <string>io.github.coldhighsun.swiftlet</string>
+  <key>CFBundleExecutable</key>
+  <string>Swiftlet</string>
+  <key>CFBundleIconFile</key>
+  <string>Swiftlet.icns</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleShortVersionString</key>
+  <string>@VERSION@</string>
+  <key>CFBundleVersion</key>
+  <string>@VERSION@</string>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleLocalizations</key>
+  <array>
+    <string>en</string>
+    <string>zh-Hans</string>
+  </array>
+  <key>LSApplicationCategoryType</key>
+  <string>public.app-category.productivity</string>
+  <!-- The oldest macOS .NET 11 supports. -->
+  <key>LSMinimumSystemVersion</key>
+  <string>15.0</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+</dict>
+</plist>

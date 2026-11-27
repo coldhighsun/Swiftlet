@@ -9,6 +9,8 @@ on:
   pull_request:
     branches:
       - main
+  # A manual run builds every package and keeps them as artifacts of the run; it never creates a release.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -42,15 +44,42 @@ jobs:
           }
         shell: pwsh
 
-  # ── Release ──────────────────────────────────────────────────────────────────
-  release:
-    name: Release
+  # ── Package version ──────────────────────────────────────────────────────────
+  version:
+    name: Resolve version
     needs: build-and-test
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
 
-    permissions:
-      contents: write         # needed to create GitHub Releases
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
+
+    steps:
+      - name: Resolve version from tag
+        id: version
+        env:
+          # e.g. v1.2.3 or v1.2.3-beta.1; a manual run on a branch gets a placeholder.
+          TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v0.0.0-dev.{0}', github.run_number) }}
+        run: |
+          # The installer name and the app's update check rely on this exact shape.
+          if ($env:TAG -notmatch '^v\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
+            throw "Release tags must look like v1.2.3 or v1.2.3-beta.1, got '$env:TAG'"
+          }
+          $version = $env:TAG.Substring(1)
+          # A pre-release is never offered by the app's update check.
+          $isPrerelease = $version.Contains('-')
+          "tag=$env:TAG" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "is_prerelease=$($isPrerelease.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+  # ── Windows packages ─────────────────────────────────────────────────────────
+  package-windows:
+    name: Package (Windows)
+    needs: version
+    runs-on: windows-latest
 
     steps:
       - name: Checkout
@@ -63,24 +92,11 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Resolve version from tag
-        id: version
-        env:
-          TAG: ${{ github.ref_name }}          # e.g. v1.2.3 or v1.2.3-beta.1
-        run: |
-          # The installer name and the app's update check rely on this exact shape.
-          if ($env:TAG -notmatch '^v\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
-            throw "Release tags must look like v1.2.3 or v1.2.3-beta.1, got '$env:TAG'"
-          }
-          $version = $env:TAG.Substring(1)
-          # A pre-release is never offered by the app's update check.
-          $isPrerelease = $version.Contains('-')
-          "version=$version" >> $env:GITHUB_OUTPUT
-          "is_prerelease=$($isPrerelease.ToString().ToLower())" >> $env:GITHUB_OUTPUT
-        shell: pwsh
-
       - name: Publish (win-x64, self-contained)
         run: dotnet publish src/Swiftlet.Desktop/Swiftlet.Desktop.csproj -c Release -r win-x64 --self-contained -o artifacts/installer-input
+
+      - name: Publish (win-x64, framework-dependent)
+        run: dotnet publish src/Swiftlet.Desktop/Swiftlet.Desktop.csproj -c Release -r win-x64 --self-contained false -o artifacts/portable-framework-dependent
 
       - name: Install Inno Setup
         # "--source winget" avoids the msstore source, which fails on runners. Inno Setup 6 is also
@@ -90,7 +106,7 @@ jobs:
 
       - name: Build installer
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
           $iscc = Get-ChildItem -Path "$env:ProgramFiles", "${env:ProgramFiles(x86)}", "$env:LOCALAPPDATA\Programs" `
             -Recurse -Filter "ISCC.exe" -ErrorAction SilentlyContinue |
@@ -103,32 +119,145 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Building the installer failed" }
         shell: pwsh
 
-      - name: Build portable package and checksums
+      - name: Build portable packages
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ needs.version.outputs.tag }}
         run: |
-          $zip = "artifacts/installer/Swiftlet-$env:TAG-win-x64-portable.zip"
-          Compress-Archive -Path artifacts/installer-input/* -DestinationPath $zip
-          # Format is compatible with "sha256sum -c": lowercase hash, two spaces, bare file name, LF endings, no BOM.
-          # The app refuses to run an installer that is not listed here with the right hash.
-          $lines = foreach ($file in "artifacts/installer/Swiftlet-Setup-$env:TAG.exe", $zip) {
-            $hash = (Get-FileHash -Path $file -Algorithm SHA256).Hash.ToLowerInvariant()
-            "$hash  $(Split-Path $file -Leaf)"
-          }
-          $text = ($lines -join "`n") + "`n"
-          [System.IO.File]::WriteAllText("$PWD/artifacts/installer/SHA256SUMS.txt", $text, [System.Text.UTF8Encoding]::new($false))
-          Get-Content artifacts/installer/SHA256SUMS.txt
+          $prefix = "artifacts/installer/Swiftlet-$env:TAG-win-x64-portable"
+          Compress-Archive -Path artifacts/installer-input/* -DestinationPath "$prefix.zip"
+          Compress-Archive -Path artifacts/portable-framework-dependent/* -DestinationPath "$prefix-framework-dependent.zip"
         shell: pwsh
+
+      - name: Upload packages
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-windows
+          if-no-files-found: error
+          compression-level: 0    # the packages are compressed already
+          path: |
+            artifacts/installer/Swiftlet-Setup-${{ needs.version.outputs.tag }}.exe
+            artifacts/installer/Swiftlet-${{ needs.version.outputs.tag }}-win-x64-portable.zip
+            artifacts/installer/Swiftlet-${{ needs.version.outputs.tag }}-win-x64-portable-framework-dependent.zip
+
+  # ── Linux package ────────────────────────────────────────────────────────────
+  package-linux:
+    name: Package (Linux)
+    needs: version
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+
+      - name: Publish (linux-x64, self-contained)
+        run: dotnet publish src/Swiftlet.Desktop/Swiftlet.Desktop.csproj -c Release -r linux-x64 --self-contained -o artifacts/publish-linux-x64
+
+      - name: Build archive
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          mkdir -p artifacts/package/Swiftlet artifacts/installer
+          cp -R artifacts/publish-linux-x64/. artifacts/package/Swiftlet/
+          cp LICENSE THIRD-PARTY-NOTICES.md artifacts/package/Swiftlet/
+          chmod +x artifacts/package/Swiftlet/Swiftlet
+          tar -czf "artifacts/installer/Swiftlet-$TAG-linux-x64.tar.gz" -C artifacts/package Swiftlet
+
+      - name: Upload packages
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-linux
+          if-no-files-found: error
+          compression-level: 0
+          path: artifacts/installer/Swiftlet-${{ needs.version.outputs.tag }}-linux-x64.tar.gz
+
+  # ── macOS package ────────────────────────────────────────────────────────────
+  # Apple silicon only: Magick.NET 15 has no native library for Intel Macs (osx-x64).
+  package-macos:
+    name: Package (macOS)
+    needs: version
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+
+      - name: Publish (osx-arm64, self-contained)
+        run: dotnet publish src/Swiftlet.Desktop/Swiftlet.Desktop.csproj -c Release -r osx-arm64 --self-contained -o artifacts/publish-osx-arm64
+
+      - name: Build disk image
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: bash installer/macos/build-dmg.sh artifacts/publish-osx-arm64 "$VERSION" "artifacts/installer/Swiftlet-$TAG-osx-arm64.dmg"
+
+      - name: Upload packages
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-macos
+          if-no-files-found: error
+          compression-level: 0
+          path: artifacts/installer/Swiftlet-${{ needs.version.outputs.tag }}-osx-arm64.dmg
+
+  # ── Release ──────────────────────────────────────────────────────────────────
+  release:
+    name: Release
+    needs: [version, package-windows, package-linux, package-macos]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write         # needed to create GitHub Releases
+
+    steps:
+      # The release notes are generated by GitHub, so no checkout is needed.
+      - name: Download packages
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: package-*
+          merge-multiple: true
+          path: release
+
+      - name: Write checksums
+        working-directory: release
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        # "sha256sum" format: lowercase hash, two spaces, bare file name, LF endings.
+        # The app refuses to run an installer that is not listed here with the right hash.
+        run: |
+          sha256sum \
+            "Swiftlet-Setup-$TAG.exe" \
+            "Swiftlet-$TAG-win-x64-portable.zip" \
+            "Swiftlet-$TAG-win-x64-portable-framework-dependent.zip" \
+            "Swiftlet-$TAG-linux-x64.tar.gz" \
+            "Swiftlet-$TAG-osx-arm64.dmg" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Swiftlet ${{ github.ref_name }}
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: Swiftlet ${{ needs.version.outputs.tag }}
           generate_release_notes: true
-          prerelease: ${{ steps.version.outputs.is_prerelease }}
+          prerelease: ${{ needs.version.outputs.is_prerelease }}
           fail_on_unmatched_files: true
           files: |
-            artifacts/installer/Swiftlet-Setup-${{ github.ref_name }}.exe
-            artifacts/installer/Swiftlet-${{ github.ref_name }}-win-x64-portable.zip
-            artifacts/installer/SHA256SUMS.txt
+            release/Swiftlet-Setup-${{ needs.version.outputs.tag }}.exe
+            release/Swiftlet-${{ needs.version.outputs.tag }}-win-x64-portable.zip
+            release/Swiftlet-${{ needs.version.outputs.tag }}-win-x64-portable-framework-dependent.zip
+            release/Swiftlet-${{ needs.version.outputs.tag }}-linux-x64.tar.gz
+            release/Swiftlet-${{ needs.version.outputs.tag }}-osx-arm64.dmg
+            release/SHA256SUMS.txt
