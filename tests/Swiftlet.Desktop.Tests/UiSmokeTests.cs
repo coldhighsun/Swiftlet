@@ -1593,7 +1593,12 @@ public class UiSmokeTests
                     {
                         Render(window, $"dark-{name}");
 
-                        Color(window.Background).Should().Be(Avalonia.Media.Color.Parse("#12171C"), name);
+                        // The pop-up is a transparent window around a card with round corners.
+                        var background = window is NewMailWindow
+                            ? window.FindControl<Border>("Card")!.Background
+                            : window.Background;
+                        Color(background).Should().Be(
+                            Avalonia.Media.Color.Parse(window is NewMailWindow ? "#1B232B" : "#12171C"), name);
                         // Scroll bar buttons belong to control templates, so only plain buttons are checked.
                         window.GetVisualDescendants().OfType<Button>().Where(b => b.GetType() == typeof(Button) && b.Content is PathIcon)
                             .Should().OnlyContain(
@@ -1660,6 +1665,9 @@ public class UiSmokeTests
                 Snapshot(window, $"new-mail-{language}");
 
                 window.ShowActivated.Should().BeFalse();
+                window.TransparencyLevelHint.Should().Equal(WindowTransparencyLevel.Transparent);
+                Color(window.Background).A.Should().Be(0);
+                window.FindControl<Border>("Card")!.CornerRadius.Should().Be(new CornerRadius(12));
                 window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text)
                     .Should().Contain([expectedTitle, "Alice"]);
                 var buttons = window.GetVisualDescendants().OfType<Button>().ToList();
