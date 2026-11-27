@@ -72,6 +72,63 @@ public static class SqliteSchemaInitializer
         await context.Database.ExecuteSqlRawAsync(RemoteImageRulesTable, cancellationToken);
         await EnsureCustomDisplayNameColumnAsync(context, cancellationToken);
         await EnsureArchiveFolderColumnAsync(context, cancellationToken);
+        await EnsureSortOrderColumnAsync(context, cancellationToken);
+        await EnsureExpandedColumnAsync(context, cancellationToken);
+    }
+
+    /// <summary>
+    /// Adds the <c>SortOrder</c> column to an Accounts table created by an earlier version; does nothing when it exists.
+    /// Existing accounts are numbered by creation time, so they keep the order they had.
+    /// </summary>
+    /// <param name="context">The global database context.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the column exists.</returns>
+    private static async Task EnsureSortOrderColumnAsync(GlobalDbContext context, CancellationToken cancellationToken)
+    {
+        var existing = await context.Database
+            .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM pragma_table_info('Accounts') WHERE name = 'SortOrder'")
+            .SingleAsync(cancellationToken);
+        if (existing > 0)
+        {
+            return;
+        }
+
+        // One transaction: the numbering happens exactly when the column appears.
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        await context.Database.ExecuteSqlRawAsync(
+            "ALTER TABLE Accounts ADD COLUMN SortOrder INTEGER NOT NULL DEFAULT 0;",
+            cancellationToken);
+        await context.Database.ExecuteSqlRawAsync(
+            """
+            UPDATE Accounts SET SortOrder =
+                (SELECT COUNT(*) FROM Accounts AS earlier
+                 WHERE earlier.CreatedAt < Accounts.CreatedAt
+                    OR (earlier.CreatedAt = Accounts.CreatedAt AND earlier.Id < Accounts.Id));
+            """,
+            cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Adds the <c>IsExpanded</c> column to an Accounts table created by an earlier version; does nothing when it exists.
+    /// Existing accounts start expanded, as the tree always showed them before.
+    /// </summary>
+    /// <param name="context">The global database context.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the column exists.</returns>
+    private static async Task EnsureExpandedColumnAsync(GlobalDbContext context, CancellationToken cancellationToken)
+    {
+        var existing = await context.Database
+            .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM pragma_table_info('Accounts') WHERE name = 'IsExpanded'")
+            .SingleAsync(cancellationToken);
+        if (existing > 0)
+        {
+            return;
+        }
+
+        await context.Database.ExecuteSqlRawAsync(
+            "ALTER TABLE Accounts ADD COLUMN IsExpanded INTEGER NOT NULL DEFAULT 1;",
+            cancellationToken);
     }
 
     /// <summary>

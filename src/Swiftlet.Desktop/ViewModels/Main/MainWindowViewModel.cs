@@ -1829,6 +1829,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 }
 
                 node = new AccountNodeViewModel(account);
+                node.SetExpandedSilently(account.IsExpanded);
+                node.ExpandedChanged += OnAccountExpandedChangedAsync;
                 TreeRoots.Insert(1 + Accounts.Count, node);
                 Accounts.Add(node);
             }
@@ -1863,6 +1865,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             }
         }
 
+        ApplyStoredAccountOrder();
         await ReloadLabelsAsync();
 
         // The unified inbox is the view at startup and whenever the selected node disappears.
@@ -1893,6 +1896,99 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         // The folders or the chosen archive folder may have changed.
         ArchiveSelectedCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// Moves the account nodes into the order the database returned, so a reload never undoes a reordering.
+    /// </summary>
+    private void ApplyStoredAccountOrder()
+    {
+        var selected = SelectedNode;
+        for (var target = 0; target < _accounts.Count; target++)
+        {
+            var current = Accounts.ToList().FindIndex(n => n.Account.Id == _accounts[target].Id);
+            if (current < 0 || current == target)
+            {
+                continue;
+            }
+
+            Accounts.Move(current, target);
+            TreeRoots.Move(1 + current, 1 + target);
+        }
+
+        // Moving a container can clear the tree's selection; the selected node itself did not change.
+        if (!ReferenceEquals(SelectedNode, selected))
+        {
+            SelectedNode = selected;
+        }
+    }
+
+    /// <summary>
+    /// Moves an account node to a new position in the tree and stores the new order.
+    /// </summary>
+    /// <param name="node">The node to move.</param>
+    /// <param name="newIndex">The position among the accounts the node should end up at.</param>
+    /// <returns>A task that completes when the order is saved, or the tree was restored after a failure.</returns>
+    public async Task MoveAccountAsync(AccountNodeViewModel node, int newIndex)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+
+        var oldIndex = Accounts.IndexOf(node);
+        if (oldIndex < 0)
+        {
+            return;
+        }
+
+        newIndex = Math.Clamp(newIndex, 0, Accounts.Count - 1);
+        if (newIndex == oldIndex)
+        {
+            return;
+        }
+
+        var selected = SelectedNode;
+        Accounts.Move(oldIndex, newIndex);
+        TreeRoots.Move(1 + oldIndex, 1 + newIndex);
+        if (!ReferenceEquals(SelectedNode, selected))
+        {
+            SelectedNode = selected;
+        }
+
+        var ids = Accounts.Select(a => a.Account.Id).ToList();
+        var saved = false;
+        await GuardedAsync("Error_ReorderAccounts", async () =>
+        {
+            await _dispatcher.SendAsync(new AccountCommands.ReorderAccountsCommand(ids));
+            saved = true;
+        });
+        if (!saved)
+        {
+            // Show what is actually stored.
+            await GuardedAsync("Error_LoadAccounts", ReloadAccountsAsync);
+        }
+    }
+
+    /// <summary>
+    /// Stores the expanded state of an account node after the user changed it.
+    /// </summary>
+    /// <param name="sender">The node.</param>
+    /// <param name="e">The event arguments.</param>
+    private async void OnAccountExpandedChangedAsync(object? sender, EventArgs e)
+    {
+        if (sender is not AccountNodeViewModel node)
+        {
+            return;
+        }
+
+        try
+        {
+            await _dispatcher.SendAsync(new AccountCommands.SetAccountExpandedCommand(node.Account.Id, node.IsExpanded));
+        }
+        catch (Exception ex)
+        {
+            // Losing the remembered state only means the node opens in its default state next time; an event handler
+            // must not throw, so the failure is logged and the tree keeps working.
+            _logger.LogWarning(ex, "Could not store the expanded state of an account node");
+        }
     }
 
     /// <summary>

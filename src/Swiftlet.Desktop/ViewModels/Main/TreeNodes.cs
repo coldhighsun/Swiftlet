@@ -24,6 +24,17 @@ public sealed partial class AccountNodeViewModel(MailAccount account) : Observab
     public partial int UnreadCount { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether the node is expanded in the tree.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsExpanded { get; set; } = true;
+
+    /// <summary>
+    /// Raised when the user expands or collapses the node; not raised by <see cref="SetExpandedSilently"/>.
+    /// </summary>
+    public event EventHandler? ExpandedChanged;
+
+    /// <summary>
     /// Gets the badge text.
     /// </summary>
     public string UnreadText => UnreadBadge.Format(UnreadCount);
@@ -32,6 +43,41 @@ public sealed partial class AccountNodeViewModel(MailAccount account) : Observab
     /// Gets a value indicating whether the badge is shown.
     /// </summary>
     public bool HasUnread => UnreadCount > 0;
+
+    /// <summary>
+    /// Whether <see cref="ExpandedChanged"/> is suppressed because the state is being set from stored data rather than by
+    /// the user.
+    /// </summary>
+    private bool _isLoadingExpanded;
+
+    /// <summary>
+    /// Sets the expanded state from stored data without announcing it as a user change.
+    /// </summary>
+    /// <param name="expanded">Whether the node is expanded.</param>
+    public void SetExpandedSilently(bool expanded)
+    {
+        _isLoadingExpanded = true;
+        try
+        {
+            IsExpanded = expanded;
+        }
+        finally
+        {
+            _isLoadingExpanded = false;
+        }
+    }
+
+    /// <summary>
+    /// Announces a change of <see cref="IsExpanded"/> made by the user.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    partial void OnIsExpandedChanged(bool value)
+    {
+        if (!_isLoadingExpanded)
+        {
+            ExpandedChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
 
     /// <summary>
     /// Gets the account.

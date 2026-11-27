@@ -172,4 +172,34 @@ public class MailAccountTests
 
         account.ArchiveFolderName.Should().Be(expected);
     }
+
+    /// <summary>
+    /// Verifies a new account starts expanded and can be moved and collapsed.
+    /// </summary>
+    [Fact]
+    public void MoveToAndSetExpanded_Values_AreKept()
+    {
+        var account = MailAccount.Create("Me", "me@example.com", AuthMethod.Password, Imap, Smtp, DateTimeOffset.UtcNow);
+        account.IsExpanded.Should().BeTrue();
+        account.SortOrder.Should().Be(0);
+
+        account.MoveTo(3);
+        account.SetExpanded(false);
+
+        account.SortOrder.Should().Be(3);
+        account.IsExpanded.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies a negative position is rejected.
+    /// </summary>
+    [Fact]
+    public void MoveTo_Negative_Throws()
+    {
+        var account = MailAccount.Create("Me", "me@example.com", AuthMethod.Password, Imap, Smtp, DateTimeOffset.UtcNow);
+
+        var act = () => account.MoveTo(-1);
+
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
 }

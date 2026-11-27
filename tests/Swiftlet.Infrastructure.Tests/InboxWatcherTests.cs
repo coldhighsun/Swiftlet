@@ -511,6 +511,18 @@ internal sealed class CancellingAccountRepository : IAccountRepository
     }
 
     /// <inheritdoc />
+    public Task ReorderAsync(IReadOnlyList<Guid> orderedIds, CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException();
+    }
+
+    /// <inheritdoc />
+    public Task SetExpandedAsync(Guid id, bool expanded, CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException();
+    }
+
+    /// <inheritdoc />
     public Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         throw new NotSupportedException();

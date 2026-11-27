@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using Swiftlet.Desktop.Controls;
 using Swiftlet.Desktop.ViewModels.Main;
 
 namespace Swiftlet.Desktop.Views;
@@ -26,6 +27,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        AccountTreeBehavior.Attach(FolderTree, AccountDropLine, (node, index) => (DataContext as MainWindowViewModel)?.MoveAccountAsync(node, index) ?? Task.CompletedTask);
         Opened += OnOpenedAsync;
         Closed += OnClosed;
     }

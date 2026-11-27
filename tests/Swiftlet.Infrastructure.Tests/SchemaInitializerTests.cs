@@ -149,7 +149,7 @@ public class SchemaInitializerTests
         await using (var setup = connection.CreateCommand())
         {
             setup.CommandText =
-                "CREATE TABLE Accounts (Id TEXT NOT NULL PRIMARY KEY, DisplayName TEXT, EmailAddress TEXT, AuthMethod INTEGER);";
+                "CREATE TABLE Accounts (Id TEXT NOT NULL PRIMARY KEY, DisplayName TEXT, EmailAddress TEXT, AuthMethod INTEGER, CreatedAt INTEGER NOT NULL DEFAULT 0);";
             await setup.ExecuteNonQueryAsync(ct);
         }
 
@@ -181,7 +181,7 @@ public class SchemaInitializerTests
         {
             setup.CommandText =
                 """
-                CREATE TABLE Accounts (Id TEXT NOT NULL PRIMARY KEY, DisplayName TEXT, EmailAddress TEXT, AuthMethod INTEGER);
+                CREATE TABLE Accounts (Id TEXT NOT NULL PRIMARY KEY, DisplayName TEXT, EmailAddress TEXT, AuthMethod INTEGER, CreatedAt INTEGER NOT NULL DEFAULT 0);
                 INSERT INTO Accounts (Id, DisplayName, EmailAddress, AuthMethod) VALUES ('a', 'me', 'me@example.com', 0);
                 """;
             await setup.ExecuteNonQueryAsync(ct);
@@ -214,10 +214,10 @@ public class SchemaInitializerTests
             setup.CommandText = string.Create(
                 System.Globalization.CultureInfo.InvariantCulture,
                 $"""
-                CREATE TABLE Accounts (Id TEXT NOT NULL PRIMARY KEY, DisplayName TEXT, EmailAddress TEXT, AuthMethod INTEGER);
-                INSERT INTO Accounts VALUES ('typed', 'Work', 'me@example.com', {(int)AuthMethod.Password});
-                INSERT INTO Accounts VALUES ('filled', 'me', 'me@example.org', {(int)AuthMethod.Password});
-                INSERT INTO Accounts VALUES ('oauth', 'Me Myself', 'me@gmail.com', {(int)AuthMethod.OAuth2});
+                CREATE TABLE Accounts (Id TEXT NOT NULL PRIMARY KEY, DisplayName TEXT, EmailAddress TEXT, AuthMethod INTEGER, CreatedAt INTEGER NOT NULL DEFAULT 0);
+                INSERT INTO Accounts (Id, DisplayName, EmailAddress, AuthMethod) VALUES ('typed', 'Work', 'me@example.com', {(int)AuthMethod.Password});
+                INSERT INTO Accounts (Id, DisplayName, EmailAddress, AuthMethod) VALUES ('filled', 'me', 'me@example.org', {(int)AuthMethod.Password});
+                INSERT INTO Accounts (Id, DisplayName, EmailAddress, AuthMethod) VALUES ('oauth', 'Me Myself', 'me@gmail.com', {(int)AuthMethod.OAuth2});
                 """);
             await setup.ExecuteNonQueryAsync(ct);
         }
@@ -349,5 +349,43 @@ public class SchemaInitializerTests
         }
 
         plan.Should().ContainSingle().Which.Should().Contain("USING COVERING INDEX IX_Messages_Unread");
+    }
+
+    /// <summary>
+    /// Verifies accounts of an earlier version are numbered by creation time, start expanded, and that a second run
+    /// leaves the order alone.
+    /// </summary>
+    [Fact]
+    public async Task InitializeGlobal_AccountsWithoutOrderColumns_NumbersByCreationAndExpands()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var connection = new SqliteConnection("DataSource=:memory:");
+        await connection.OpenAsync(ct);
+        await using (var setup = connection.CreateCommand())
+        {
+            setup.CommandText = """
+                CREATE TABLE Accounts (Id TEXT NOT NULL PRIMARY KEY, DisplayName TEXT, EmailAddress TEXT, AuthMethod INTEGER, CreatedAt INTEGER);
+                INSERT INTO Accounts VALUES ('late', 'L', 'l@example.com', 0, 3000);
+                INSERT INTO Accounts VALUES ('early', 'E', 'e@example.com', 0, 1000);
+                INSERT INTO Accounts VALUES ('middle', 'M', 'm@example.com', 0, 2000);
+                """;
+            await setup.ExecuteNonQueryAsync(ct);
+        }
+
+        var options = new DbContextOptionsBuilder<GlobalDbContext>().UseSqlite(connection).Options;
+        await using var context = new GlobalDbContext(options);
+
+        await SqliteSchemaInitializer.InitializeGlobalAsync(context, ct);
+        await context.Database.ExecuteSqlRawAsync("UPDATE Accounts SET SortOrder = 9 WHERE Id = 'early'", ct);
+        await SqliteSchemaInitializer.InitializeGlobalAsync(context, ct);
+
+        var order = await context.Database
+            .SqlQueryRaw<string>("SELECT Id AS Value FROM Accounts ORDER BY SortOrder")
+            .ToListAsync(ct);
+        order.Should().Equal("middle", "late", "early");
+        var collapsed = await context.Database
+            .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM Accounts WHERE IsExpanded = 0")
+            .SingleAsync(ct);
+        collapsed.Should().Be(0);
     }
 }

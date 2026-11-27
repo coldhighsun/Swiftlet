@@ -61,6 +61,7 @@
 
   <data name="Error_Format" xml:space="preserve"><value>{0}: {1}</value></data>
   <data name="Error_LoadAccounts" xml:space="preserve"><value>加载账号失败</value></data>
+  <data name="Error_ReorderAccounts" xml:space="preserve"><value>调整账号顺序失败</value></data>
   <data name="Error_Refresh" xml:space="preserve"><value>刷新失败</value></data>
   <data name="Error_Search" xml:space="preserve"><value>搜索失败</value></data>
   <data name="Error_LoadMessages" xml:space="preserve"><value>加载邮件失败</value></data>

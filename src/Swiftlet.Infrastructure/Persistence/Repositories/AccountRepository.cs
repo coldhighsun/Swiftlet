@@ -16,6 +16,9 @@ internal sealed class AccountRepository(GlobalDbContext context, IAccountDbConte
     /// <inheritdoc />
     public async Task AddAsync(MailAccount account, CancellationToken cancellationToken = default)
     {
+        // A new account goes to the end of the tree.
+        var last = await context.Accounts.MaxAsync(a => (int?)a.SortOrder, cancellationToken);
+        account.MoveTo(last is { } value ? value + 1 : 0);
         context.Accounts.Add(account);
         await context.SaveChangesAsync(cancellationToken);
         names?.RememberAccount(account.Id, account.EmailAddress);
@@ -36,7 +39,7 @@ internal sealed class AccountRepository(GlobalDbContext context, IAccountDbConte
     /// <inheritdoc />
     public async Task<IReadOnlyList<MailAccount>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        var accounts = await context.Accounts.OrderBy(a => a.CreatedAt).ToListAsync(cancellationToken);
+        var accounts = await context.Accounts.OrderBy(a => a.SortOrder).ThenBy(a => a.CreatedAt).ToListAsync(cancellationToken);
         foreach (var account in accounts)
         {
             names?.RememberAccount(account.Id, account.EmailAddress);
@@ -52,6 +55,32 @@ internal sealed class AccountRepository(GlobalDbContext context, IAccountDbConte
 
         // The account is tracked by this context (it was read from it), so only the changed columns are written.
         await context.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task ReorderAsync(IReadOnlyList<Guid> orderedIds, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(orderedIds);
+
+        // One transaction so a failure part-way never leaves a half-numbered list. Column-only updates keep tracked
+        // account entities of this context untouched.
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        for (var i = 0; i < orderedIds.Count; i++)
+        {
+            var id = orderedIds[i];
+            var order = i;
+            await context.Accounts.Where(a => a.Id == id)
+                .ExecuteUpdateAsync(s => s.SetProperty(a => a.SortOrder, order), cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task SetExpandedAsync(Guid id, bool expanded, CancellationToken cancellationToken = default)
+    {
+        await context.Accounts.Where(a => a.Id == id)
+            .ExecuteUpdateAsync(s => s.SetProperty(a => a.IsExpanded, expanded), cancellationToken);
     }
 
     /// <inheritdoc />

@@ -58,6 +58,16 @@ public sealed class MailAccount
     public string? ArchiveFolderName { get; private set; }
 
     /// <summary>
+    /// Gets the position of the account in the folder tree; lower values come first.
+    /// </summary>
+    public int SortOrder { get; private set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the account node is expanded in the folder tree.
+    /// </summary>
+    public bool IsExpanded { get; private set; } = true;
+
+    /// <summary>
     /// Gets the time the account was created.
     /// </summary>
     public DateTimeOffset CreatedAt { get; private set; }
@@ -176,6 +186,25 @@ public sealed class MailAccount
     public void ChangeArchiveFolder(string? folderName)
     {
         ArchiveFolderName = string.IsNullOrWhiteSpace(folderName) ? null : folderName;
+    }
+
+    /// <summary>
+    /// Changes the position of the account in the folder tree.
+    /// </summary>
+    /// <param name="order">The new position; must not be negative.</param>
+    public void MoveTo(int order)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(order);
+        SortOrder = order;
+    }
+
+    /// <summary>
+    /// Remembers whether the account node is expanded in the folder tree.
+    /// </summary>
+    /// <param name="expanded">Whether the node is expanded.</param>
+    public void SetExpanded(bool expanded)
+    {
+        IsExpanded = expanded;
     }
 
     /// <summary>

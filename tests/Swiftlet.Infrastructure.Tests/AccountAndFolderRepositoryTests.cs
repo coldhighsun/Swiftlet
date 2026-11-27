@@ -98,4 +98,113 @@ public class AccountAndFolderRepositoryTests
         var folders = await verifyContext.Folders().GetByAccountAsync(account.Id, ct);
         folders.Should().ContainSingle().Which.UidValidity.Should().Be(42u);
     }
+
+
+    /// <summary>
+    /// Creates IMAP settings; every account needs its own instance, because EF Core owned types cannot be shared.
+    /// </summary>
+    /// <returns>The settings.</returns>
+    private static ServerEndpoint NewImap()
+    {
+        return new ServerEndpoint("imap.example.com", 993, true);
+    }
+
+    /// <summary>
+    /// Creates SMTP settings; every account needs its own instance, because EF Core owned types cannot be shared.
+    /// </summary>
+    /// <returns>The settings.</returns>
+    private static ServerEndpoint NewSmtp()
+    {
+        return new ServerEndpoint("smtp.example.com", 465, true);
+    }
+
+    /// <summary>
+    /// Verifies new accounts are appended after the existing ones and listed in that order.
+    /// </summary>
+    [Fact]
+    public async Task AddAsync_SeveralAccounts_AppendsToTheEnd()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var repository = db.CreateAccountRepository();
+        var a = MailAccount.Create("A", "a@example.com", AuthMethod.Password, NewImap(), NewSmtp(), DateTimeOffset.UtcNow);
+        var b = MailAccount.Create("B", "b@example.com", AuthMethod.Password, NewImap(), NewSmtp(), DateTimeOffset.UtcNow.AddMinutes(-5));
+
+        await repository.AddAsync(a, ct);
+        await repository.AddAsync(b, ct);
+
+        await using var verifyContext = db.CreateVerifier();
+        var all = await verifyContext.Accounts().GetAllAsync(ct);
+        all.Select(x => x.Id).Should().Equal(a.Id, b.Id);
+        all.Select(x => x.SortOrder).Should().Equal(0, 1);
+    }
+
+    /// <summary>
+    /// Verifies the stored order wins over the creation time, and unknown identifiers are ignored.
+    /// </summary>
+    [Fact]
+    public async Task ReorderAsync_NewOrder_IsReturnedByGetAll()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var repository = db.CreateAccountRepository();
+        var a = MailAccount.Create("A", "a@example.com", AuthMethod.Password, NewImap(), NewSmtp(), DateTimeOffset.UtcNow);
+        var b = MailAccount.Create("B", "b@example.com", AuthMethod.Password, NewImap(), NewSmtp(), DateTimeOffset.UtcNow);
+        var c = MailAccount.Create("C", "c@example.com", AuthMethod.Password, NewImap(), NewSmtp(), DateTimeOffset.UtcNow);
+        await repository.AddAsync(a, ct);
+        await repository.AddAsync(b, ct);
+        await repository.AddAsync(c, ct);
+
+        await repository.ReorderAsync([c.Id, Guid.NewGuid(), a.Id, b.Id], ct);
+
+        await using var verifyContext = db.CreateVerifier();
+        var all = await verifyContext.Accounts().GetAllAsync(ct);
+        all.Select(x => x.Id).Should().Equal(c.Id, a.Id, b.Id);
+    }
+
+    /// <summary>
+    /// Verifies the expanded state is stored and a new account starts expanded.
+    /// </summary>
+    [Fact]
+    public async Task SetExpandedAsync_Collapse_IsStored()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var repository = db.CreateAccountRepository();
+        var account = MailAccount.Create("A", "a@example.com", AuthMethod.Password, NewImap(), NewSmtp(), DateTimeOffset.UtcNow);
+        await repository.AddAsync(account, ct);
+
+        await repository.SetExpandedAsync(account.Id, false, ct);
+        await repository.SetExpandedAsync(Guid.NewGuid(), false, ct);
+
+        await using var verifyContext = db.CreateVerifier();
+        var loaded = await verifyContext.Accounts().GetAsync(account.Id, ct);
+        loaded!.IsExpanded.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies the command handlers pass the order and the expanded state on to the repository.
+    /// </summary>
+    [Fact]
+    public async Task Handlers_ReorderAndExpand_UpdateStoredValues()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var repository = db.CreateAccountRepository();
+        var a = MailAccount.Create("A", "a@example.com", AuthMethod.Password, NewImap(), NewSmtp(), DateTimeOffset.UtcNow);
+        var b = MailAccount.Create("B", "b@example.com", AuthMethod.Password, NewImap(), NewSmtp(), DateTimeOffset.UtcNow);
+        await repository.AddAsync(a, ct);
+        await repository.AddAsync(b, ct);
+
+        await new Swiftlet.Application.Accounts.ReorderAccountsCommandHandler(repository)
+            .Handle(new Swiftlet.Application.Accounts.ReorderAccountsCommand([b.Id, a.Id]), ct);
+        await new Swiftlet.Application.Accounts.SetAccountExpandedCommandHandler(repository)
+            .Handle(new Swiftlet.Application.Accounts.SetAccountExpandedCommand(a.Id, false), ct);
+
+        await using var verifyContext = db.CreateVerifier();
+        var all = await verifyContext.Accounts().GetAllAsync(ct);
+        all.Select(x => x.Id).Should().Equal(b.Id, a.Id);
+        all.Single(x => x.Id == a.Id).IsExpanded.Should().BeFalse();
+        all.Single(x => x.Id == b.Id).IsExpanded.Should().BeTrue();
+    }
 }

@@ -61,6 +61,7 @@
 
   <data name="Error_Format" xml:space="preserve"><value>{0}: {1}</value></data>
   <data name="Error_LoadAccounts" xml:space="preserve"><value>Failed to load accounts</value></data>
+  <data name="Error_ReorderAccounts" xml:space="preserve"><value>Failed to reorder accounts</value></data>
   <data name="Error_Refresh" xml:space="preserve"><value>Refresh failed</value></data>
   <data name="Error_Search" xml:space="preserve"><value>Search failed</value></data>
   <data name="Error_LoadMessages" xml:space="preserve"><value>Failed to load messages</value></data>
