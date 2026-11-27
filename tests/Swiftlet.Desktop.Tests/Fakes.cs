@@ -489,6 +489,20 @@ internal sealed class FakeAppSettings : IAppSettings
         Theme = value;
     }
 
+    /// <inheritdoc />
+    public WindowPlacement? MainWindowPlacement { get; set; }
+
+    /// <inheritdoc />
+    public void SetMainWindowPlacement(WindowPlacement value)
+    {
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+
+        MainWindowPlacement = value;
+    }
+
     /// <summary>
     /// Gets the values passed to <see cref="SetDownloadAllMail"/>.
     /// </summary>

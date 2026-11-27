@@ -88,10 +88,18 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
     /// <returns>The window.</returns>
     private MainWindow CreateMainWindow()
     {
-        return new MainWindow
+        var window = new MainWindow
         {
             DataContext = services.GetRequiredService<MainWindowViewModel>(),
         };
+
+        // Attached here, before the tray handling, which hides the window while it is closing.
+        if (services.GetService<IAppSettings>() is { } settings)
+        {
+            RememberWindowPlacement.Attach(window, settings, services.GetService<ILogger<RememberWindowPlacement>>());
+        }
+
+        return window;
     }
 
     /// <summary>

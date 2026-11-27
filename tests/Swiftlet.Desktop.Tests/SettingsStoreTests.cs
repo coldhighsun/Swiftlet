@@ -177,6 +177,43 @@ public class SettingsStoreTests : IDisposable
     }
 
     /// <summary>
+    /// Verifies the window placement is empty at first, and survives a restart and later saves.
+    /// </summary>
+    [Fact]
+    public void SetMainWindowPlacement_Saved_PersistsAcrossLaterSaves()
+    {
+        var store = new AppSettings(StorePath);
+        store.MainWindowPlacement.Should().BeNull();
+        var placement = new WindowPlacement(-1200, 40, 900.5, 600, true);
+
+        store.SetMainWindowPlacement(placement);
+        store.Save("en");
+        new AppSettings(StorePath).SetDownloadAllMail(false);
+
+        new AppSettings(StorePath).MainWindowPlacement.Should().Be(placement);
+    }
+
+    /// <summary>
+    /// Verifies an unusable window placement is ignored without losing other settings.
+    /// </summary>
+    /// <param name="stored">The stored JSON value.</param>
+    [Theory]
+    [InlineData("5")]
+    [InlineData("{}")]
+    [InlineData("""{"x":"left","y":0,"width":900,"height":600}""")]
+    [InlineData("""{"x":0,"y":0,"width":-1,"height":600}""")]
+    public void MainWindowPlacement_UnusableValue_IsIgnoredAndKeepsOtherSettings(string stored)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(StorePath)!);
+        File.WriteAllText(StorePath, $$"""{"language":"zh-Hans","mainWindowPlacement":{{stored}}}""");
+
+        var store = new AppSettings(StorePath);
+
+        store.MainWindowPlacement.Should().BeNull();
+        store.Load().Should().Be("zh-Hans");
+    }
+
+    /// <summary>
     /// Verifies that, registered after AddApplication, the store is what the sync settings and language store resolve to.
     /// </summary>
     [Fact]

@@ -75,6 +75,17 @@ public interface IAppSettings : ISyncSettings
     /// </summary>
     /// <param name="value">One of the <see cref="ThemePreference"/> values.</param>
     void SetTheme(string value);
+
+    /// <summary>
+    /// Gets where the main window was last, or <see langword="null"/> when nothing was saved.
+    /// </summary>
+    WindowPlacement? MainWindowPlacement { get; }
+
+    /// <summary>
+    /// Saves where the main window is.
+    /// </summary>
+    /// <param name="value">The placement.</param>
+    void SetMainWindowPlacement(WindowPlacement value);
 }
 
 /// <summary>
@@ -133,6 +144,11 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     private volatile string _trayUnreadStyle;
 
     /// <summary>
+    /// The in-memory main window placement.
+    /// </summary>
+    private volatile WindowPlacement? _mainWindowPlacement;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="AppSettings"/> class and reads the file once.
     /// </summary>
     /// <param name="path">The settings file path.</param>
@@ -150,6 +166,7 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
             file.Theme is { ValueKind: JsonValueKind.String } theme ? theme.GetString() : null);
         _trayUnreadStyle = Settings.TrayUnreadStyle.Normalize(
             file.TrayUnreadStyle is { ValueKind: JsonValueKind.String } style ? style.GetString() : null);
+        _mainWindowPlacement = ReadPlacement(file.MainWindowPlacement);
     }
 
     /// <summary>
@@ -163,6 +180,7 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     /// <param name="CloseToTray">Whether closing the main window hides it in the tray.</param>
     /// <param name="ShowNewMailNotifications">Whether newly arrived mail is announced with a pop-up.</param>
     /// <param name="TrayUnreadStyle">How the tray icon points out unread mail; raw JSON for the same reason as the theme.</param>
+    /// <param name="MainWindowPlacement">Where the main window was; raw JSON for the same reason as the theme.</param>
     private sealed record SettingsFile(
         string? Language,
         bool? SyncServerDeletions,
@@ -171,7 +189,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
         JsonElement? Theme = null,
         bool? CloseToTray = null,
         bool? ShowNewMailNotifications = null,
-        JsonElement? TrayUnreadStyle = null);
+        JsonElement? TrayUnreadStyle = null,
+        JsonElement? MainWindowPlacement = null);
 
     /// <inheritdoc />
     public bool RemoveServerDeletedMessages => _removeServerDeletedMessages;
@@ -196,6 +215,25 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
 
     /// <inheritdoc />
     public event EventHandler? TrayUnreadStyleChanged;
+
+    /// <inheritdoc />
+    public WindowPlacement? MainWindowPlacement => _mainWindowPlacement;
+
+    /// <inheritdoc />
+    public void SetMainWindowPlacement(WindowPlacement value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        lock (_gate)
+        {
+            if (value == _mainWindowPlacement)
+            {
+                return;
+            }
+
+            Write(Snapshot() with { MainWindowPlacement = SerializePlacement(value) });
+            _mainWindowPlacement = value;
+        }
+    }
 
     /// <inheritdoc />
     public string Load()
@@ -305,7 +343,43 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
             JsonSerializer.SerializeToElement(_theme),
             _closeToTray,
             _showNewMailNotifications,
-            JsonSerializer.SerializeToElement(_trayUnreadStyle));
+            JsonSerializer.SerializeToElement(_trayUnreadStyle),
+            _mainWindowPlacement is { } placement ? SerializePlacement(placement) : null);
+    }
+
+    /// <summary>
+    /// Converts a window placement to its stored form.
+    /// </summary>
+    /// <param name="placement">The placement.</param>
+    /// <returns>The JSON value.</returns>
+    private static JsonElement SerializePlacement(WindowPlacement placement)
+    {
+        return JsonSerializer.SerializeToElement(placement, JsonSerializerOptions.Web);
+    }
+
+    /// <summary>
+    /// Reads a stored window placement.
+    /// </summary>
+    /// <param name="stored">The JSON value, if any.</param>
+    /// <returns>The placement, or <see langword="null"/> when it is missing or unusable.</returns>
+    private static WindowPlacement? ReadPlacement(JsonElement? stored)
+    {
+        if (stored is not { ValueKind: JsonValueKind.Object } element)
+        {
+            return null;
+        }
+
+        try
+        {
+            return element.Deserialize<WindowPlacement>(JsonSerializerOptions.Web) is { HasUsableSize: true } placement
+                ? placement
+                : null;
+        }
+        catch (JsonException)
+        {
+            // A damaged placement only means the window opens at its default place.
+            return null;
+        }
     }
 
     /// <summary>

@@ -151,6 +151,94 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies a window moved and resized comes back there after being hidden in the tray, even when it was moved
+    /// while hidden, and the placement is saved.
+    /// </summary>
+    [Fact]
+    public async Task WindowPlacement_ClosedToTrayAndShownAgain_RestoresBounds()
+    {
+        await DispatchAsync(
+            () =>
+            {
+                var settings = new FakeAppSettings();
+                var window = new Window { Width = 1000, Height = 700 };
+                RememberWindowPlacement.Attach(window, settings);
+                window.Show();
+                window.Position = new PixelPoint(120, 80);
+                window.Width = 900;
+                window.Height = 600;
+                Dispatcher.UIThread.RunJobs();
+
+                window.Hide();
+                window.Position = new PixelPoint(5, 5);
+                window.Width = 400;
+                Dispatcher.UIThread.RunJobs();
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                window.Position.Should().Be(new PixelPoint(120, 80));
+                window.ClientSize.Should().Be(new Size(900, 600));
+                window.Close();
+                settings.MainWindowPlacement.Should().Be(new Swiftlet.Desktop.Settings.WindowPlacement(120, 80, 900, 600, false));
+                return Task.CompletedTask;
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the saved placement is applied the first time, and a maximized window is saved with the bounds it
+    /// returns to.
+    /// </summary>
+    [Fact]
+    public async Task WindowPlacement_SavedMaximized_AppliesAndKeepsNormalBounds()
+    {
+        await DispatchAsync(
+            () =>
+            {
+                var saved = new Swiftlet.Desktop.Settings.WindowPlacement(60, 40, 900, 600, true);
+                var settings = new FakeAppSettings { MainWindowPlacement = saved };
+                var window = new Window { Width = 1000, Height = 700 };
+
+                RememberWindowPlacement.Attach(window, settings);
+                window.Position.Should().Be(new PixelPoint(60, 40));
+                window.Width.Should().Be(900);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                window.WindowState.Should().Be(WindowState.Maximized);
+                window.Close();
+                settings.MainWindowPlacement.Should().Be(saved);
+                return Task.CompletedTask;
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies a placement that cannot be saved does not stop the window from closing.
+    /// </summary>
+    [Fact]
+    public async Task WindowPlacement_SaveFails_WindowStillCloses()
+    {
+        await DispatchAsync(
+            () =>
+            {
+                var settings = new FakeAppSettings { Failure = new IOException("disk full") };
+                var window = new Window { Width = 900, Height = 600 };
+                var closed = false;
+                window.Closed += (_, _) => closed = true;
+                RememberWindowPlacement.Attach(window, settings);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                window.Close();
+
+                closed.Should().BeTrue();
+                return Task.CompletedTask;
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Verifies the tray icon carries the menu and follows the language.
     /// </summary>
     [Fact]
