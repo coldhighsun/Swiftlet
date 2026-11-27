@@ -161,7 +161,7 @@ public class UiSmokeTests
             {
                 var scenario = new MainWindowViewModelTests.Scenario();
                 await scenario.StartAsync();
-                using var viewModel = new TrayViewModel(scenario.ViewModel, scenario.Localizer, () => { }, () => { });
+                using var viewModel = new TrayViewModel(scenario.ViewModel, scenario.Localizer, new FakeAppSettings(), () => { }, () => { });
                 using var tray = new AvaloniaTrayIcon(Avalonia.Application.Current!, viewModel);
                 var items = tray.Icon.Menu!.Items.OfType<NativeMenuItem>().Where(i => i is not NativeMenuItemSeparator).ToList();
 
@@ -173,6 +173,44 @@ public class UiSmokeTests
 
                 items.Select(i => i.Header).Should().Equal("Open Swiftlet", "Compose", "Sync all accounts", "Settings", "Quit");
                 tray.Icon.ToolTipText.Should().StartWith("Swiftlet - Unread: 2");
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the icon changes its picture with the unread mail and blinks only in that style.
+    /// </summary>
+    [Fact]
+    public async Task TrayIcon_UnreadMail_ShowsDotOrBlinks()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var scenario = new MainWindowViewModelTests.Scenario();
+                var settings = new FakeAppSettings();
+                using var viewModel = new TrayViewModel(scenario.ViewModel, scenario.Localizer, settings, () => { }, () => { });
+                using var tray = new AvaloniaTrayIcon(Avalonia.Application.Current!, viewModel);
+                tray.Icon.Icon.Should().BeSameAs(tray.NormalImage);
+
+                await scenario.StartAsync();
+
+                tray.Icon.Icon.Should().BeSameAs(tray.UnreadImage);
+                tray.IsBlinking.Should().BeFalse();
+
+                settings.SetTrayUnreadStyle("blink");
+
+                tray.IsBlinking.Should().BeTrue();
+                tray.Icon.Icon.Should().BeSameAs(tray.UnreadImage);
+                tray.Blink();
+                tray.Icon.Icon.Should().BeSameAs(tray.NormalImage);
+                tray.Blink();
+                tray.Icon.Icon.Should().BeSameAs(tray.UnreadImage);
+
+                tray.Blink();
+                viewModel.Indicator = TrayIndicator.None;
+
+                tray.IsBlinking.Should().BeFalse();
+                tray.Icon.Icon.Should().BeSameAs(tray.NormalImage);
             },
             TestContext.Current.CancellationToken);
     }
@@ -748,7 +786,7 @@ public class UiSmokeTests
                 var boxes = window.GetVisualDescendants().OfType<CheckBox>().ToList();
                 boxes.Should().HaveCount(5);
                 window.GetVisualDescendants().OfType<ComboBox>().Where(c => c.IsEffectivelyVisible)
-                    .Select(c => c.SelectedItem).Should().Equal(selector.SelectedOption, viewModel.SelectedTheme);
+                    .Select(c => c.SelectedItem).Should().Equal(selector.SelectedOption, viewModel.SelectedTheme, viewModel.SelectedTrayUnreadStyle);
                 var box = boxes.Single(b => b.Content as string == checkbox);
                 box.IsChecked.Should().BeFalse();
                 boxes.Where(b => b != box).Should().OnlyContain(b => b.IsChecked == true, "the tray, notification and history download settings are on by default");

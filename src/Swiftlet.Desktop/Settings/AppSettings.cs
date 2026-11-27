@@ -50,6 +50,22 @@ public interface IAppSettings : ISyncSettings
     void SetShowNewMailNotifications(bool value);
 
     /// <summary>
+    /// Gets how the tray icon points out unread mail, one of the <see cref="Settings.TrayUnreadStyle"/> values.
+    /// </summary>
+    string TrayUnreadStyle { get; }
+
+    /// <summary>
+    /// Raised after a changed <see cref="TrayUnreadStyle"/> was saved, so the tray icon can follow at once.
+    /// </summary>
+    event EventHandler? TrayUnreadStyleChanged;
+
+    /// <summary>
+    /// Changes how the tray icon points out unread mail, and saves the choice.
+    /// </summary>
+    /// <param name="value">One of the <see cref="Settings.TrayUnreadStyle"/> values.</param>
+    void SetTrayUnreadStyle(string value);
+
+    /// <summary>
     /// Gets the saved theme preference, one of the <see cref="ThemePreference"/> values.
     /// </summary>
     string Theme { get; }
@@ -112,6 +128,11 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     private volatile string _theme;
 
     /// <summary>
+    /// The in-memory tray icon style.
+    /// </summary>
+    private volatile string _trayUnreadStyle;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="AppSettings"/> class and reads the file once.
     /// </summary>
     /// <param name="path">The settings file path.</param>
@@ -127,6 +148,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
         _showNewMailNotifications = file.ShowNewMailNotifications ?? true;
         _theme = ThemePreference.Normalize(
             file.Theme is { ValueKind: JsonValueKind.String } theme ? theme.GetString() : null);
+        _trayUnreadStyle = Settings.TrayUnreadStyle.Normalize(
+            file.TrayUnreadStyle is { ValueKind: JsonValueKind.String } style ? style.GetString() : null);
     }
 
     /// <summary>
@@ -139,6 +162,7 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     /// <param name="Theme">The theme preference; read as raw JSON so a wrongly typed value does not discard the whole file.</param>
     /// <param name="CloseToTray">Whether closing the main window hides it in the tray.</param>
     /// <param name="ShowNewMailNotifications">Whether newly arrived mail is announced with a pop-up.</param>
+    /// <param name="TrayUnreadStyle">How the tray icon points out unread mail; raw JSON for the same reason as the theme.</param>
     private sealed record SettingsFile(
         string? Language,
         bool? SyncServerDeletions,
@@ -146,7 +170,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
         bool? DownloadAllMail = null,
         JsonElement? Theme = null,
         bool? CloseToTray = null,
-        bool? ShowNewMailNotifications = null);
+        bool? ShowNewMailNotifications = null,
+        JsonElement? TrayUnreadStyle = null);
 
     /// <inheritdoc />
     public bool RemoveServerDeletedMessages => _removeServerDeletedMessages;
@@ -165,6 +190,12 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
 
     /// <inheritdoc />
     public bool ShowNewMailNotifications => _showNewMailNotifications;
+
+    /// <inheritdoc />
+    public string TrayUnreadStyle => _trayUnreadStyle;
+
+    /// <inheritdoc />
+    public event EventHandler? TrayUnreadStyleChanged;
 
     /// <inheritdoc />
     public string Load()
@@ -236,6 +267,20 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     }
 
     /// <inheritdoc />
+    public void SetTrayUnreadStyle(string value)
+    {
+        var style = Settings.TrayUnreadStyle.Normalize(value);
+        lock (_gate)
+        {
+            Write(Snapshot() with { TrayUnreadStyle = JsonSerializer.SerializeToElement(style) });
+            _trayUnreadStyle = style;
+        }
+
+        // Outside the lock, so a listener may read the settings from any thread.
+        TrayUnreadStyleChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <inheritdoc />
     public void SetTheme(string value)
     {
         var theme = ThemePreference.Normalize(value);
@@ -259,7 +304,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
             _downloadAllMail,
             JsonSerializer.SerializeToElement(_theme),
             _closeToTray,
-            _showNewMailNotifications);
+            _showNewMailNotifications,
+            JsonSerializer.SerializeToElement(_trayUnreadStyle));
     }
 
     /// <summary>

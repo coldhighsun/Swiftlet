@@ -141,6 +141,42 @@ public class SettingsStoreTests : IDisposable
     }
 
     /// <summary>
+    /// Verifies the tray style defaults to the dot, is saved and announced.
+    /// </summary>
+    [Fact]
+    public void TrayUnreadStyle_DefaultsToDotAndIsSavedAndAnnounced()
+    {
+        var store = new AppSettings(StorePath);
+        store.TrayUnreadStyle.Should().Be("dot");
+        var announced = 0;
+        store.TrayUnreadStyleChanged += (_, _) => announced++;
+
+        store.SetTrayUnreadStyle("blink");
+        store.Save("en");
+
+        announced.Should().Be(1);
+        new AppSettings(StorePath).TrayUnreadStyle.Should().Be("blink");
+    }
+
+    /// <summary>
+    /// Verifies an unusable tray style falls back to the dot without losing other settings.
+    /// </summary>
+    /// <param name="stored">The stored JSON value.</param>
+    [Theory]
+    [InlineData("\"sparkle\"")]
+    [InlineData("5")]
+    public void TrayUnreadStyle_UnusableValue_FallsBackAndKeepsOtherSettings(string stored)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(StorePath)!);
+        File.WriteAllText(StorePath, $$"""{"language":"zh-Hans","trayUnreadStyle":{{stored}}}""");
+
+        var store = new AppSettings(StorePath);
+
+        store.TrayUnreadStyle.Should().Be("dot");
+        store.Load().Should().Be("zh-Hans");
+    }
+
+    /// <summary>
     /// Verifies that, registered after AddApplication, the store is what the sync settings and language store resolve to.
     /// </summary>
     [Fact]

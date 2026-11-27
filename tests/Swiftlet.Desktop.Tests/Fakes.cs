@@ -439,6 +439,24 @@ internal sealed class FakeAppSettings : IAppSettings
     }
 
     /// <inheritdoc />
+    public string TrayUnreadStyle { get; set; } = Swiftlet.Desktop.Settings.TrayUnreadStyle.Dot;
+
+    /// <inheritdoc />
+    public event EventHandler? TrayUnreadStyleChanged;
+
+    /// <inheritdoc />
+    public void SetTrayUnreadStyle(string value)
+    {
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+
+        TrayUnreadStyle = value;
+        TrayUnreadStyleChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <inheritdoc />
     public void SetTheme(string value)
     {
         if (Failure is not null)

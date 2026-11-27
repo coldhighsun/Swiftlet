@@ -35,7 +35,18 @@
               <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding ThemeOptions}"
                         SelectedItem="{Binding SelectedTheme}">
                 <ComboBox.ItemTemplate>
-                  <DataTemplate DataType="settings:ThemeOptionViewModel">
+                  <DataTemplate DataType="settings:ChoiceOptionViewModel">
+                    <TextBlock Text="{Binding DisplayName}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+            </Grid>
+            <Grid ColumnDefinitions="120,*">
+              <TextBlock Text="{loc:Loc Settings_TrayUnread}" VerticalAlignment="Center" TextWrapping="Wrap" />
+              <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding TrayUnreadStyleOptions}"
+                        SelectedItem="{Binding SelectedTrayUnreadStyle}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate DataType="settings:ChoiceOptionViewModel">
                     <TextBlock Text="{Binding DisplayName}" />
                   </DataTemplate>
                 </ComboBox.ItemTemplate>

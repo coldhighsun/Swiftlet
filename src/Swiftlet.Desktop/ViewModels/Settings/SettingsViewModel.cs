@@ -70,11 +70,17 @@ public sealed partial class SettingsViewModel : ObservableObject
         LanguageSelector = languageSelector;
         ThemeOptions =
         [
-            new ThemeOptionViewModel(ThemePreference.System, () => localizer["Settings_ThemeSystem"]),
-            new ThemeOptionViewModel(ThemePreference.Light, () => localizer["Settings_ThemeLight"]),
-            new ThemeOptionViewModel(ThemePreference.Dark, () => localizer["Settings_ThemeDark"]),
+            new ChoiceOptionViewModel(ThemePreference.System, () => localizer["Settings_ThemeSystem"]),
+            new ChoiceOptionViewModel(ThemePreference.Light, () => localizer["Settings_ThemeLight"]),
+            new ChoiceOptionViewModel(ThemePreference.Dark, () => localizer["Settings_ThemeDark"]),
         ];
         SelectedTheme = ThemeOptions.First(o => o.Code == settings.Theme);
+        TrayUnreadStyleOptions =
+        [
+            new ChoiceOptionViewModel(TrayUnreadStyle.Dot, () => localizer["Settings_TrayUnreadDot"]),
+            new ChoiceOptionViewModel(TrayUnreadStyle.Blink, () => localizer["Settings_TrayUnreadBlink"]),
+        ];
+        SelectedTrayUnreadStyle = TrayUnreadStyleOptions.First(o => o.Code == settings.TrayUnreadStyle);
         localizer.LanguageChanged += OnLanguageChanged;
     }
 
@@ -86,13 +92,24 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <summary>
     /// Gets the available themes.
     /// </summary>
-    public IReadOnlyList<ThemeOptionViewModel> ThemeOptions { get; }
+    public IReadOnlyList<ChoiceOptionViewModel> ThemeOptions { get; }
 
     /// <summary>
     /// Gets or sets the selected theme.
     /// </summary>
     [ObservableProperty]
-    public partial ThemeOptionViewModel SelectedTheme { get; set; }
+    public partial ChoiceOptionViewModel SelectedTheme { get; set; }
+
+    /// <summary>
+    /// Gets the ways the tray icon can point out unread mail.
+    /// </summary>
+    public IReadOnlyList<ChoiceOptionViewModel> TrayUnreadStyleOptions { get; }
+
+    /// <summary>
+    /// Gets or sets the selected tray icon style.
+    /// </summary>
+    [ObservableProperty]
+    public partial ChoiceOptionViewModel SelectedTrayUnreadStyle { get; set; }
 
     /// <summary>
     /// Gets the text saying whether the local data is encrypted, or <see langword="null"/> when unknown.
@@ -117,7 +134,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// Saves and applies a newly selected theme.
     /// </summary>
     /// <param name="value">The new selection.</param>
-    partial void OnSelectedThemeChanged(ThemeOptionViewModel value)
+    partial void OnSelectedThemeChanged(ChoiceOptionViewModel value)
     {
         if (value is null || value.Code == _settings.Theme)
         {
@@ -141,13 +158,37 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Saves a newly selected tray icon style.
+    /// </summary>
+    /// <param name="value">The new selection.</param>
+    partial void OnSelectedTrayUnreadStyleChanged(ChoiceOptionViewModel value)
+    {
+        if (value is null || value.Code == _settings.TrayUnreadStyle)
+        {
+            return;
+        }
+
+        ErrorText = null;
+        try
+        {
+            _settings.SetTrayUnreadStyle(value.Code);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The file could not be written; show it and put the picker back so it matches what is stored.
+            ErrorText = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
+            SelectedTrayUnreadStyle = TrayUnreadStyleOptions.First(o => o.Code == _settings.TrayUnreadStyle);
+        }
+    }
+
+    /// <summary>
     /// Re-reads the texts built by this view model after the language changed.
     /// </summary>
     /// <param name="sender">The event sender.</param>
     /// <param name="e">The event arguments.</param>
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
-        foreach (var option in ThemeOptions)
+        foreach (var option in ThemeOptions.Concat(TrayUnreadStyleOptions))
         {
             option.RefreshLanguage();
         }

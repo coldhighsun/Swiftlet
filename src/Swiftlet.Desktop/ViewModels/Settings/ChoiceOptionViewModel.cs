@@ -3,11 +3,11 @@ using CommunityToolkit.Mvvm.ComponentModel;
 namespace Swiftlet.Desktop.ViewModels.Settings;
 
 /// <summary>
-/// A selectable theme.
+/// One entry of a picker in the settings window.
 /// </summary>
 /// <param name="code">The preference value, for example <c>dark</c>.</param>
 /// <param name="displayName">Produces the display name in the current language.</param>
-public sealed class ThemeOptionViewModel(string code, Func<string> displayName) : ObservableObject
+public sealed class ChoiceOptionViewModel(string code, Func<string> displayName) : ObservableObject
 {
     /// <summary>
     /// Gets the preference value represented by this option.
@@ -15,7 +15,7 @@ public sealed class ThemeOptionViewModel(string code, Func<string> displayName) 
     public string Code { get; } = code;
 
     /// <summary>
-    /// Gets the name shown in the theme picker.
+    /// Gets the name shown in the picker.
     /// </summary>
     public string DisplayName => displayName();
 

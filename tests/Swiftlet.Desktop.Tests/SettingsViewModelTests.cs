@@ -269,6 +269,40 @@ public class SettingsViewModelTests
     }
 
     /// <summary>
+    /// Verifies choosing a tray style saves it, and the names follow the language.
+    /// </summary>
+    [Fact]
+    public void SelectedTrayUnreadStyle_Changed_SavesAndFollowsLanguage()
+    {
+        var settings = new FakeAppSettings();
+        var localizer = TestLocalizer.English();
+        var viewModel = new SettingsViewModel(settings, localizer, new FakeRemoteImageRules());
+        viewModel.SelectedTrayUnreadStyle.Code.Should().Be("dot");
+
+        viewModel.SelectedTrayUnreadStyle = viewModel.TrayUnreadStyleOptions.Single(o => o.Code == "blink");
+
+        settings.TrayUnreadStyle.Should().Be("blink");
+        viewModel.SelectedTrayUnreadStyle.DisplayName.Should().Be("Blinking");
+        localizer.SetPreference("zh-Hans");
+        viewModel.SelectedTrayUnreadStyle.DisplayName.Should().Be("图标闪烁");
+    }
+
+    /// <summary>
+    /// Verifies a failed save of the tray style is reported and the picker returns to the stored value.
+    /// </summary>
+    [Fact]
+    public void SelectedTrayUnreadStyle_SaveFails_ShowsErrorAndRevertsValue()
+    {
+        var settings = new FakeAppSettings { Failure = new IOException("disk full") };
+        var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules());
+
+        viewModel.SelectedTrayUnreadStyle = viewModel.TrayUnreadStyleOptions.Single(o => o.Code == "blink");
+
+        viewModel.SelectedTrayUnreadStyle.Code.Should().Be("dot");
+        viewModel.ErrorText.Should().Contain("disk full");
+    }
+
+    /// <summary>
     /// Verifies toggling the new mail notification saves the choice.
     /// </summary>
     [Fact]

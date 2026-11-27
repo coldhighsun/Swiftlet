@@ -219,6 +219,9 @@
   <data name="Settings_CloseToTrayHint" xml:space="preserve"><value>Mail keeps synchronizing. Quit from the menu of the tray icon. Turn this off if your desktop shows no tray icons.</value></data>
   <data name="Settings_NewMailNotifications" xml:space="preserve"><value>Show a notification for new mail</value></data>
   <data name="Settings_NewMailNotificationsHint" xml:space="preserve"><value>A small window appears in the corner of the screen when unread mail arrives in an inbox.</value></data>
+  <data name="Settings_TrayUnread" xml:space="preserve"><value>Unread in tray</value></data>
+  <data name="Settings_TrayUnreadDot" xml:space="preserve"><value>Red dot</value></data>
+  <data name="Settings_TrayUnreadBlink" xml:space="preserve"><value>Blinking</value></data>
   <data name="Notification_NewMessage" xml:space="preserve"><value>New message</value></data>
   <data name="Notification_NewMessages" xml:space="preserve"><value>{0} new messages</value></data>
   <data name="Notification_More" xml:space="preserve"><value>{0} · {1} more</value></data>

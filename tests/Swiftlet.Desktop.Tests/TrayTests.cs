@@ -132,6 +132,56 @@ public class TrayTests
     }
 
     /// <summary>
+    /// Verifies the icon points out unread inbox mail in the chosen style and stops once it is read.
+    /// </summary>
+    /// <param name="style">The saved style.</param>
+    /// <param name="expected">The expected indicator.</param>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Theory]
+    [InlineData("dot", TrayIndicator.Dot)]
+    [InlineData("blink", TrayIndicator.Blink)]
+    public async Task Indicator_FollowsUnreadInboxMail(string style, TrayIndicator expected)
+    {
+        var scenario = new MainWindowViewModelTests.Scenario();
+        using var tray = new TrayViewModel(
+            scenario.ViewModel, scenario.Localizer, new FakeAppSettings { TrayUnreadStyle = style }, () => { }, () => { });
+        tray.Indicator.Should().Be(TrayIndicator.None);
+
+        await scenario.StartAsync();
+        tray.Indicator.Should().Be(expected);
+
+        scenario.Dispatcher.On<GetUnreadCountsQuery>(_ => (IReadOnlyDictionary<Guid, int>)new Dictionary<Guid, int>
+        {
+            [scenario.Sent.Id] = 5,
+        });
+        await scenario.ViewModel.RefreshAsync();
+        await scenario.ViewModel.WhenIdleAsync();
+
+        tray.Indicator.Should().Be(TrayIndicator.None, "only the inbox counts");
+    }
+
+    /// <summary>
+    /// Verifies a newly chosen style applies at once, until the view model is disposed.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Indicator_StyleChanged_AppliesUntilDisposed()
+    {
+        var scenario = new MainWindowViewModelTests.Scenario();
+        await scenario.StartAsync();
+        var settings = new FakeAppSettings();
+        var tray = new TrayViewModel(scenario.ViewModel, scenario.Localizer, settings, () => { }, () => { });
+        tray.Indicator.Should().Be(TrayIndicator.Dot);
+
+        settings.SetTrayUnreadStyle("blink");
+        tray.Indicator.Should().Be(TrayIndicator.Blink);
+
+        tray.Dispose();
+        settings.SetTrayUnreadStyle("dot");
+        tray.Indicator.Should().Be(TrayIndicator.Blink);
+    }
+
+    /// <summary>
     /// Verifies the tooltip and the menu texts follow the language.
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>
@@ -160,7 +210,7 @@ public class TrayTests
         var scenario = new MainWindowViewModelTests.Scenario();
         var shown = 0;
         var quit = 0;
-        using var tray = new TrayViewModel(scenario.ViewModel, scenario.Localizer, () => shown++, () => quit++);
+        using var tray = new TrayViewModel(scenario.ViewModel, scenario.Localizer, new FakeAppSettings(), () => shown++, () => quit++);
 
         tray.OpenCommand.Execute(null);
         tray.ExitCommand.Execute(null);
@@ -179,7 +229,7 @@ public class TrayTests
         var scenario = new MainWindowViewModelTests.Scenario();
         await scenario.StartAsync();
         var shown = 0;
-        using var tray = new TrayViewModel(scenario.ViewModel, scenario.Localizer, () => shown++, () => { });
+        using var tray = new TrayViewModel(scenario.ViewModel, scenario.Localizer, new FakeAppSettings(), () => shown++, () => { });
 
         await tray.ComposeCommand.ExecuteAsync(null);
 
@@ -196,7 +246,7 @@ public class TrayTests
     {
         var scenario = new MainWindowViewModelTests.Scenario();
         var shown = 0;
-        using var tray = new TrayViewModel(scenario.ViewModel, scenario.Localizer, () => shown++, () => { });
+        using var tray = new TrayViewModel(scenario.ViewModel, scenario.Localizer, new FakeAppSettings(), () => shown++, () => { });
 
         await tray.SettingsCommand.ExecuteAsync(null);
 
@@ -230,6 +280,6 @@ public class TrayTests
     /// <returns>The view model.</returns>
     private static TrayViewModel Create(MainWindowViewModelTests.Scenario scenario)
     {
-        return new TrayViewModel(scenario.ViewModel, scenario.Localizer, () => { }, () => { });
+        return new TrayViewModel(scenario.ViewModel, scenario.Localizer, new FakeAppSettings(), () => { }, () => { });
     }
 }

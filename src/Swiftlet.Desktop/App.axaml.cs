@@ -139,6 +139,7 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
         var tray = new TrayViewModel(
             viewModel,
             services.GetRequiredService<ILocalizer>(),
+            settings,
             () => _activator?.BringToFront(),
             () => desktop.Shutdown());
         var icon = new AvaloniaTrayIcon(this, tray);
