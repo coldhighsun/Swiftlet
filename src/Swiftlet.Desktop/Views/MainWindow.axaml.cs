@@ -1,7 +1,14 @@
 using System.ComponentModel;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Swiftlet.Desktop.Controls;
+using Avalonia.VisualTree;
+using Swiftlet.Application.Abstractions;
+using Swiftlet.Desktop.Hosting;
+using Swiftlet.Desktop.Services;
 using Swiftlet.Desktop.ViewModels.Main;
 
 namespace Swiftlet.Desktop.Views;
@@ -22,6 +29,11 @@ public partial class MainWindow : Window
     private DispatcherTimer? _refreshTimer;
 
     /// <summary>
+    /// Shows the preview of the attachment the pointer rests on.
+    /// </summary>
+    private readonly AttachmentHoverController _attachmentHover;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="MainWindow"/> class.
     /// </summary>
     public MainWindow()
@@ -30,6 +42,17 @@ public partial class MainWindow : Window
         AccountTreeBehavior.Attach(FolderTree, AccountDropLine, (node, index) => (DataContext as MainWindowViewModel)?.MoveAccountAsync(node, index) ?? Task.CompletedTask);
         Opened += OnOpenedAsync;
         Closed += OnClosed;
+
+        _attachmentHover = new AttachmentHoverController(
+            LoadAttachmentPreviewAsync,
+            attachment => ((MainWindowViewModel)DataContext!).CreateAttachmentPreview(attachment),
+            new AvaloniaAttachmentPreviewPresenter());
+
+        // The attachment buttons live in a data template, so the pointer is tracked on the window and the button under it is looked up.
+        AddHandler(PointerMovedEvent, OnPointerMovedOverAttachments, RoutingStrategies.Bubble, handledEventsToo: true);
+        AddHandler(PointerPressedEvent, (_, _) => _attachmentHover.Leave(), RoutingStrategies.Tunnel, handledEventsToo: true);
+        PointerExited += (_, _) => _attachmentHover.Leave();
+        Deactivated += (_, _) => _attachmentHover.Leave();
     }
 
     /// <summary>
@@ -82,6 +105,37 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Loads the preview of an attachment through the current view model.
+    /// </summary>
+    /// <param name="attachment">The attachment.</param>
+    /// <param name="cancellationToken">Cancelled when the pointer leaves the attachment.</param>
+    /// <returns>The preview, or <see langword="null"/> when none could be loaded.</returns>
+    private Task<AttachmentPreview?> LoadAttachmentPreviewAsync(AttachmentItemViewModel attachment, CancellationToken cancellationToken)
+    {
+        return DataContext is MainWindowViewModel viewModel
+            ? viewModel.LoadAttachmentPreviewAsync(attachment, cancellationToken)
+            : Task.FromResult<AttachmentPreview?>(null);
+    }
+
+    /// <summary>
+    /// Starts or stops the attachment preview depending on whether the pointer is over an attachment button.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OnPointerMovedOverAttachments(object? sender, PointerEventArgs e)
+    {
+        var button = (e.Source as Visual)?.FindAncestorOfType<Button>(includeSelf: true);
+        if (button?.DataContext is AttachmentItemViewModel attachment)
+        {
+            _attachmentHover.Enter(attachment, button);
+        }
+        else
+        {
+            _attachmentHover.Leave();
+        }
+    }
+
+    /// <summary>
     /// Stops the periodic refresh and the sync-triggered refreshes.
     /// </summary>
     /// <param name="sender">The event sender.</param>
@@ -89,6 +143,7 @@ public partial class MainWindow : Window
     private void OnClosed(object? sender, EventArgs e)
     {
         _refreshTimer?.Stop();
+        _attachmentHover.Leave();
         (DataContext as MainWindowViewModel)?.Dispose();
     }
 }

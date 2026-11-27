@@ -45,6 +45,10 @@
   <data name="Reader_To" xml:space="preserve"><value>收件人：</value></data>
   <data name="Reader_Time" xml:space="preserve"><value>时间：</value></data>
   <data name="Reader_RemoteImagesBlocked" xml:space="preserve"><value>为保护隐私，已阻止加载远程图片。</value></data>
+  <data name="Preview_Loading" xml:space="preserve"><value>正在加载预览…</value></data>
+  <data name="Preview_NotAvailable" xml:space="preserve"><value>无法预览此文件</value></data>
+  <data name="Preview_TooLarge" xml:space="preserve"><value>文件过大，无法预览</value></data>
+  <data name="Preview_MoreEntries" xml:space="preserve"><value>……另有 {0} 项</value></data>
   <data name="Reader_LoadImages" xml:space="preserve"><value>加载图片</value></data>
   <data name="Reader_AlwaysAllowSender" xml:space="preserve"><value>总是加载 {0} 的图片</value></data>
   <data name="Reader_AlwaysAllowDomain" xml:space="preserve"><value>总是加载 {0} 域发件人的图片</value></data>

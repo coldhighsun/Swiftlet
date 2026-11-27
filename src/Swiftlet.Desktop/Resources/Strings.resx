@@ -45,6 +45,10 @@
   <data name="Reader_To" xml:space="preserve"><value>To:</value></data>
   <data name="Reader_Time" xml:space="preserve"><value>Time:</value></data>
   <data name="Reader_RemoteImagesBlocked" xml:space="preserve"><value>Remote images were blocked to protect your privacy.</value></data>
+  <data name="Preview_Loading" xml:space="preserve"><value>Loading preview…</value></data>
+  <data name="Preview_NotAvailable" xml:space="preserve"><value>No preview available</value></data>
+  <data name="Preview_TooLarge" xml:space="preserve"><value>File too large to preview</value></data>
+  <data name="Preview_MoreEntries" xml:space="preserve"><value>… and {0} more</value></data>
   <data name="Reader_LoadImages" xml:space="preserve"><value>Load images</value></data>
   <data name="Reader_AlwaysAllowSender" xml:space="preserve"><value>Always load images from {0}</value></data>
   <data name="Reader_AlwaysAllowDomain" xml:space="preserve"><value>Always load images from senders at {0}</value></data>

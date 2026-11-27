@@ -479,7 +479,7 @@
                         <DataTemplate DataType="main:AttachmentItemViewModel">
                           <Button Command="{Binding SaveCommand}" Margin="0,0,8,8" Padding="12,8" CornerRadius="12"
                                   Background="{DynamicResource Brush.WindowBg}" BorderThickness="1"
-                                  BorderBrush="{DynamicResource Brush.Border}" ToolTip.Tip="{Binding Label}"
+                                  BorderBrush="{DynamicResource Brush.Border}"
                                   AutomationProperties.Name="{Binding Label}">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                               <PathIcon Data="{StaticResource Icon.Attach}" />

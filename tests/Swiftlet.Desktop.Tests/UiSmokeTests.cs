@@ -1696,6 +1696,39 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies the attachment preview window shows the file, then a thumbnail or text, and replaces the loading message.
+    /// </summary>
+    [Fact]
+    public async Task AttachmentPreviewWindow_LoadedContent_ShowsTextAndThumbnail()
+    {
+        await DispatchAsync(
+            () =>
+            {
+                var account = TestData.Account();
+                var message = TestData.Message(account, TestData.Folder(account, "INBOX", Swiftlet.Domain.Folders.FolderRole.Inbox), 1, "Hello");
+                message.AddAttachment("notes.txt", "text/plain", 2048);
+                var attachment = new Swiftlet.Desktop.ViewModels.Main.AttachmentItemViewModel(
+                    account.Id, message.Attachments[0], _ => Task.CompletedTask);
+                var viewModel = new Swiftlet.Desktop.ViewModels.Main.AttachmentPreviewViewModel(attachment, TestLocalizer.Chinese());
+                var window = new AttachmentPreviewWindow { DataContext = viewModel };
+                Render(window, "attachment-preview-loading");
+                window.FindControl<TextBlock>("PreviewMessage")!.IsVisible.Should().BeTrue();
+
+                viewModel.Apply(new Swiftlet.Application.Abstractions.AttachmentPreview(
+                    Swiftlet.Application.Abstractions.AttachmentPreviewKind.Text, Text: "第一行\nsecond line", Truncated: true));
+                Snapshot(window, "attachment-preview-text");
+
+                window.FindControl<TextBlock>("PreviewMessage")!.IsVisible.Should().BeFalse();
+                var text = window.FindControl<TextBlock>("PreviewText")!;
+                text.IsVisible.Should().BeTrue();
+                text.Text.Should().Contain("second line");
+                window.Close();
+                return Task.CompletedTask;
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Verifies each attachment of a new message has a named remove button, and the address rows are borderless.
     /// </summary>
     [Fact]

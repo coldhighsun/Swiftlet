@@ -1695,6 +1695,50 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Creates what the preview window shows for an attachment, starting with the loading message.
+    /// </summary>
+    /// <param name="attachment">The attachment.</param>
+    /// <returns>The view model of the preview.</returns>
+    public AttachmentPreviewViewModel CreateAttachmentPreview(AttachmentItemViewModel attachment)
+    {
+        return new AttachmentPreviewViewModel(attachment, _localizer);
+    }
+
+    /// <summary>
+    /// Loads the quick preview of an attachment; a failure is only logged, because the preview is optional.
+    /// </summary>
+    /// <param name="attachment">The attachment.</param>
+    /// <param name="cancellationToken">Cancelled when the pointer leaves the attachment.</param>
+    /// <returns>The preview, or <see langword="null"/> when it could not be loaded.</returns>
+    public async Task<AttachmentPreview?> LoadAttachmentPreviewAsync(
+        AttachmentItemViewModel attachment,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(attachment);
+        try
+        {
+            return await _dispatcher.SendAsync(
+                new GetAttachmentPreviewQuery(attachment.AccountId, attachment.Attachment.MessageId, attachment.Attachment.Id),
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Offline, a refused sign-in or a message gone from the server all just mean "no preview"; none of them
+            // deserves an error in the status line for something the user did not ask for.
+            using (_logger.BeginMailScope(AccountName(attachment.AccountId)))
+            {
+                _logger.LogInformation(ex, "Attachment preview of message {MessageId} failed", attachment.Attachment.MessageId);
+            }
+
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Synchronizes the given accounts side by side and reloads the view.
     /// </summary>
     /// <param name="targets">The accounts to synchronize.</param>
