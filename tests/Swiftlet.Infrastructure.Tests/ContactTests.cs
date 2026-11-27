@@ -124,6 +124,30 @@ public sealed class ContactTests
     }
 
     /// <summary>
+    /// Verifies every address of every contact maps to its name, ignoring case, and a contact without a name is listed.
+    /// </summary>
+    [Fact]
+    public async Task GetContactNames_Contacts_MapsEveryAddress()
+    {
+        await using var db = await TestDatabase.CreateAsync(Token);
+        var repository = db.CreateContactRepository();
+        await repository.AddRangeAsync(
+            [
+                Contact.Create("Ann", null, ["Ann@x.com", "ann@work.com"]),
+                Contact.Create(string.Empty, null, ["nameless@x.com"], company: "Acme"),
+            ],
+            Token);
+        var handler = new GetContactNamesQueryHandler(repository);
+
+        var names = await handler.Handle(new GetContactNamesQuery(), Token);
+
+        names.Should().HaveCount(3);
+        names["ann@x.com"].Should().Be("Ann");
+        names["ANN@WORK.COM"].Should().Be("Ann");
+        names["nameless@x.com"].Should().BeEmpty();
+    }
+
+    /// <summary>
     /// Verifies sending remembers every recipient, including blind copies, with the typed name.
     /// </summary>
     [Fact]

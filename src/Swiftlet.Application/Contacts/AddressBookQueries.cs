@@ -26,6 +26,42 @@ public sealed record AddressBook(IReadOnlyList<Contact> Contacts, IReadOnlyList<
 public sealed record GetAddressBookQuery : IQuery<AddressBook>;
 
 /// <summary>
+/// Gets every address that belongs to a contact with the name of that contact. The name is empty for a contact without
+/// one. Addresses are compared ignoring case. Unlike <see cref="GetAddressBookQuery"/> it reads the contacts only, so it
+/// is cheap enough to run whenever names are shown.
+/// </summary>
+public sealed record GetContactNamesQuery : IQuery<IReadOnlyDictionary<string, string>>;
+
+/// <summary>
+/// Handles <see cref="GetContactNamesQuery"/>.
+/// </summary>
+/// <param name="contacts">The contact repository.</param>
+public sealed class GetContactNamesQueryHandler(IContactRepository contacts)
+    : IQueryHandler<GetContactNamesQuery, IReadOnlyDictionary<string, string>>
+{
+    /// <inheritdoc />
+    public async ValueTask<IReadOnlyDictionary<string, string>> Handle(
+        GetContactNamesQuery query,
+        CancellationToken cancellationToken)
+    {
+        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var contact in await contacts.GetAllAsync(cancellationToken))
+        {
+            foreach (var address in contact.Emails)
+            {
+                // Should two contacts share an address, a name wins over none, and otherwise the first one.
+                if (!names.TryGetValue(address, out var known) || known.Length == 0)
+                {
+                    names[address] = contact.DisplayName;
+                }
+            }
+        }
+
+        return names;
+    }
+}
+
+/// <summary>
 /// Handles <see cref="GetAddressBookQuery"/>. The collected addresses are derived on every request from the cached Sent
 /// folders and from the recipients remembered when sending, so nothing has to be updated during synchronization.
 /// </summary>
