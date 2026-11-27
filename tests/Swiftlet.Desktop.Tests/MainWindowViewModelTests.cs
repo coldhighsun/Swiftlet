@@ -2248,6 +2248,26 @@ public class MainWindowViewModelTests
     }
 
     /// <summary>
+    /// Verifies a change made outside the window reloads the list and the unread counts.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task RefreshAfterLocalChange_MessageRemoved_ReloadsListAndUnreadCounts()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        var counts = scenario.Dispatcher.Sent<GetUnreadCountsQuery>().Count;
+        scenario.Messages.RemoveAt(0);
+
+        scenario.ViewModel.RefreshAfterLocalChange();
+        await Task.WhenAll(scenario.UiThread.Invocations);
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.ViewModel.Messages.Should().ContainSingle();
+        scenario.Dispatcher.Sent<GetUnreadCountsQuery>().Count.Should().BeGreaterThan(counts);
+    }
+
+    /// <summary>
     /// Verifies delete is unavailable without a selected message.
     /// </summary>
     [Fact]

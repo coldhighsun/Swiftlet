@@ -395,7 +395,7 @@ public sealed class MailSyncService(
         var oldest = cacheWasEmpty ? _timeProvider.GetUtcNow() - EmptyCacheNewMailAge : DateTimeOffset.MinValue;
         var arrived = created
             .Where(m => !m.IsRead && m.SentAt >= oldest)
-            .Select(m => new NewMailSummary(m.FromName, m.FromAddress, m.Subject, m.SentAt))
+            .Select(m => new NewMailSummary(m.FromName, m.FromAddress, m.Subject, m.SentAt, m.Id, m.FolderId, m.Preview))
             .ToList();
         if (arrived.Count > 0)
         {

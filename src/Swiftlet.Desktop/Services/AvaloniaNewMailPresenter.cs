@@ -12,7 +12,7 @@ public sealed class AvaloniaNewMailPresenter : INewMailPresenter
     /// <summary>
     /// How long the pop-up stays without being touched.
     /// </summary>
-    private static readonly TimeSpan DisplayTime = TimeSpan.FromSeconds(6);
+    private static readonly TimeSpan DisplayTime = TimeSpan.FromSeconds(10);
 
     /// <summary>
     /// Counts down until the pop-up disappears.
@@ -33,6 +33,12 @@ public sealed class AvaloniaNewMailPresenter : INewMailPresenter
         _timer = new DispatcherTimer { Interval = displayTime ?? DisplayTime };
         _timer.Tick += (_, _) =>
         {
+            // An action that is still running keeps the pop-up, so its outcome can be seen; the countdown starts over.
+            if (_window?.DataContext is NewMailViewModel { IsBusy: true })
+            {
+                return;
+            }
+
             _timer.Stop();
             (_window?.DataContext as NewMailViewModel)?.CloseCommand.Execute(null);
         };

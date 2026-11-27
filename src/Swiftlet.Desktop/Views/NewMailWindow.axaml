@@ -12,22 +12,65 @@
   <!-- The window itself is transparent, so only this card with its round corners is seen. -->
   <Border x:Name="Card" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}"
           BorderThickness="1" CornerRadius="12" ClipToBounds="True">
-    <Grid ColumnDefinitions="*,Auto">
-      <Button x:Name="OpenButton" Classes="icon" Padding="16,12" HorizontalAlignment="Stretch"
-              HorizontalContentAlignment="Stretch" Command="{Binding OpenCommand}"
+    <StackPanel>
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Classes="caption" Text="{Binding Title}" Margin="16,0,8,0" VerticalAlignment="Center" />
+        <Button x:Name="CloseButton" Grid.Column="1" Classes="icon" Margin="0,4,4,0"
+                Command="{Binding CloseCommand}" ToolTip.Tip="{loc:Loc Common_Close}"
+                AutomationProperties.Name="{loc:Loc Common_Close}">
+          <PathIcon Data="{StaticResource Icon.Close}" Width="12" Height="12" />
+        </Button>
+      </Grid>
+
+      <!-- The text area keeps its height from message to message, so the action buttons stay where they are. -->
+      <Button x:Name="OpenButton" Classes="icon" Padding="16,4" Height="112" HorizontalAlignment="Stretch"
+              HorizontalContentAlignment="Stretch" VerticalContentAlignment="Top" Command="{Binding OpenCommand}"
               ToolTip.Tip="{loc:Loc Notification_Open}" AutomationProperties.Name="{loc:Loc Notification_Open}">
         <StackPanel Spacing="4">
-          <TextBlock Classes="caption" Text="{Binding Title}" />
           <TextBlock Text="{Binding Sender}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxLines="1" />
           <TextBlock Text="{Binding Subject}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="2" />
-          <TextBlock Classes="caption" Text="{Binding Footer}" TextTrimming="CharacterEllipsis" MaxLines="1" />
+          <TextBlock Classes="secondary" Text="{Binding Preview}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="2" />
         </StackPanel>
       </Button>
-      <Button x:Name="CloseButton" Grid.Column="1" Classes="icon" Margin="0,4,4,0" VerticalAlignment="Top"
-              Command="{Binding CloseCommand}" ToolTip.Tip="{loc:Loc Common_Close}"
-              AutomationProperties.Name="{loc:Loc Common_Close}">
-        <PathIcon Data="{StaticResource Icon.Close}" Width="12" Height="12" />
-      </Button>
-    </Grid>
+
+      <Grid ColumnDefinitions="*,Auto" Margin="16,4,16,0">
+        <TextBlock Classes="caption" Text="{Binding AccountAddress}" TextTrimming="CharacterEllipsis" MaxLines="1" />
+        <TextBlock Grid.Column="1" Classes="caption" Text="{Binding Position}" Margin="8,0,0,0"
+                   IsVisible="{Binding HasSeveral}" />
+      </Grid>
+      <TextBlock Classes="error" Text="{Binding Error}" Margin="16,4,16,0" TextWrapping="Wrap"
+                 IsVisible="{Binding HasError}" />
+
+      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto" Margin="8,4,8,8">
+        <Button x:Name="PreviousButton" Classes="icon" Command="{Binding PreviousCommand}"
+                IsVisible="{Binding HasSeveral}" ToolTip.Tip="{loc:Loc Notification_Previous}"
+                AutomationProperties.Name="{loc:Loc Notification_Previous}">
+          <PathIcon Data="{StaticResource Icon.ChevronLeft}" />
+        </Button>
+        <Button x:Name="NextButton" Grid.Column="1" Classes="icon" Command="{Binding NextCommand}"
+                IsVisible="{Binding HasSeveral}" ToolTip.Tip="{loc:Loc Notification_Next}"
+                AutomationProperties.Name="{loc:Loc Notification_Next}">
+          <PathIcon Data="{StaticResource Icon.ChevronRight}" />
+        </Button>
+        <Button x:Name="StarButton" Grid.Column="3" Classes="icon" Command="{Binding StarCommand}"
+                ToolTip.Tip="{loc:Loc Notification_Star}" AutomationProperties.Name="{loc:Loc Notification_Star}">
+          <PathIcon Data="{StaticResource Icon.Star}" />
+        </Button>
+        <Button x:Name="MarkReadButton" Grid.Column="4" Classes="icon" Command="{Binding MarkReadCommand}"
+                ToolTip.Tip="{loc:Loc Notification_MarkRead}" AutomationProperties.Name="{loc:Loc Notification_MarkRead}">
+          <PathIcon Data="{StaticResource Icon.MailRead}" />
+        </Button>
+        <Button x:Name="ArchiveButton" Grid.Column="5" Classes="icon" Command="{Binding ArchiveCommand}"
+                ToolTip.Tip="{Binding ArchiveHint}" ToolTip.ShowOnDisabled="True"
+                AutomationProperties.Name="{loc:Loc Toolbar_Archive}">
+          <PathIcon Data="{StaticResource Icon.Archive}" />
+        </Button>
+        <Button x:Name="DeleteButton" Grid.Column="6" Classes="icon danger" Command="{Binding DeleteCommand}"
+                ToolTip.Tip="{Binding DeleteHint}" ToolTip.ShowOnDisabled="True"
+                AutomationProperties.Name="{loc:Loc Toolbar_Delete}">
+          <PathIcon Data="{StaticResource Icon.Delete}" />
+        </Button>
+      </Grid>
+    </StackPanel>
   </Border>
 </Window>

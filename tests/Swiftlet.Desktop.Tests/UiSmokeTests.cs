@@ -1817,8 +1817,10 @@ public class UiSmokeTests
                         {
                             DataContext = new NewMailViewModel(
                                 new Swiftlet.Application.Sync.NewMailEventArgs(
-                                    account.Id, account.EmailAddress, [new("Alice", "alice@example.com", "Hello", DateTimeOffset.UnixEpoch)]),
-                                localizer),
+                                    account.Id, account.EmailAddress, [Summary("Alice", "Hello", DateTimeOffset.UnixEpoch)]),
+                                QuickActionDispatcher(),
+                                localizer,
+                                () => { }),
                         }),
                     ];
                     foreach (var (name, window) in windows)
@@ -1863,6 +1865,37 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Describes an announced message.
+    /// </summary>
+    /// <param name="sender">The sender name.</param>
+    /// <param name="subject">The subject.</param>
+    /// <param name="sentAt">When it was sent.</param>
+    /// <returns>The summary.</returns>
+    private static Swiftlet.Application.Sync.NewMailSummary Summary(string sender, string subject, DateTimeOffset sentAt)
+    {
+        return new Swiftlet.Application.Sync.NewMailSummary(
+            sender,
+            "sender@example.com",
+            subject,
+            sentAt,
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Shall we meet at noon? I booked a table near the office, tell me whether that works for you.");
+    }
+
+    /// <summary>
+    /// Creates a dispatcher answering that messages can be deleted but not archived.
+    /// </summary>
+    /// <returns>The dispatcher.</returns>
+    private static FakeDispatcher QuickActionDispatcher()
+    {
+        var dispatcher = new FakeDispatcher();
+        dispatcher.On<Swiftlet.Application.Messages.GetQuickActionsQuery>(
+            _ => new Swiftlet.Application.Messages.QuickActionAvailability(true, false));
+        return dispatcher;
+    }
+
+    /// <summary>
     /// Verifies the new mail pop-up shows its texts in both themes, and its buttons are named and work.
     /// </summary>
     /// <param name="language">The language.</param>
@@ -1873,17 +1906,18 @@ public class UiSmokeTests
     public async Task NewMailPopup_ShowsTextsAndClosesFromItsButton(string language, string expectedTitle)
     {
         await DispatchAsync(
-            () =>
+            async () =>
             {
                 LocalizationManager.Instance.SetPreference(language);
                 var arrival = new Swiftlet.Application.Sync.NewMailEventArgs(
                     Guid.NewGuid(),
                     "me@example.com",
                     [
-                        new("Alice", "alice@example.com", "A rather long subject that has to wrap onto a second line and then be cut off with an ellipsis", DateTimeOffset.UnixEpoch.AddDays(1)),
-                        new("Bob", "bob@example.com", "Earlier", DateTimeOffset.UnixEpoch),
+                        Summary("Alice", "A rather long subject that has to wrap onto a second line and then be cut off with an ellipsis", DateTimeOffset.UnixEpoch.AddDays(1)),
+                        Summary("Bob", "Earlier", DateTimeOffset.UnixEpoch),
                     ]);
-                using var viewModel = new NewMailViewModel(arrival, LocalizationManager.Instance);
+                using var viewModel = new NewMailViewModel(arrival, QuickActionDispatcher(), LocalizationManager.Instance, () => { });
+                await viewModel.AvailabilityLoad;
                 var presenter = new AvaloniaNewMailPresenter();
                 var closeRequests = 0;
                 viewModel.CloseRequested += (_, _) =>
@@ -1903,14 +1937,26 @@ public class UiSmokeTests
                 window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text)
                     .Should().Contain([expectedTitle, "Alice"]);
                 var buttons = window.GetVisualDescendants().OfType<Button>().ToList();
-                buttons.Should().HaveCount(2).And.OnlyContain(
-                    b => !string.IsNullOrEmpty(Avalonia.Automation.AutomationProperties.GetName(b)));
+                buttons.Select(b => b.Name).Should().BeEquivalentTo(
+                    "CloseButton", "OpenButton", "PreviousButton", "NextButton",
+                    "StarButton", "MarkReadButton", "ArchiveButton", "DeleteButton");
+                buttons.Should().OnlyContain(b => !string.IsNullOrEmpty(Avalonia.Automation.AutomationProperties.GetName(b)));
+                buttons.Single(b => b.Name == "DeleteButton").IsEffectivelyEnabled.Should().BeTrue();
+                var archive = buttons.Single(b => b.Name == "ArchiveButton");
+                archive.IsEffectivelyEnabled.Should().BeFalse();
+                ToolTip.GetShowOnDisabled(archive).Should().BeTrue();
+
+                // The action row must not move when the shown message has shorter texts.
+                var height = window.Bounds.Height;
+                viewModel.NextCommand.Execute(null);
+                await viewModel.AvailabilityLoad;
+                Snapshot(window, $"new-mail-second-{language}");
+                window.Bounds.Height.Should().Be(height);
 
                 buttons.Single(b => b.Name == "CloseButton").Command!.Execute(null);
 
                 closeRequests.Should().Be(1);
                 presenter.Window.Should().BeNull();
-                return Task.CompletedTask;
             },
             TestContext.Current.CancellationToken);
     }
@@ -1925,8 +1971,8 @@ public class UiSmokeTests
             () =>
             {
                 var arrival = new Swiftlet.Application.Sync.NewMailEventArgs(
-                    Guid.NewGuid(), "me@example.com", [new("Alice", "alice@example.com", "Hello", DateTimeOffset.UnixEpoch)]);
-                using var viewModel = new NewMailViewModel(arrival, LocalizationManager.Instance);
+                    Guid.NewGuid(), "me@example.com", [Summary("Alice", "Hello", DateTimeOffset.UnixEpoch)]);
+                using var viewModel = new NewMailViewModel(arrival, QuickActionDispatcher(), LocalizationManager.Instance, () => { });
                 var presenter = new AvaloniaNewMailPresenter();
                 var closeRequests = 0;
                 viewModel.CloseRequested += (_, _) => closeRequests++;

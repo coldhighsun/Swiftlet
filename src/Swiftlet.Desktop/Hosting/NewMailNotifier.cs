@@ -24,6 +24,11 @@ public sealed class NewMailNotifier : IDisposable
     private readonly IAppSettings _settings;
 
     /// <summary>
+    /// Runs the actions of the pop-up.
+    /// </summary>
+    private readonly IRequestDispatcher _dispatcher;
+
+    /// <summary>
     /// The localizer.
     /// </summary>
     private readonly ILocalizer _localizer;
@@ -42,6 +47,11 @@ public sealed class NewMailNotifier : IDisposable
     /// Shows the mail when the pop-up is clicked.
     /// </summary>
     private readonly Action _open;
+
+    /// <summary>
+    /// Told after an action of the pop-up changed a cached message.
+    /// </summary>
+    private readonly Action _changed;
 
     /// <summary>
     /// The logger.
@@ -63,27 +73,33 @@ public sealed class NewMailNotifier : IDisposable
     /// </summary>
     /// <param name="events">The sync notifications.</param>
     /// <param name="settings">The settings.</param>
+    /// <param name="dispatcher">Runs the actions of the pop-up.</param>
     /// <param name="localizer">The localizer.</param>
     /// <param name="uiThread">The UI thread marshaller.</param>
     /// <param name="presenter">Puts the pop-up on screen.</param>
     /// <param name="open">Shows the mail when the pop-up is clicked.</param>
+    /// <param name="changed">Told after an action of the pop-up changed a cached message.</param>
     /// <param name="logger">The logger; optional.</param>
     public NewMailNotifier(
         ISyncEvents events,
         IAppSettings settings,
+        IRequestDispatcher dispatcher,
         ILocalizer localizer,
         IUiThread uiThread,
         INewMailPresenter presenter,
         Action open,
+        Action changed,
         ILogger<NewMailNotifier>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(events);
         _events = events;
         _settings = settings;
+        _dispatcher = dispatcher;
         _localizer = localizer;
         _uiThread = uiThread;
         _presenter = presenter;
         _open = open;
+        _changed = changed;
         _logger = logger ?? NullLogger<NewMailNotifier>.Instance;
         events.NewMailArrived += OnNewMailArrived;
     }
@@ -144,9 +160,10 @@ public sealed class NewMailNotifier : IDisposable
 
         if (_current is null)
         {
-            _current = new NewMailViewModel(arrival, _localizer);
+            _current = new NewMailViewModel(arrival, _dispatcher, _localizer, _changed, _logger);
             _current.OpenRequested += OnOpenRequested;
             _current.CloseRequested += OnCloseRequested;
+            _current.Interacted += OnInteracted;
         }
         else
         {
@@ -178,6 +195,19 @@ public sealed class NewMailNotifier : IDisposable
     }
 
     /// <summary>
+    /// Keeps the pop-up on screen for a while longer after the user used it.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OnInteracted(object? sender, EventArgs e)
+    {
+        if (_current is { } current && ReferenceEquals(sender, current))
+        {
+            _presenter.Show(current);
+        }
+    }
+
+    /// <summary>
     /// Forgets the shown pop-up, so the next arrival starts a new count.
     /// </summary>
     private void Dismiss()
@@ -190,6 +220,7 @@ public sealed class NewMailNotifier : IDisposable
         _current = null;
         current.OpenRequested -= OnOpenRequested;
         current.CloseRequested -= OnCloseRequested;
+        current.Interacted -= OnInteracted;
         current.Dispose();
         _presenter.Close();
     }

@@ -1,5 +1,6 @@
 using Avalonia;
 using AwesomeAssertions;
+using Swiftlet.Application.Messages;
 using Swiftlet.Application.Sync;
 using Swiftlet.Desktop.Hosting;
 using Swiftlet.Desktop.Localization;
@@ -25,82 +26,307 @@ public class NewMailTests
         return new NewMailEventArgs(
             Guid.NewGuid(),
             account,
-            [.. messages.Select(m => new NewMailSummary("Alice", "alice@example.com", m.Subject, start.AddMinutes(m.Minute)))]);
+            [.. messages.Select(m => new NewMailSummary(
+                "Alice", "alice@example.com", m.Subject, start.AddMinutes(m.Minute), Guid.NewGuid(), Guid.NewGuid(), $"Text of {m.Subject}"))]);
     }
 
     /// <summary>
-    /// Verifies a single message shows its sender, subject and account.
+    /// Creates a dispatcher answering the requests of the pop-up.
+    /// </summary>
+    /// <param name="result">How every action ends.</param>
+    /// <param name="availability">Which actions are possible; all of them when omitted.</param>
+    /// <returns>The dispatcher.</returns>
+    private static FakeDispatcher Dispatcher(
+        QuickMailActionResult result = QuickMailActionResult.Done,
+        QuickActionAvailability? availability = null)
+    {
+        var dispatcher = new FakeDispatcher();
+        dispatcher.On<QuickMailActionCommand>(_ => result);
+        dispatcher.On<GetQuickActionsQuery>(_ => availability ?? new QuickActionAvailability(true, true));
+        return dispatcher;
+    }
+
+    /// <summary>
+    /// Creates a view model and waits until its buttons are up to date.
+    /// </summary>
+    /// <param name="dispatcher">The dispatcher.</param>
+    /// <param name="arrival">The first arrival.</param>
+    /// <param name="changed">Told about changes.</param>
+    /// <returns>The view model.</returns>
+    private static async Task<NewMailViewModel> CreateAsync(FakeDispatcher dispatcher, NewMailEventArgs arrival, Action? changed = null)
+    {
+        var viewModel = new NewMailViewModel(arrival, dispatcher, TestLocalizer.English(), changed ?? (() => { }));
+        await viewModel.AvailabilityLoad;
+        return viewModel;
+    }
+
+    /// <summary>
+    /// Verifies a single message shows its sender, subject, preview and account.
     /// </summary>
     [Fact]
-    public void ViewModel_OneMessage_ShowsSenderSubjectAndAccount()
+    public async Task ViewModel_OneMessage_ShowsItsTexts()
     {
-        using var viewModel = new NewMailViewModel(Arrival("me@example.com", ("Hello", 1)), TestLocalizer.English());
+        using var viewModel = await CreateAsync(Dispatcher(), Arrival("me@example.com", ("Hello", 1)));
 
         viewModel.Title.Should().Be("New message");
         viewModel.Sender.Should().Be("Alice");
         viewModel.Subject.Should().Be("Hello");
-        viewModel.Footer.Should().Be("me@example.com");
+        viewModel.Preview.Should().Be("Text of Hello");
+        viewModel.AccountAddress.Should().Be("me@example.com");
+        viewModel.HasSeveral.Should().BeFalse();
+        viewModel.PreviousCommand.CanExecute(null).Should().BeFalse();
+        viewModel.NextCommand.CanExecute(null).Should().BeFalse();
     }
 
     /// <summary>
-    /// Verifies several messages are counted and the newest one is shown.
+    /// Verifies several messages are counted and shown newest first.
     /// </summary>
     [Fact]
-    public void ViewModel_SeveralMessages_ShowsNewestAndCount()
+    public async Task ViewModel_SeveralMessages_ShowsNewestFirst()
     {
-        using var viewModel = new NewMailViewModel(
-            Arrival("me@example.com", ("newest", 3), ("old", 1), ("middle", 2)),
-            TestLocalizer.English());
+        using var viewModel = await CreateAsync(
+            Dispatcher(),
+            Arrival("me@example.com", ("old", 1), ("newest", 3), ("middle", 2)));
 
         viewModel.Title.Should().Be("3 new messages");
         viewModel.Subject.Should().Be("newest");
-        viewModel.Footer.Should().Be("me@example.com · 2 more");
+        viewModel.Position.Should().Be("1 of 3");
+        viewModel.NextCommand.Execute(null);
+        viewModel.Subject.Should().Be("middle");
+        viewModel.Position.Should().Be("2 of 3");
     }
 
     /// <summary>
     /// Verifies a missing sender name and subject have replacements.
     /// </summary>
     [Fact]
-    public void ViewModel_BlankNameAndSubject_UsesAddressAndPlaceholder()
+    public async Task ViewModel_BlankNameAndSubject_UsesAddressAndPlaceholder()
     {
         var arrival = new NewMailEventArgs(
             Guid.NewGuid(),
             "me@example.com",
-            [new NewMailSummary(" ", "bob@example.com", string.Empty, DateTimeOffset.UnixEpoch)]);
+            [new NewMailSummary(" ", "bob@example.com", string.Empty, DateTimeOffset.UnixEpoch, Guid.NewGuid(), Guid.NewGuid(), string.Empty)]);
 
-        using var viewModel = new NewMailViewModel(arrival, TestLocalizer.English());
+        using var viewModel = await CreateAsync(Dispatcher(), arrival);
 
         viewModel.Sender.Should().Be("bob@example.com");
         viewModel.Subject.Should().Be("(No subject)");
     }
 
     /// <summary>
-    /// Verifies added mail raises the count, and only newer mail replaces the shown message.
+    /// Verifies later mail joins the end of the queue, so the shown message does not change under the pointer.
     /// </summary>
     [Fact]
-    public void ViewModel_Add_CountsAllAndKeepsTheNewest()
+    public async Task ViewModel_Add_KeepsTheShownMessage()
     {
-        using var viewModel = new NewMailViewModel(Arrival("a@example.com", ("current", 5)), TestLocalizer.English());
+        using var viewModel = await CreateAsync(Dispatcher(), Arrival("a@example.com", ("current", 5)));
+        var later = Arrival("b@example.com", ("later", 9));
 
-        viewModel.Add(Arrival("b@example.com", ("earlier", 1)));
+        viewModel.Add(later);
+        viewModel.Add(later);
+
+        viewModel.Title.Should().Be("2 new messages");
         viewModel.Subject.Should().Be("current");
-        viewModel.Footer.Should().Be("a@example.com · 1 more");
-
-        viewModel.Add(Arrival("b@example.com", ("later", 9)));
-
-        viewModel.Title.Should().Be("3 new messages");
+        viewModel.Position.Should().Be("1 of 2");
+        viewModel.NextCommand.CanExecute(null).Should().BeTrue();
+        viewModel.NextCommand.Execute(null);
         viewModel.Subject.Should().Be("later");
-        viewModel.Footer.Should().Be("b@example.com · 2 more");
+        viewModel.AccountAddress.Should().Be("b@example.com");
+    }
+
+    /// <summary>
+    /// Verifies every action is sent for the shown message, reports the change and moves on.
+    /// </summary>
+    /// <param name="action">The action.</param>
+    [Theory]
+    [InlineData(QuickMailAction.MarkRead)]
+    [InlineData(QuickMailAction.Star)]
+    [InlineData(QuickMailAction.Archive)]
+    [InlineData(QuickMailAction.Delete)]
+    public async Task Action_Done_SendsItForTheShownMessageAndShowsTheNext(QuickMailAction action)
+    {
+        var dispatcher = Dispatcher();
+        var arrival = Arrival("me@example.com", ("first", 2), ("second", 1));
+        var changes = 0;
+        using var viewModel = await CreateAsync(dispatcher, arrival, () => changes++);
+        var command = action switch
+        {
+            QuickMailAction.MarkRead => viewModel.MarkReadCommand,
+            QuickMailAction.Star => viewModel.StarCommand,
+            QuickMailAction.Archive => viewModel.ArchiveCommand,
+            _ => viewModel.DeleteCommand,
+        };
+
+        await command.ExecuteAsync(null);
+
+        var shown = arrival.Messages[0];
+        dispatcher.Sent<QuickMailActionCommand>().Should().Equal(
+            new QuickMailActionCommand(arrival.AccountId, shown.MessageId, shown.FolderId, action));
+        changes.Should().Be(1);
+        viewModel.Subject.Should().Be("second");
+        viewModel.Title.Should().Be("New message");
+        viewModel.IsBusy.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies handling the last message of the queue goes back to the one before it, which stayed unread.
+    /// </summary>
+    [Fact]
+    public async Task Action_AtTheEnd_ShowsThePreviousMessage()
+    {
+        using var viewModel = await CreateAsync(Dispatcher(), Arrival("me@example.com", ("skipped", 2), ("last", 1)));
+        viewModel.NextCommand.Execute(null);
+        await viewModel.AvailabilityLoad;
+
+        await viewModel.MarkReadCommand.ExecuteAsync(null);
+
+        viewModel.Subject.Should().Be("skipped");
+        viewModel.HasSeveral.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies handling the only message asks to close the pop-up.
+    /// </summary>
+    [Fact]
+    public async Task Action_OnTheOnlyMessage_RequestsClose()
+    {
+        using var viewModel = await CreateAsync(Dispatcher(), Arrival("me@example.com", ("only", 1)));
+        var closes = 0;
+        var interactions = 0;
+        viewModel.CloseRequested += (_, _) => closes++;
+        viewModel.Interacted += (_, _) => interactions++;
+
+        await viewModel.DeleteCommand.ExecuteAsync(null);
+
+        closes.Should().Be(1);
+        interactions.Should().Be(0);
+    }
+
+    /// <summary>
+    /// Verifies a message that was removed elsewhere is skipped without reporting a change.
+    /// </summary>
+    [Fact]
+    public async Task Action_MessageGone_ShowsTheNextWithoutReportingAChange()
+    {
+        var changes = 0;
+        using var viewModel = await CreateAsync(
+            Dispatcher(QuickMailActionResult.Gone), Arrival("me@example.com", ("gone", 2), ("next", 1)), () => changes++);
+
+        await viewModel.DeleteCommand.ExecuteAsync(null);
+
+        viewModel.Subject.Should().Be("next");
+        changes.Should().Be(0);
+    }
+
+    /// <summary>
+    /// Verifies an action the account cannot carry out keeps the message and looks the buttons up again.
+    /// </summary>
+    [Fact]
+    public async Task Action_Unavailable_KeepsTheMessageAndRefreshesTheButtons()
+    {
+        var dispatcher = Dispatcher(QuickMailActionResult.Unavailable);
+        using var viewModel = await CreateAsync(dispatcher, Arrival("me@example.com", ("stays", 1)));
+        dispatcher.On<GetQuickActionsQuery>(_ => new QuickActionAvailability(true, false));
+
+        await viewModel.ArchiveCommand.ExecuteAsync(null);
+        await viewModel.AvailabilityLoad;
+
+        viewModel.Subject.Should().Be("stays");
+        viewModel.ArchiveCommand.CanExecute(null).Should().BeFalse();
+        viewModel.HasError.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies a failed action keeps the message, says so, and the line disappears with the next message.
+    /// </summary>
+    [Fact]
+    public async Task Action_Fails_KeepsTheMessageAndShowsAnError()
+    {
+        var dispatcher = Dispatcher();
+        dispatcher.On<QuickMailActionCommand>(_ => throw new InvalidOperationException("disk full"));
+        using var viewModel = await CreateAsync(dispatcher, Arrival("me@example.com", ("stays", 2), ("next", 1)));
+
+        await viewModel.MarkReadCommand.ExecuteAsync(null);
+
+        viewModel.Subject.Should().Be("stays");
+        viewModel.Error.Should().Be("That did not work. Try again.");
+        viewModel.IsBusy.Should().BeFalse();
+        viewModel.NextCommand.Execute(null);
+        viewModel.HasError.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies nothing else can start while an action runs.
+    /// </summary>
+    [Fact]
+    public async Task Action_Running_DisablesActionsAndNavigation()
+    {
+        var dispatcher = Dispatcher();
+        var release = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        dispatcher.OnAsync<QuickMailActionCommand>((_, _) => release.Task);
+        using var viewModel = await CreateAsync(dispatcher, Arrival("me@example.com", ("first", 2), ("second", 1)));
+
+        var running = viewModel.MarkReadCommand.ExecuteAsync(null);
+
+        viewModel.IsBusy.Should().BeTrue();
+        viewModel.StarCommand.CanExecute(null).Should().BeFalse();
+        viewModel.ArchiveCommand.CanExecute(null).Should().BeFalse();
+        viewModel.DeleteCommand.CanExecute(null).Should().BeFalse();
+        viewModel.NextCommand.CanExecute(null).Should().BeFalse();
+        release.SetResult(QuickMailActionResult.Done);
+        await running;
+        viewModel.StarCommand.CanExecute(null).Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies the buttons that move a message follow what the account can do and explain why they are disabled.
+    /// </summary>
+    [Fact]
+    public async Task Availability_NoTrashAndNoArchive_DisablesBothWithAReason()
+    {
+        using var viewModel = await CreateAsync(
+            Dispatcher(availability: new QuickActionAvailability(false, false)), Arrival("me@example.com", ("Hello", 1)));
+
+        viewModel.DeleteCommand.CanExecute(null).Should().BeFalse();
+        viewModel.ArchiveCommand.CanExecute(null).Should().BeFalse();
+        viewModel.MarkReadCommand.CanExecute(null).Should().BeTrue();
+        viewModel.DeleteHint.Should().Contain("Trash");
+        viewModel.ArchiveHint.Should().Contain("archive folder");
+    }
+
+    /// <summary>
+    /// Verifies a late answer about an earlier message does not decide the buttons of the shown one.
+    /// </summary>
+    [Fact]
+    public async Task Availability_LateAnswer_IsDropped()
+    {
+        var dispatcher = Dispatcher();
+        var late = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var arrival = Arrival("me@example.com", ("first", 2), ("second", 1));
+        var slowFolder = arrival.Messages[0].FolderId;
+        dispatcher.OnAsync<GetQuickActionsQuery>((query, _) => query.FolderId == slowFolder
+            ? late.Task
+            : Task.FromResult<object?>(new QuickActionAvailability(false, false)));
+        using var viewModel = new NewMailViewModel(arrival, dispatcher, TestLocalizer.English(), () => { });
+        var first = viewModel.AvailabilityLoad;
+
+        viewModel.NextCommand.Execute(null);
+        await viewModel.AvailabilityLoad;
+        late.SetResult(new QuickActionAvailability(true, true));
+        await first;
+
+        viewModel.DeleteCommand.CanExecute(null).Should().BeFalse();
     }
 
     /// <summary>
     /// Verifies the texts follow a language change until the view model is disposed.
     /// </summary>
     [Fact]
-    public void ViewModel_LanguageChange_RefreshesTextsUntilDisposed()
+    public async Task ViewModel_LanguageChange_RefreshesTextsUntilDisposed()
     {
         var localizer = TestLocalizer.English();
-        var viewModel = new NewMailViewModel(Arrival("me@example.com", ("Hello", 1)), localizer);
+        var viewModel = new NewMailViewModel(Arrival("me@example.com", ("Hello", 1)), Dispatcher(), localizer, () => { });
+        await viewModel.AvailabilityLoad;
         var changes = new List<string?>();
         viewModel.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
 
@@ -240,6 +466,39 @@ public class NewMailTests
     }
 
     /// <summary>
+    /// Verifies an action restarts the countdown of the pop-up and reports the change.
+    /// </summary>
+    [Fact]
+    public async Task Notifier_ActionWithMoreMail_ShowsAgainAndReportsTheChange()
+    {
+        var scenario = new Scenario();
+        scenario.Events.RaiseNewMail(Arrival("me@example.com", ("first", 1), ("second", 2)));
+        var popup = scenario.Presenter.Shown[0];
+
+        await popup.MarkReadCommand.ExecuteAsync(null);
+
+        scenario.Presenter.Shown.Should().HaveCount(2);
+        scenario.Presenter.Closed.Should().Be(0);
+        scenario.Changed.Should().Be(1);
+    }
+
+    /// <summary>
+    /// Verifies the pop-up disappears after the last message was handled.
+    /// </summary>
+    [Fact]
+    public async Task Notifier_LastMessageHandled_ClosesPopup()
+    {
+        var scenario = new Scenario();
+        scenario.Events.RaiseNewMail(Arrival("me@example.com", ("only", 1)));
+
+        await scenario.Presenter.Shown[0].MarkReadCommand.ExecuteAsync(null);
+
+        scenario.Presenter.Closed.Should().Be(1);
+        scenario.Presenter.Shown.Should().ContainSingle("a closed pop-up must not be shown again");
+        scenario.Opened.Should().Be(0);
+    }
+
+    /// <summary>
     /// A notifier wired to fakes.
     /// </summary>
     private sealed class Scenario
@@ -249,7 +508,8 @@ public class NewMailTests
         /// </summary>
         public Scenario()
         {
-            Notifier = new NewMailNotifier(Events, Settings, TestLocalizer.English(), UiThread, Presenter, () => Opened++);
+            Notifier = new NewMailNotifier(
+                Events, Settings, Dispatcher(), TestLocalizer.English(), UiThread, Presenter, () => Opened++, () => Changed++);
         }
 
         /// <summary>
@@ -281,5 +541,10 @@ public class NewMailTests
         /// Gets how often the mail was opened.
         /// </summary>
         public int Opened { get; private set; }
+
+        /// <summary>
+        /// Gets how often a change of cached mail was reported.
+        /// </summary>
+        public int Changed { get; private set; }
     }
 }

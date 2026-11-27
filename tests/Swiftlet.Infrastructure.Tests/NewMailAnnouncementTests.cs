@@ -50,8 +50,11 @@ public class NewMailAnnouncementTests
         var arrival = scenario.Announced.Should().ContainSingle().Subject;
         arrival.AccountId.Should().Be(scenario.AccountId);
         arrival.AccountAddress.Should().Be(scenario.AccountAddress);
-        arrival.Messages.Should().ContainSingle().Which.Should().Be(
-            new NewMailSummary("Alice", "alice@example.com", "Lunch?", TestData.Remote(2).SentAt));
+        var folder = (await db.CreateFolderRepository().GetByAccountAsync(scenario.AccountId, ct)).Single();
+        var cached = (await db.CreateMessageRepository().GetByFolderAsync(scenario.AccountId, folder.Id, 0, 10, ct))
+            .Single(m => m.Uid == 2);
+        arrival.Messages.Should().ContainSingle().Which.Should().Be(new NewMailSummary(
+            "Alice", "alice@example.com", "Lunch?", TestData.Remote(2).SentAt, cached.Id, folder.Id, cached.Preview));
     }
 
     /// <summary>

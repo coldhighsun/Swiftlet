@@ -21,7 +21,7 @@ public class SyncEventsTests
         var args = new NewMailEventArgs(
             Guid.NewGuid(),
             "me@example.com",
-            [new NewMailSummary("Alice", "alice@example.com", "Hello", DateTimeOffset.UnixEpoch)]);
+            [new NewMailSummary("Alice", "alice@example.com", "Hello", DateTimeOffset.UnixEpoch, Guid.NewGuid(), Guid.NewGuid(), "Hi")]);
 
         events.RaiseNewMailArrived(args);
 

@@ -366,6 +366,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Reloads the view and the unread counts after cached messages were changed outside this window, for example in the
+    /// new mail pop-up. Refreshes are coalesced with those following a sync.
+    /// </summary>
+    public void RefreshAfterLocalChange()
+    {
+        ScheduleRefresh();
+    }
+
+    /// <summary>
     /// Schedules a coalesced refresh on the UI thread; may be called from any thread.
     /// </summary>
     private void ScheduleRefresh()

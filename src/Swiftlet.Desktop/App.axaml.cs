@@ -174,6 +174,7 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
         var notifier = new NewMailNotifier(
             services.GetRequiredService<ISyncEvents>(),
             settings,
+            services.GetRequiredService<IRequestDispatcher>(),
             services.GetRequiredService<ILocalizer>(),
             services.GetRequiredService<IUiThread>(),
             new AvaloniaNewMailPresenter(),
@@ -182,6 +183,7 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
                 viewModel.SelectedNode = viewModel.UnifiedInbox;
                 _activator?.BringToFront();
             },
+            viewModel.RefreshAfterLocalChange,
             services.GetService<ILogger<NewMailNotifier>>());
         desktop.Exit += (_, _) => notifier.Dispose();
     }

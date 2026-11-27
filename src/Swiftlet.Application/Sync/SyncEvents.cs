@@ -25,7 +25,17 @@ public sealed class AccountSyncedEventArgs(Guid accountId, int newMessages) : Ev
 /// <param name="FromAddress">The sender's address.</param>
 /// <param name="Subject">The subject; may be empty.</param>
 /// <param name="SentAt">When the message was sent.</param>
-public sealed record NewMailSummary(string FromName, string FromAddress, string Subject, DateTimeOffset SentAt);
+/// <param name="MessageId">The identifier of the cached message.</param>
+/// <param name="FolderId">The folder the message arrived in.</param>
+/// <param name="Preview">The beginning of the message text; may be empty.</param>
+public sealed record NewMailSummary(
+    string FromName,
+    string FromAddress,
+    string Subject,
+    DateTimeOffset SentAt,
+    Guid MessageId,
+    Guid FolderId,
+    string Preview);
 
 /// <summary>
 /// Event data raised when unread mail arrived in the inbox of an account.
