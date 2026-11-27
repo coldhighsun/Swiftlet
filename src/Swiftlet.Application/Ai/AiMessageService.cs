@@ -1,32 +1,17 @@
 using System.Runtime.CompilerServices;
 using System.Text;
-using Microsoft.Extensions.AI;
 using Swiftlet.Domain.Messages;
 
 namespace Swiftlet.Application.Ai;
 
 /// <summary>
-/// Asks the AI service about one message and streams the answer. This is the only place mail content leaves the
-/// computer for AI, and only when the settings allow it.
+/// Asks the AI service about one message and keeps complete answers.
 /// </summary>
-/// <param name="settings">The AI settings.</param>
+/// <param name="answers">The connection to the service.</param>
 /// <param name="messages">The message repository.</param>
-/// <param name="clients">The client factory.</param>
-/// <param name="keys">The API key store.</param>
 /// <param name="cache">The recent answers.</param>
-public sealed class AiMessageService(
-    IAiSettings settings,
-    IMessageRepository messages,
-    IAiClientFactory clients,
-    AiKeyStore keys,
-    AiResultCache cache)
+public sealed class AiMessageService(AiAnswers answers, IMessageRepository messages, AiResultCache cache)
 {
-    /// <summary>
-    /// The output limit for Claude, whose own default is far too small; its thinking counts too. Other services keep
-    /// their own default, because many reject a limit above what the model supports.
-    /// </summary>
-    private const int ClaudeOutputTokens = 16_000;
-
     /// <summary>
     /// Streams the answer of a task about a message. A refused or interrupted answer is not kept.
     /// </summary>
@@ -45,13 +30,8 @@ public sealed class AiMessageService(
         bool fresh,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var configuration = settings.Ai;
-        if (!configuration.IsReady || !AiEndpoint.TryParse(configuration.Endpoint, out var endpoint))
-        {
-            throw new AiException(AiFailure.NotConfigured);
-        }
-
-        var key = new AiResultKey(messageId, task, language, configuration);
+        var target = answers.RequireTarget();
+        var key = new AiResultKey(messageId, task, language, target.Configuration);
         if (!fresh && cache.Get(key) is { } kept)
         {
             if (kept.IsInputTruncated)
@@ -70,59 +50,25 @@ public sealed class AiMessageService(
 
         var message = await messages.GetAsync(accountId, messageId, cancellationToken)
             ?? throw new InvalidOperationException($"Message {messageId} was not found.");
-        var content = AiContentBuilder.Build(message, configuration.MaxInputCharacters);
-        var apiKey = await keys.GetAsync(configuration.Provider, endpoint, cancellationToken);
-        using var client = clients.Create(
-            new AiConnection(configuration.Provider, endpoint, configuration.Model, apiKey));
+        var content = AiContentBuilder.Build(message, target.Configuration.MaxInputCharacters);
         if (content.IsTruncated)
         {
             yield return new AiOutput(AiOutputKind.InputTruncated);
         }
 
-        List<ChatMessage> prompt =
-        [
-            new(ChatRole.System, AiPrompts.System(task, language, content.Tag)),
-            new(ChatRole.User, content.Text),
-        ];
-        var options = new ChatOptions
-        {
-            MaxOutputTokens = configuration.Provider == AiProvider.Claude ? ClaudeOutputTokens : null,
-        };
-
         var answer = new StringBuilder();
-        var filter = new ThinkTagFilter();
-        ChatFinishReason? finish = null;
-        await foreach (var update in client.GetStreamingResponseAsync(prompt, options, cancellationToken))
+        var refused = false;
+        var cut = false;
+        var instructions = AiPrompts.System(task, language, content.Tag);
+        await foreach (var part in answers.AskAsync(target, instructions, content.Text, cancellationToken))
         {
-            finish = update.FinishReason ?? finish;
-            var visible = filter.Push(update.Text);
-            if (visible.Length > 0)
-            {
-                answer.Append(visible);
-                yield return new AiOutput(AiOutputKind.Text, visible);
-            }
+            answer.Append(part.Text);
+            refused |= part.Kind == AiOutputKind.Refused;
+            cut |= part.Kind == AiOutputKind.OutputTruncated;
+            yield return part;
         }
 
-        if (finish == ChatFinishReason.ContentFilter)
-        {
-            yield return new AiOutput(AiOutputKind.Refused);
-            yield break;
-        }
-
-        var rest = filter.Flush();
-        if (rest.Length > 0)
-        {
-            answer.Append(rest);
-            yield return new AiOutput(AiOutputKind.Text, rest);
-        }
-
-        var cut = finish == ChatFinishReason.Length;
-        if (cut)
-        {
-            yield return new AiOutput(AiOutputKind.OutputTruncated);
-        }
-
-        if (!string.IsNullOrWhiteSpace(answer.ToString()))
+        if (!refused && !string.IsNullOrWhiteSpace(answer.ToString()))
         {
             cache.Set(key, new AiResult(answer.ToString(), content.IsTruncated, cut));
         }

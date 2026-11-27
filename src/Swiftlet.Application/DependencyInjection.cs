@@ -49,6 +49,7 @@ public static class DependencyInjection
         services.AddScoped<PendingFlagService>();
         services.TryAddSingleton<IAiSettings, DisabledAiSettings>();
         services.AddScoped<AiKeyStore>();
+        services.AddScoped<AiAnswers>();
         services.AddScoped<AiMessageService>();
         services.AddSingleton<AiResultCache>();
         return services;
