@@ -438,4 +438,21 @@
   <data name="Ai_ErrorNetwork" xml:space="preserve"><value>无法连接到该服务。</value></data>
   <data name="Ai_ErrorTimeout" xml:space="preserve"><value>服务响应超时。</value></data>
   <data name="Ai_ErrorUnknown" xml:space="preserve"><value>请求失败，详情见日志。</value></data>
+  <data name="Ai_Summarize" xml:space="preserve"><value>摘要</value></data>
+  <data name="Ai_Translate" xml:space="preserve"><value>翻译</value></data>
+  <data name="Ai_SummaryTitle" xml:space="preserve"><value>邮件摘要</value></data>
+  <data name="Ai_TranslationTitle" xml:space="preserve"><value>邮件翻译</value></data>
+  <data name="Ai_LanguageEnglish" xml:space="preserve"><value>English</value></data>
+  <data name="Ai_LanguageChinese" xml:space="preserve"><value>中文</value></data>
+  <data name="Ai_Stop" xml:space="preserve"><value>停止</value></data>
+  <data name="Ai_Regenerate" xml:space="preserve"><value>重新生成</value></data>
+  <data name="Ai_Copy" xml:space="preserve"><value>复制结果</value></data>
+  <data name="Ai_ClosePanel" xml:space="preserve"><value>关闭 AI 面板</value></data>
+  <data name="Ai_Waiting" xml:space="preserve"><value>正在等待回复…</value></data>
+  <data name="Ai_Stopped" xml:space="preserve"><value>已停止，结果不完整。</value></data>
+  <data name="Ai_InputTruncated" xml:space="preserve"><value>邮件较长，只发送了开头部分。</value></data>
+  <data name="Ai_OutputTruncated" xml:space="preserve"><value>结果达到长度上限，已被截断。</value></data>
+  <data name="Ai_Refused" xml:space="preserve"><value>模型拒绝处理此邮件。</value></data>
+  <data name="Ai_EmptyAnswer" xml:space="preserve"><value>模型没有返回内容。</value></data>
+  <data name="Ai_ErrorNotConfigured" xml:space="preserve"><value>AI 尚未配置，请检查设置中的 AI 页。</value></data>
 </root>

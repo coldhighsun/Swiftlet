@@ -422,6 +422,19 @@
                 <TextBlock Text="{loc:Loc Toolbar_Forward}" />
               </StackPanel>
             </Button>
+            <!-- Present only while AI is switched on and set up. -->
+            <Button Classes="icon" Command="{Binding AiAssist.SummarizeCommand}"
+                    IsVisible="{Binding AiAssist.IsAvailable, FallbackValue=False}"
+                    ToolTip.Tip="{loc:Loc Ai_Summarize}" AutomationProperties.Name="{loc:Loc Ai_Summarize}">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <PathIcon Data="{StaticResource Icon.Sparkle}" />
+                <TextBlock Text="{loc:Loc Ai_Summarize}" />
+              </StackPanel>
+            </Button>
+            <Button Classes="icon" Command="{Binding AiAssist.TranslateCommand}"
+                    IsVisible="{Binding AiAssist.IsAvailable, FallbackValue=False}"
+                    Content="{loc:Loc Ai_Translate}"
+                    ToolTip.Tip="{loc:Loc Ai_Translate}" AutomationProperties.Name="{loc:Loc Ai_Translate}" />
             <Button Classes="icon" Command="{Binding ToggleFlagCommand}"
                     ToolTip.Tip="{loc:Loc Toolbar_Star}" AutomationProperties.Name="{loc:Loc Toolbar_Star}">
               <PathIcon Classes="star" Classes.flagged="{Binding SelectedMessage.IsFlagged, FallbackValue=False}" />
@@ -543,6 +556,10 @@
                     </ItemsControl>
                     <Border Height="1" Margin="0,0,0,12" Background="{DynamicResource Brush.Border}" />
                   </StackPanel>
+                  <!-- In the layout, not in a popup: the native web view below would cover one. -->
+                  <views:AiPanel DockPanel.Dock="Top"
+                                 DataContext="{Binding $parent[Window].((main:MainWindowViewModel)DataContext).AiAssist}"
+                                 IsVisible="{Binding IsOpen, FallbackValue=False}" />
                   <Border DockPanel.Dock="Top" IsVisible="{Binding HasBlockedRemoteImages}" Padding="12,8" Margin="0,0,0,8"
                           Background="{DynamicResource Brush.WarningBg}" CornerRadius="8">
                     <DockPanel>

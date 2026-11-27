@@ -12,6 +12,7 @@ using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
 using Swiftlet.Desktop.Settings;
 using Swiftlet.Desktop.ViewModels;
+using Swiftlet.Desktop.ViewModels.Ai;
 using Swiftlet.Desktop.ViewModels.Contacts;
 using Swiftlet.Desktop.ViewModels.Main;
 using Swiftlet.Desktop.ViewModels.Settings;
@@ -81,6 +82,7 @@ internal static class Program
         builder.Services.AddSingleton<IThemeApplier, AvaloniaThemeApplier>();
         builder.Services.AddSingleton(sp => new HtmlPreviewStore(Path.GetTempPath(), sp.GetService<ILogger<HtmlPreviewStore>>()));
         builder.Services.AddSingleton<MainWindowViewModel>();
+        builder.Services.AddSingleton<AiAssistViewModel>();
         builder.Services.AddTransient<AddAccountViewModel>();
         builder.Services.AddTransient<EditAccountViewModel>();
         builder.Services.AddTransient<LabelManagerViewModel>();

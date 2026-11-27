@@ -1223,6 +1223,81 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies the AI buttons of the reading pane open a panel above the mail that shows the answer, and that they are
+    /// absent without AI.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    /// <param name="summarize">The expected caption of the summary button.</param>
+    /// <param name="title">The expected title of the panel.</param>
+    [Theory]
+    [InlineData("zh-Hans", "摘要", "邮件摘要")]
+    [InlineData("en", "Summarize", "Summary")]
+    public async Task MainWindow_AiSummary_ShowsPanelAboveTheMail(string language, string summarize, string title)
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference(language);
+                var scenario = new MainWindowViewModelTests.Scenario(withAi: true);
+                scenario.Localizer.SetPreference(language);
+                scenario.Dispatcher.OnStream<Swiftlet.Application.Ai.SummarizeMessageQuery, Swiftlet.Application.Ai.AiOutput>(
+                    (_, token) => AiAssistViewModelTests.Parts(
+                        [
+                            new(Swiftlet.Application.Ai.AiOutputKind.InputTruncated),
+                            new(Swiftlet.Application.Ai.AiOutputKind.Text, "The answer of the model.\n- one point\n- another"),
+                        ],
+                        token));
+                await scenario.StartAsync();
+                scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, $"main-window-ai-closed-{language}", language);
+
+                window.GetVisualDescendants().OfType<AiPanel>().Single().IsVisible.Should().BeFalse();
+                var button = window.GetVisualDescendants().OfType<Button>().Single(b => UiQueries.Caption(b) == summarize);
+                button.IsEffectivelyVisible.Should().BeTrue();
+                button.Command!.Execute(null);
+                await scenario.ViewModel.AiAssist!.Running;
+                Snapshot(window, $"main-window-ai-open-{language}");
+
+                var panel = window.GetVisualDescendants().OfType<AiPanel>().Single();
+                panel.IsEffectivelyVisible.Should().BeTrue();
+                panel.GetVisualDescendants().OfType<TextBlock>().Select(b => b.Text).Should().Contain(title);
+                panel.GetVisualDescendants().OfType<SelectableTextBlock>().Single().Text
+                    .Should().StartWith("The answer of the model.");
+                panel.GetVisualDescendants().OfType<RadioButton>().Select(b => b.IsChecked)
+                    .Should().Equal(language == "zh-Hans", language == "en");
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the reading pane offers no AI actions without AI.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_WithoutAi_ShowsNoAiActions()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference("en");
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Localizer.SetPreference("en");
+                await scenario.StartAsync();
+                scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-no-ai", "en");
+
+                window.GetVisualDescendants().OfType<Button>()
+                    .Where(b => UiQueries.Caption(b) is "Summarize" or "Translate")
+                    .Should().HaveCount(2).And.OnlyContain(b => !b.IsEffectivelyVisible);
+                window.GetVisualDescendants().OfType<AiPanel>().Single().IsEffectivelyVisible.Should().BeFalse();
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Verifies the toolbar label flyout lists the labels and ticking one sends the set-label command.
     /// </summary>
     [Fact]
@@ -1584,7 +1659,8 @@ public class UiSmokeTests
             async () =>
             {
                 LocalizationManager.Instance.SetPreference(language);
-                var scenario = new MainWindowViewModelTests.Scenario();
+                // With AI, the pane has the most actions.
+                var scenario = new MainWindowViewModelTests.Scenario(withAi: true);
                 scenario.Localizer.SetPreference(language);
                 var longAccount = TestData.Account($"{new string('a', 68)}@example.com");
                 scenario.Dispatcher.On<Swiftlet.Application.Queries.GetAccountsQuery>(
@@ -1602,7 +1678,7 @@ public class UiSmokeTests
                 reader.Bounds.Width.Should().BeGreaterThanOrEqualTo(300);
                 reader.Bounds.Right.Should().BeLessThanOrEqualTo(800);
                 var buttons = window.FindControl<Control>("ReaderActions")!.GetVisualDescendants().OfType<Button>().ToList();
-                buttons.Should().HaveCount(7);
+                buttons.Should().HaveCount(9);
                 foreach (var button in buttons)
                 {
                     button.Bounds.Width.Should().BeGreaterThan(0);
@@ -1804,7 +1880,7 @@ public class UiSmokeTests
                 var layout = row.GetVisualDescendants().OfType<Border>().First(b => b.Name == "PART_LayoutRoot");
                 Color(layout.Background).Should().Be(Token(window, "Brush.AccentSubtle"));
                 var disabled = window.FindControl<Control>("ReaderActions")!.GetVisualDescendants().OfType<Button>()
-                    .Where(b => !b.IsEffectivelyEnabled)
+                    .Where(b => b.IsEffectivelyVisible && !b.IsEffectivelyEnabled)
                     .ToList();
                 disabled.Should().NotBeEmpty();
                 foreach (var button in disabled)

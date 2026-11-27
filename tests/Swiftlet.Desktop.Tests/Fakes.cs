@@ -48,6 +48,37 @@ internal sealed class FakeDispatcher : IRequestDispatcher
     }
 
     /// <summary>
+    /// The registered stream handlers keyed by request type.
+    /// </summary>
+    private readonly Dictionary<Type, Func<object, CancellationToken, object>> _streams = [];
+
+    /// <summary>
+    /// Registers a handler for a streamed query.
+    /// </summary>
+    /// <typeparam name="TRequest">The request type.</typeparam>
+    /// <typeparam name="TResponse">The item type.</typeparam>
+    /// <param name="handler">The handler producing the items.</param>
+    public void OnStream<TRequest, TResponse>(Func<TRequest, CancellationToken, IAsyncEnumerable<TResponse>> handler)
+    {
+        _streams[typeof(TRequest)] = (request, token) => handler((TRequest)request, token);
+    }
+
+    /// <inheritdoc />
+    public IAsyncEnumerable<TResponse> StreamAsync<TResponse>(
+        IStreamQuery<TResponse> query,
+        CancellationToken cancellationToken = default)
+    {
+        lock (Requests)
+        {
+            Requests.Add(query);
+        }
+
+        return _streams.TryGetValue(query.GetType(), out var handler)
+            ? (IAsyncEnumerable<TResponse>)handler(query, cancellationToken)
+            : throw new InvalidOperationException($"No fake handler for {query.GetType().Name}.");
+    }
+
+    /// <summary>
     /// Gets the recorded requests of one type.
     /// </summary>
     /// <typeparam name="TRequest">The request type.</typeparam>

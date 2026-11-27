@@ -13,6 +13,7 @@ using Swiftlet.Application.Sync;
 using Swiftlet.Desktop.Formatting;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
+using Swiftlet.Desktop.ViewModels.Ai;
 using Swiftlet.Desktop.ViewModels.Compose;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Folders;
@@ -199,6 +200,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <param name="logger">The logger; optional.</param>
     /// <param name="timeProvider">The clock; optional.</param>
     /// <param name="contacts">The address book names are taken from; optional.</param>
+    /// <param name="aiAssist">The AI panel of the reading pane; optional.</param>
     public MainWindowViewModel(
         IRequestDispatcher dispatcher,
         IDialogService dialogs,
@@ -208,8 +210,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         IRemoteImageRules remoteImageRules,
         ILogger<MainWindowViewModel>? logger = null,
         TimeProvider? timeProvider = null,
-        IContactDirectory? contacts = null)
+        IContactDirectory? contacts = null,
+        AiAssistViewModel? aiAssist = null)
     {
+        AiAssist = aiAssist;
         _contacts = contacts ?? new ContactDirectory(dispatcher);
         _addressActions = new MessageAddressActions(
             (name, address) => ShowContactsAsync(new ContactsRequest(name, address)),
@@ -243,6 +247,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Gets the AI panel of the reading pane, or <see langword="null"/> when there is none.
+    /// </summary>
+    public AiAssistViewModel? AiAssist { get; }
+
+    /// <summary>
     /// Stops reacting to sync notifications.
     /// </summary>
     public void Dispose()
@@ -259,6 +268,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _syncEvents.SyncStatusChanged -= OnSyncStatusChanged;
         _syncEvents.NewMailArrived -= OnNewMailArrived;
         _contacts.NamesChanged -= OnContactNamesChanged;
+        AiAssist?.Dispose();
     }
 
     /// <summary>
@@ -1684,6 +1694,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         AccountPage?.Refresh();
         NewMail?.Refresh();
+        AiAssist?.RefreshLanguage();
     }
 
     /// <summary>
@@ -1699,6 +1710,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         RebuildLabelChoices();
         FollowNewMail(value);
+        AiAssist?.Show(value?.Message);
         var sideEffects = new List<Task>();
         if (value is { IsRead: false })
         {

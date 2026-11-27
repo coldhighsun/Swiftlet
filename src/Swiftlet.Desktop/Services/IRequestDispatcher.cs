@@ -24,4 +24,13 @@ public interface IRequestDispatcher
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The result.</returns>
     Task<TResponse> SendAsync<TResponse>(IQuery<TResponse> query, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Runs a streamed query; its scope lives until the enumeration ends.
+    /// </summary>
+    /// <typeparam name="TResponse">The item type.</typeparam>
+    /// <param name="query">The query.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The items.</returns>
+    IAsyncEnumerable<TResponse> StreamAsync<TResponse>(IStreamQuery<TResponse> query, CancellationToken cancellationToken = default);
 }

@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Mediator;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -23,5 +24,18 @@ public sealed class ScopedRequestDispatcher(IServiceScopeFactory scopeFactory) :
         await using var scope = scopeFactory.CreateAsyncScope();
         var sender = scope.ServiceProvider.GetRequiredService<ISender>();
         return await sender.Send(query, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async IAsyncEnumerable<TResponse> StreamAsync<TResponse>(
+        IStreamQuery<TResponse> query,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var sender = scope.ServiceProvider.GetRequiredService<ISender>();
+        await foreach (var item in sender.CreateStream(query, cancellationToken))
+        {
+            yield return item;
+        }
     }
 }

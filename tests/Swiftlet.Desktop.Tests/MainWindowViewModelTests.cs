@@ -33,7 +33,8 @@ public class MainWindowViewModelTests
         /// Initializes a new instance of the <see cref="Scenario"/> class.
         /// </summary>
         /// <param name="hasAccount">Whether the account exists from the start.</param>
-        public Scenario(bool hasAccount = true)
+        /// <param name="withAi">Whether the AI panel exists, with AI switched on and set up.</param>
+        public Scenario(bool hasAccount = true, bool withAi = false)
         {
             HasAccount = hasAccount;
             Account = TestData.Account();
@@ -66,6 +67,14 @@ public class MainWindowViewModelTests
             Dispatcher.On<SyncAccountCommand>(_ => new SyncResult(2, 1, []));
             Dispatcher.On<SyncFolderCommand>(_ => new FolderSyncResult(0, false));
             Localizer = TestLocalizer.Chinese();
+            Swiftlet.Desktop.ViewModels.Ai.AiAssistViewModel? aiAssist = null;
+            if (withAi)
+            {
+                var ai = new Swiftlet.Application.Ai.DisabledAiSettings();
+                ai.SetAi(AiAssistViewModelTests.Ready());
+                aiAssist = new(Dispatcher, Dialogs, Localizer, ai, UiThread);
+            }
+
             ViewModel = new MainWindowViewModel(
                 Dispatcher,
                 Dialogs,
@@ -75,7 +84,8 @@ public class MainWindowViewModelTests
                 RemoteImageRules,
                 Logger,
                 Clock,
-                new Swiftlet.Desktop.Services.ContactDirectory(Dispatcher, settings: Settings));
+                new Swiftlet.Desktop.Services.ContactDirectory(Dispatcher, settings: Settings),
+                aiAssist);
         }
 
         /// <summary>

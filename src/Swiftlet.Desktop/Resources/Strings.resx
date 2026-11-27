@@ -438,4 +438,21 @@
   <data name="Ai_ErrorNetwork" xml:space="preserve"><value>The service could not be reached.</value></data>
   <data name="Ai_ErrorTimeout" xml:space="preserve"><value>The service did not answer in time.</value></data>
   <data name="Ai_ErrorUnknown" xml:space="preserve"><value>The request failed. See the log for details.</value></data>
+  <data name="Ai_Summarize" xml:space="preserve"><value>Summarize</value></data>
+  <data name="Ai_Translate" xml:space="preserve"><value>Translate</value></data>
+  <data name="Ai_SummaryTitle" xml:space="preserve"><value>Summary</value></data>
+  <data name="Ai_TranslationTitle" xml:space="preserve"><value>Translation</value></data>
+  <data name="Ai_LanguageEnglish" xml:space="preserve"><value>English</value></data>
+  <data name="Ai_LanguageChinese" xml:space="preserve"><value>中文</value></data>
+  <data name="Ai_Stop" xml:space="preserve"><value>Stop</value></data>
+  <data name="Ai_Regenerate" xml:space="preserve"><value>Generate again</value></data>
+  <data name="Ai_Copy" xml:space="preserve"><value>Copy the answer</value></data>
+  <data name="Ai_ClosePanel" xml:space="preserve"><value>Close the AI panel</value></data>
+  <data name="Ai_Waiting" xml:space="preserve"><value>Waiting for the answer…</value></data>
+  <data name="Ai_Stopped" xml:space="preserve"><value>Stopped; the answer is incomplete.</value></data>
+  <data name="Ai_InputTruncated" xml:space="preserve"><value>The message is long: only its beginning was sent.</value></data>
+  <data name="Ai_OutputTruncated" xml:space="preserve"><value>The answer was cut off at the length limit.</value></data>
+  <data name="Ai_Refused" xml:space="preserve"><value>The model declined to process this message.</value></data>
+  <data name="Ai_EmptyAnswer" xml:space="preserve"><value>The model returned no text.</value></data>
+  <data name="Ai_ErrorNotConfigured" xml:space="preserve"><value>AI is not set up. Check the AI page in the settings.</value></data>
 </root>
