@@ -126,6 +126,21 @@ public class SettingsStoreTests : IDisposable
     }
 
     /// <summary>
+    /// Verifies new mail notifications are on unless the file says otherwise, and the choice survives a restart.
+    /// </summary>
+    [Fact]
+    public void ShowNewMailNotifications_DefaultsOnAndIsSaved()
+    {
+        var store = new AppSettings(StorePath);
+        store.ShowNewMailNotifications.Should().BeTrue();
+
+        store.SetShowNewMailNotifications(false);
+        store.Save("en");
+
+        new AppSettings(StorePath).ShowNewMailNotifications.Should().BeFalse();
+    }
+
+    /// <summary>
     /// Verifies that, registered after AddApplication, the store is what the sync settings and language store resolve to.
     /// </summary>
     [Fact]

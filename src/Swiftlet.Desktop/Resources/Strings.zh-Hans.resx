@@ -217,6 +217,12 @@
   <data name="Compose_RemoveAttachment" xml:space="preserve"><value>移除附件</value></data>
   <data name="Settings_CloseToTray" xml:space="preserve"><value>关闭窗口后缩到托盘继续运行</value></data>
   <data name="Settings_CloseToTrayHint" xml:space="preserve"><value>邮件会继续同步，可从托盘图标的菜单退出。如果你的桌面环境不显示托盘图标，请关闭此项。</value></data>
+  <data name="Settings_NewMailNotifications" xml:space="preserve"><value>有新邮件时弹出提示</value></data>
+  <data name="Settings_NewMailNotificationsHint" xml:space="preserve"><value>收件箱收到未读邮件时，在屏幕角落显示一个小窗口。</value></data>
+  <data name="Notification_NewMessage" xml:space="preserve"><value>新邮件</value></data>
+  <data name="Notification_NewMessages" xml:space="preserve"><value>{0} 封新邮件</value></data>
+  <data name="Notification_More" xml:space="preserve"><value>{0} · 另有 {1} 封</value></data>
+  <data name="Notification_Open" xml:space="preserve"><value>查看新邮件</value></data>
   <data name="Tray_Open" xml:space="preserve"><value>打开 Swiftlet</value></data>
   <data name="Tray_Compose" xml:space="preserve"><value>写邮件</value></data>
   <data name="Tray_SyncAll" xml:space="preserve"><value>同步全部账户</value></data>

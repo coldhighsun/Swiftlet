@@ -39,6 +39,17 @@ public interface IAppSettings : ISyncSettings
     void SetCloseToTray(bool value);
 
     /// <summary>
+    /// Gets a value indicating whether newly arrived mail is announced with a pop-up.
+    /// </summary>
+    bool ShowNewMailNotifications { get; }
+
+    /// <summary>
+    /// Changes whether newly arrived mail is announced, and saves the choice.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    void SetShowNewMailNotifications(bool value);
+
+    /// <summary>
     /// Gets the saved theme preference, one of the <see cref="ThemePreference"/> values.
     /// </summary>
     string Theme { get; }
@@ -86,6 +97,11 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     private volatile bool _closeToTray;
 
     /// <summary>
+    /// The in-memory value, read when new mail arrives.
+    /// </summary>
+    private volatile bool _showNewMailNotifications;
+
+    /// <summary>
     /// The in-memory language preference, guarded by <see cref="_gate"/>; kept so a corrupt file never resets it.
     /// </summary>
     private string? _language;
@@ -108,6 +124,7 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
         _downloadFullHistory = file.DownloadFullHistory ?? true;
         _downloadAllMail = file.DownloadAllMail ?? true;
         _closeToTray = file.CloseToTray ?? true;
+        _showNewMailNotifications = file.ShowNewMailNotifications ?? true;
         _theme = ThemePreference.Normalize(
             file.Theme is { ValueKind: JsonValueKind.String } theme ? theme.GetString() : null);
     }
@@ -121,13 +138,15 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     /// <param name="DownloadAllMail">Whether the "All Mail" folder is downloaded too.</param>
     /// <param name="Theme">The theme preference; read as raw JSON so a wrongly typed value does not discard the whole file.</param>
     /// <param name="CloseToTray">Whether closing the main window hides it in the tray.</param>
+    /// <param name="ShowNewMailNotifications">Whether newly arrived mail is announced with a pop-up.</param>
     private sealed record SettingsFile(
         string? Language,
         bool? SyncServerDeletions,
         bool? DownloadFullHistory = null,
         bool? DownloadAllMail = null,
         JsonElement? Theme = null,
-        bool? CloseToTray = null);
+        bool? CloseToTray = null,
+        bool? ShowNewMailNotifications = null);
 
     /// <inheritdoc />
     public bool RemoveServerDeletedMessages => _removeServerDeletedMessages;
@@ -143,6 +162,9 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
 
     /// <inheritdoc />
     public bool CloseToTray => _closeToTray;
+
+    /// <inheritdoc />
+    public bool ShowNewMailNotifications => _showNewMailNotifications;
 
     /// <inheritdoc />
     public string Load()
@@ -204,6 +226,16 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     }
 
     /// <inheritdoc />
+    public void SetShowNewMailNotifications(bool value)
+    {
+        lock (_gate)
+        {
+            Write(Snapshot() with { ShowNewMailNotifications = value });
+            _showNewMailNotifications = value;
+        }
+    }
+
+    /// <inheritdoc />
     public void SetTheme(string value)
     {
         var theme = ThemePreference.Normalize(value);
@@ -226,7 +258,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
             _downloadFullHistory,
             _downloadAllMail,
             JsonSerializer.SerializeToElement(_theme),
-            _closeToTray);
+            _closeToTray,
+            _showNewMailNotifications);
     }
 
     /// <summary>

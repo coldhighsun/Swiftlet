@@ -5,6 +5,7 @@ using Avalonia.Threading;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Swiftlet.Application.Sync;
 using Swiftlet.Desktop.Hosting;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
@@ -68,6 +69,7 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
                 var main = CreateMainWindow();
                 Adopt(desktop, main);
                 KeepInTray(desktop, main);
+                AnnounceNewMail(desktop, main);
             }
             else
             {
@@ -149,6 +151,33 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
     }
 
     /// <summary>
+    /// Shows a pop-up when new mail arrives; clicking it brings up the main window with all inboxes.
+    /// </summary>
+    /// <param name="desktop">The desktop lifetime.</param>
+    /// <param name="window">The main window.</param>
+    private void AnnounceNewMail(IClassicDesktopStyleApplicationLifetime desktop, MainWindow window)
+    {
+        if (services.GetService<IAppSettings>() is not { } settings || window.DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        var notifier = new NewMailNotifier(
+            services.GetRequiredService<ISyncEvents>(),
+            settings,
+            services.GetRequiredService<ILocalizer>(),
+            services.GetRequiredService<IUiThread>(),
+            new AvaloniaNewMailPresenter(),
+            () =>
+            {
+                viewModel.SelectedNode = viewModel.UnifiedInbox;
+                _activator?.BringToFront();
+            },
+            services.GetService<ILogger<NewMailNotifier>>());
+        desktop.Exit += (_, _) => notifier.Dispose();
+    }
+
+    /// <summary>
     /// Creates the window that prepares the databases and then hands over to the main window.
     /// </summary>
     /// <param name="desktop">The desktop lifetime.</param>
@@ -175,6 +204,7 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
                 // The main window takes over first, so closing the startup window does not end the application.
                 Adopt(desktop, main);
                 KeepInTray(desktop, main);
+                AnnounceNewMail(desktop, main);
                 main.Show();
                 window.Close();
             }

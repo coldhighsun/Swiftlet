@@ -44,6 +44,8 @@
             <StackPanel Spacing="8">
               <CheckBox Content="{loc:Loc Settings_CloseToTray}" IsChecked="{Binding CloseToTray}" />
               <TextBlock Classes="caption" Text="{loc:Loc Settings_CloseToTrayHint}" TextWrapping="Wrap" Margin="28,0,0,0" />
+              <CheckBox Content="{loc:Loc Settings_NewMailNotifications}" IsChecked="{Binding ShowNewMailNotifications}" Margin="0,8,0,0" />
+              <TextBlock Classes="caption" Text="{loc:Loc Settings_NewMailNotificationsHint}" TextWrapping="Wrap" Margin="28,0,0,0" />
             </StackPanel>
           </StackPanel>
         </Border>

@@ -46,6 +46,8 @@ public sealed record MailSyncOptions(
 /// <param name="options">The synchronization limits.</param>
 /// <param name="logger">The logger.</param>
 /// <param name="flags">Serializes the flag work of a folder with the immediate flag push; optional.</param>
+/// <param name="events">Receives the report of newly arrived mail; optional.</param>
+/// <param name="timeProvider">The clock; optional.</param>
 public sealed class MailSyncService(
     IAccountRepository accounts,
     IFolderRepository folders,
@@ -54,8 +56,20 @@ public sealed class MailSyncService(
     ISyncSettings settings,
     MailSyncOptions options,
     ILogger<MailSyncService> logger,
-    FlagCoordinator? flags = null)
+    FlagCoordinator? flags = null,
+    SyncEvents? events = null,
+    TimeProvider? timeProvider = null)
 {
+    /// <summary>
+    /// How recently a message must have been sent to count as new when the inbox cache was empty.
+    /// </summary>
+    private static readonly TimeSpan EmptyCacheNewMailAge = TimeSpan.FromDays(1);
+
+    /// <summary>
+    /// The clock.
+    /// </summary>
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+
     /// <summary>
     /// The flag locks; a private set when no other flag writer exists.
     /// </summary>
@@ -297,6 +311,9 @@ public sealed class MailSyncService(
     {
         var uidValidity = await session.GetUidValidityAsync(folder.FullName, cancellationToken);
 
+        // Read before the update below: without a stored value this is the first sync, whose mail is not newly arrived.
+        var syncedBefore = folder.UidValidity.HasValue;
+
         // The entity is changed inside the gate too: a save of another worker would otherwise pick up a half-finished change.
         // The flag lock keeps the immediate push away from cached UIDs while they are being discarded or pushed here.
         var invalidated = await _flags.RunExclusiveAsync(
@@ -347,6 +364,11 @@ public sealed class MailSyncService(
 
             // Counted as soon as they are stored, so they are reported even if a later step of the folder fails.
             run.AddNewMessages(created.Count);
+
+            if (folder.Role == FolderRole.Inbox && syncedBefore && !invalidated)
+            {
+                AnnounceNewMail(run.Account, created, afterUid == 0);
+            }
         }
 
         // Under the flag lock: flags read before an immediate push must not be applied after it.
@@ -355,6 +377,26 @@ public sealed class MailSyncService(
             () => PullFlagsAsync(session, run.Database, folder, cancellationToken),
             cancellationToken);
         return (created.Count, invalidated || created.Count > 0 || pulled);
+    }
+
+    /// <summary>
+    /// Reports the unread messages among those just stored in an inbox.
+    /// </summary>
+    /// <param name="account">The account.</param>
+    /// <param name="created">The stored messages.</param>
+    /// <param name="cacheWasEmpty">Whether no message of the folder was cached before.</param>
+    private void AnnounceNewMail(MailAccount account, IReadOnlyList<MailMessage> created, bool cacheWasEmpty)
+    {
+        // An emptied cache is refilled with the newest server messages, which may be old mail that was never downloaded.
+        var oldest = cacheWasEmpty ? _timeProvider.GetUtcNow() - EmptyCacheNewMailAge : DateTimeOffset.MinValue;
+        var arrived = created
+            .Where(m => !m.IsRead && m.SentAt >= oldest)
+            .Select(m => new NewMailSummary(m.FromName, m.FromAddress, m.Subject, m.SentAt))
+            .ToList();
+        if (arrived.Count > 0)
+        {
+            events?.RaiseNewMailArrived(new NewMailEventArgs(account.Id, account.EmailAddress, arrived));
+        }
     }
 
     /// <summary>

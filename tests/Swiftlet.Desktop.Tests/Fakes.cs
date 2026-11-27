@@ -4,6 +4,7 @@ using Swiftlet.Application.Sync;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
 using Swiftlet.Desktop.Settings;
+using Swiftlet.Desktop.ViewModels;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Infrastructure.Persistence.Encryption;
 using Swiftlet.Domain.Folders;
@@ -424,6 +425,20 @@ internal sealed class FakeAppSettings : IAppSettings
     }
 
     /// <inheritdoc />
+    public bool ShowNewMailNotifications { get; set; } = true;
+
+    /// <inheritdoc />
+    public void SetShowNewMailNotifications(bool value)
+    {
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+
+        ShowNewMailNotifications = value;
+    }
+
+    /// <inheritdoc />
     public void SetTheme(string value)
     {
         if (Failure is not null)
@@ -668,6 +683,61 @@ internal sealed class FakeSyncEvents : ISyncEvents
     /// Gets a value indicating whether anyone is subscribed.
     /// </summary>
     public bool HasSubscribers => AccountSynced is not null || BackfillProgressed is not null || MessageSent is not null;
+
+    /// <inheritdoc />
+    public event EventHandler<NewMailEventArgs>? NewMailArrived;
+
+    /// <summary>
+    /// Raises <see cref="NewMailArrived"/> on the calling thread.
+    /// </summary>
+    /// <param name="args">The event data.</param>
+    public void RaiseNewMail(NewMailEventArgs args)
+    {
+        NewMailArrived?.Invoke(this, args);
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether anyone listens for new mail.
+    /// </summary>
+    public bool HasNewMailSubscribers => NewMailArrived is not null;
+}
+
+/// <summary>
+/// Records what the new mail pop-up was asked to do.
+/// </summary>
+internal sealed class FakeNewMailPresenter : INewMailPresenter
+{
+    /// <summary>
+    /// Gets the contents shown, one entry per call.
+    /// </summary>
+    public List<NewMailViewModel> Shown { get; } = [];
+
+    /// <summary>
+    /// Gets how often the pop-up was removed.
+    /// </summary>
+    public int Closed { get; private set; }
+
+    /// <summary>
+    /// Gets or sets an exception thrown instead of showing.
+    /// </summary>
+    public Exception? Failure { get; set; }
+
+    /// <inheritdoc />
+    public void Show(NewMailViewModel viewModel)
+    {
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+
+        Shown.Add(viewModel);
+    }
+
+    /// <inheritdoc />
+    public void Close()
+    {
+        Closed++;
+    }
 }
 
 /// <summary>

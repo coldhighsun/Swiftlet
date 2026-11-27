@@ -269,6 +269,36 @@ public class SettingsViewModelTests
     }
 
     /// <summary>
+    /// Verifies toggling the new mail notification saves the choice.
+    /// </summary>
+    [Fact]
+    public void ShowNewMailNotifications_Toggle_SavesValue()
+    {
+        var settings = new FakeAppSettings();
+        var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules());
+        viewModel.ShowNewMailNotifications.Should().BeTrue();
+
+        viewModel.ShowNewMailNotifications = false;
+
+        settings.ShowNewMailNotifications.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies a failed save of the notification choice is reported and the checkbox returns to the stored value.
+    /// </summary>
+    [Fact]
+    public void ShowNewMailNotifications_SaveFails_ShowsErrorAndRevertsValue()
+    {
+        var settings = new FakeAppSettings { Failure = new IOException("disk full") };
+        var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules());
+
+        viewModel.ShowNewMailNotifications = false;
+
+        viewModel.ShowNewMailNotifications.Should().BeTrue();
+        viewModel.ErrorText.Should().Contain("disk full");
+    }
+
+    /// <summary>
     /// Verifies a failed save is reported and the checkbox returns to the stored value.
     /// </summary>
     [Fact]

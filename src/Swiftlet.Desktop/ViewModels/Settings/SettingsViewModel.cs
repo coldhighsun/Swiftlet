@@ -63,6 +63,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         DownloadFullHistory = settings.DownloadFullHistory;
         DownloadAllMail = settings.DownloadAllMail;
         CloseToTray = settings.CloseToTray;
+        ShowNewMailNotifications = settings.ShowNewMailNotifications;
         RefreshRemoteImageRules();
         _protection = protection;
         _themeApplier = themeApplier;
@@ -195,6 +196,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     public partial bool CloseToTray { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether newly arrived mail is announced with a pop-up.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool ShowNewMailNotifications { get; set; }
+
+    /// <summary>
     /// Gets or sets the localized error of the last failed save, or <see langword="null"/>.
     /// </summary>
     [ObservableProperty]
@@ -293,6 +300,30 @@ public sealed partial class SettingsViewModel : ObservableObject
             // The file could not be written; show it and put the checkbox back so it matches what is stored.
             ErrorText = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
             CloseToTray = _settings.CloseToTray;
+        }
+    }
+
+    /// <summary>
+    /// Saves the new value as soon as the checkbox changes.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    partial void OnShowNewMailNotificationsChanged(bool value)
+    {
+        if (value == _settings.ShowNewMailNotifications)
+        {
+            return;
+        }
+
+        ErrorText = null;
+        try
+        {
+            _settings.SetShowNewMailNotifications(value);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The file could not be written; show it and put the checkbox back so it matches what is stored.
+            ErrorText = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
+            ShowNewMailNotifications = _settings.ShowNewMailNotifications;
         }
     }
 

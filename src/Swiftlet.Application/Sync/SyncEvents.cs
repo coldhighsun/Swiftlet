@@ -19,6 +19,39 @@ public sealed class AccountSyncedEventArgs(Guid accountId, int newMessages) : Ev
 }
 
 /// <summary>
+/// What a notification shows about a newly arrived message.
+/// </summary>
+/// <param name="FromName">The sender's display name; may be empty.</param>
+/// <param name="FromAddress">The sender's address.</param>
+/// <param name="Subject">The subject; may be empty.</param>
+/// <param name="SentAt">When the message was sent.</param>
+public sealed record NewMailSummary(string FromName, string FromAddress, string Subject, DateTimeOffset SentAt);
+
+/// <summary>
+/// Event data raised when unread mail arrived in the inbox of an account.
+/// </summary>
+/// <param name="accountId">The account identifier.</param>
+/// <param name="accountAddress">The email address of the account.</param>
+/// <param name="messages">The new messages; never empty.</param>
+public sealed class NewMailEventArgs(Guid accountId, string accountAddress, IReadOnlyList<NewMailSummary> messages) : EventArgs
+{
+    /// <summary>
+    /// Gets the account identifier.
+    /// </summary>
+    public Guid AccountId { get; } = accountId;
+
+    /// <summary>
+    /// Gets the email address of the account.
+    /// </summary>
+    public string AccountAddress { get; } = accountAddress;
+
+    /// <summary>
+    /// Gets the new messages.
+    /// </summary>
+    public IReadOnlyList<NewMailSummary> Messages { get; } = messages;
+}
+
+/// <summary>
 /// Event data raised after a message was sent.
 /// </summary>
 /// <param name="accountId">The sending account.</param>
@@ -133,6 +166,11 @@ public interface ISyncEvents
     /// Raised after a message was delivered. May be raised on a background thread.
     /// </summary>
     event EventHandler<MessageSentEventArgs>? MessageSent;
+
+    /// <summary>
+    /// Raised when a sync stored unread mail that newly arrived in an inbox. May be raised on a background thread.
+    /// </summary>
+    event EventHandler<NewMailEventArgs>? NewMailArrived;
 }
 
 /// <summary>
@@ -151,6 +189,36 @@ public sealed class SyncEvents : ISyncEvents
 
     /// <inheritdoc />
     public event EventHandler<MessageSentEventArgs>? MessageSent;
+
+    /// <inheritdoc />
+    public event EventHandler<NewMailEventArgs>? NewMailArrived;
+
+    /// <summary>
+    /// Raises <see cref="NewMailArrived"/>; a failing subscriber never affects the sync or the other subscribers.
+    /// </summary>
+    /// <param name="args">The event data.</param>
+    public void RaiseNewMailArrived(NewMailEventArgs args)
+    {
+        var handlers = NewMailArrived;
+        if (handlers is null)
+        {
+            return;
+        }
+
+        foreach (var handler in handlers.GetInvocationList().Cast<EventHandler<NewMailEventArgs>>())
+        {
+            try
+            {
+                handler(this, args);
+            }
+#pragma warning disable CA1031 // Subscribers are arbitrary UI code; one failing must not break the sync or the other subscribers.
+            catch (Exception)
+#pragma warning restore CA1031
+            {
+                // Intentionally ignored, as in RaiseAccountSynced.
+            }
+        }
+    }
 
     /// <summary>
     /// Raises <see cref="MessageSent"/>; a failing subscriber never affects the send or the other subscribers.

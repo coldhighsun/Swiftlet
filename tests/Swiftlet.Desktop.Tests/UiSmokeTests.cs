@@ -746,12 +746,12 @@ public class UiSmokeTests
 
                 window.Title.Should().Be(title);
                 var boxes = window.GetVisualDescendants().OfType<CheckBox>().ToList();
-                boxes.Should().HaveCount(4);
+                boxes.Should().HaveCount(5);
                 window.GetVisualDescendants().OfType<ComboBox>().Where(c => c.IsEffectivelyVisible)
                     .Select(c => c.SelectedItem).Should().Equal(selector.SelectedOption, viewModel.SelectedTheme);
                 var box = boxes.Single(b => b.Content as string == checkbox);
                 box.IsChecked.Should().BeFalse();
-                boxes.Where(b => b != box).Should().OnlyContain(b => b.IsChecked == true, "the tray setting and the history downloads are on by default");
+                boxes.Where(b => b != box).Should().OnlyContain(b => b.IsChecked == true, "the tray, notification and history download settings are on by default");
                 window.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).Should().Contain(close);
                 window.GetVisualDescendants().OfType<TextBlock>().Count(t => !string.IsNullOrEmpty(t.Text) && t.Text.Length > 40).Should().BeGreaterThan(0);
                 window.Close();
@@ -1461,6 +1461,13 @@ public class UiSmokeTests
                         ("labels", new LabelManagerWindow { DataContext = labels }),
                         ("startup", new StartupWindow { DataContext = startup }),
                         ("confirm", ConfirmWindow.Create("删除", "确定删除这封邮件吗？", "删除", "取消")),
+                        ("new-mail", new NewMailWindow
+                        {
+                            DataContext = new NewMailViewModel(
+                                new Swiftlet.Application.Sync.NewMailEventArgs(
+                                    account.Id, account.EmailAddress, [new("Alice", "alice@example.com", "Hello", DateTimeOffset.UnixEpoch)]),
+                                localizer),
+                        }),
                     ];
                     foreach (var (name, window) in windows)
                     {
@@ -1480,6 +1487,82 @@ public class UiSmokeTests
                 {
                     application.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Default;
                 }
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the new mail pop-up shows its texts in both themes, and its buttons are named and work.
+    /// </summary>
+    /// <param name="language">The language.</param>
+    /// <param name="expectedTitle">The expected heading.</param>
+    [Theory]
+    [InlineData("en", "2 new messages")]
+    [InlineData("zh-Hans", "2 封新邮件")]
+    public async Task NewMailPopup_ShowsTextsAndClosesFromItsButton(string language, string expectedTitle)
+    {
+        await DispatchAsync(
+            () =>
+            {
+                LocalizationManager.Instance.SetPreference(language);
+                var arrival = new Swiftlet.Application.Sync.NewMailEventArgs(
+                    Guid.NewGuid(),
+                    "me@example.com",
+                    [
+                        new("Alice", "alice@example.com", "A rather long subject that has to wrap onto a second line and then be cut off with an ellipsis", DateTimeOffset.UnixEpoch.AddDays(1)),
+                        new("Bob", "bob@example.com", "Earlier", DateTimeOffset.UnixEpoch),
+                    ]);
+                using var viewModel = new NewMailViewModel(arrival, LocalizationManager.Instance);
+                var presenter = new AvaloniaNewMailPresenter();
+                var closeRequests = 0;
+                viewModel.CloseRequested += (_, _) =>
+                {
+                    closeRequests++;
+                    presenter.Close();
+                };
+
+                presenter.Show(viewModel);
+                var window = presenter.Window!;
+                Snapshot(window, $"new-mail-{language}");
+
+                window.ShowActivated.Should().BeFalse();
+                window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text)
+                    .Should().Contain([expectedTitle, "Alice"]);
+                var buttons = window.GetVisualDescendants().OfType<Button>().ToList();
+                buttons.Should().HaveCount(2).And.OnlyContain(
+                    b => !string.IsNullOrEmpty(Avalonia.Automation.AutomationProperties.GetName(b)));
+
+                buttons.Single(b => b.Name == "CloseButton").Command!.Execute(null);
+
+                closeRequests.Should().Be(1);
+                presenter.Window.Should().BeNull();
+                return Task.CompletedTask;
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies a pop-up window closed from outside tells its view model.
+    /// </summary>
+    [Fact]
+    public async Task NewMailPopup_ClosedByWindowSystem_RequestsClose()
+    {
+        await DispatchAsync(
+            () =>
+            {
+                var arrival = new Swiftlet.Application.Sync.NewMailEventArgs(
+                    Guid.NewGuid(), "me@example.com", [new("Alice", "alice@example.com", "Hello", DateTimeOffset.UnixEpoch)]);
+                using var viewModel = new NewMailViewModel(arrival, LocalizationManager.Instance);
+                var presenter = new AvaloniaNewMailPresenter();
+                var closeRequests = 0;
+                viewModel.CloseRequested += (_, _) => closeRequests++;
+                presenter.Show(viewModel);
+
+                presenter.Window!.Close();
+
+                closeRequests.Should().Be(1);
+                presenter.Window.Should().BeNull();
+                return Task.CompletedTask;
             },
             TestContext.Current.CancellationToken);
     }

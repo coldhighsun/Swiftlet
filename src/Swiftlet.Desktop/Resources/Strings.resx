@@ -217,6 +217,12 @@
   <data name="Compose_RemoveAttachment" xml:space="preserve"><value>Remove attachment</value></data>
   <data name="Settings_CloseToTray" xml:space="preserve"><value>Keep running in the tray when the window is closed</value></data>
   <data name="Settings_CloseToTrayHint" xml:space="preserve"><value>Mail keeps synchronizing. Quit from the menu of the tray icon. Turn this off if your desktop shows no tray icons.</value></data>
+  <data name="Settings_NewMailNotifications" xml:space="preserve"><value>Show a notification for new mail</value></data>
+  <data name="Settings_NewMailNotificationsHint" xml:space="preserve"><value>A small window appears in the corner of the screen when unread mail arrives in an inbox.</value></data>
+  <data name="Notification_NewMessage" xml:space="preserve"><value>New message</value></data>
+  <data name="Notification_NewMessages" xml:space="preserve"><value>{0} new messages</value></data>
+  <data name="Notification_More" xml:space="preserve"><value>{0} · {1} more</value></data>
+  <data name="Notification_Open" xml:space="preserve"><value>Show new mail</value></data>
   <data name="Tray_Open" xml:space="preserve"><value>Open Swiftlet</value></data>
   <data name="Tray_Compose" xml:space="preserve"><value>Compose</value></data>
   <data name="Tray_SyncAll" xml:space="preserve"><value>Sync all accounts</value></data>
