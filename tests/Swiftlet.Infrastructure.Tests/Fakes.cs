@@ -593,6 +593,18 @@ internal sealed class FakeImapSessionFactory : IImapSessionFactory
     /// </summary>
     public int ConnectCount => Volatile.Read(ref _connectCount);
 
+    /// <summary>
+    /// Gets the passwords passed to connection attempts that did not use the stored one.
+    /// </summary>
+    public List<string> Passwords { get; } = [];
+
+    /// <inheritdoc />
+    public Task<IImapSession> ConnectAsync(MailAccount account, string password, CancellationToken cancellationToken = default)
+    {
+        Passwords.Add(password);
+        return ConnectAsync(account, cancellationToken);
+    }
+
     /// <inheritdoc />
     public Task<IImapSession> ConnectAsync(MailAccount account, CancellationToken cancellationToken = default)
     {

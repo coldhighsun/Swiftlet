@@ -30,6 +30,15 @@ internal sealed class AccountRepository(GlobalDbContext context, IAccountDbConte
     }
 
     /// <inheritdoc />
+    public async Task UpdateAsync(MailAccount account, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(account);
+
+        // The account is tracked by this context (it was read from it), so only the changed columns are written.
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         // The account row is the point of no return. Label links of its messages are removed with it (the messages

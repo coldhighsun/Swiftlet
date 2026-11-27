@@ -24,10 +24,29 @@ internal sealed class MailKitImapSessionFactory(
     private static readonly TimeSpan NetworkTimeout = TimeSpan.FromSeconds(30);
 
     /// <inheritdoc />
-    public async Task<IImapSession> ConnectAsync(MailAccount account, CancellationToken cancellationToken = default)
+    public Task<IImapSession> ConnectAsync(MailAccount account, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(account);
+        return OpenAsync(account, null, cancellationToken);
+    }
 
+    /// <inheritdoc />
+    public Task<IImapSession> ConnectAsync(MailAccount account, string password, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(account);
+        ArgumentException.ThrowIfNullOrEmpty(password);
+        return OpenAsync(account, password, cancellationToken);
+    }
+
+    /// <summary>
+    /// Connects and authenticates.
+    /// </summary>
+    /// <param name="account">The account.</param>
+    /// <param name="password">The password to use instead of the stored one, if any.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The open session.</returns>
+    private async Task<IImapSession> OpenAsync(MailAccount account, string? password, CancellationToken cancellationToken)
+    {
         logger.LogInformation(
             "Connecting to IMAP {Host}:{Port} for {Account} ({Auth})",
             account.Imap.Host,
@@ -47,7 +66,7 @@ internal sealed class MailKitImapSessionFactory(
                 await client.IdentifyAsync(new ImapImplementation { Name = "Swiftlet", Version = "1.0" }, cancellationToken);
             }
 
-            await MailAuthentication.AuthenticateAsync(client, account, secrets, accessTokens, cancellationToken);
+            await MailAuthentication.AuthenticateAsync(client, account, secrets, accessTokens, cancellationToken, password);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

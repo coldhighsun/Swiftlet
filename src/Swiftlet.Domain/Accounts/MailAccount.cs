@@ -116,6 +116,44 @@ public sealed class MailAccount
     }
 
     /// <summary>
+    /// Changes the sender name. A blank name removes a name the user typed, falling back to the local part of the
+    /// address; a name that was filled in automatically is kept.
+    /// </summary>
+    /// <param name="displayName">The name typed by the user; blank for none.</param>
+    public void ChangeDisplayName(string? displayName)
+    {
+        if (!string.IsNullOrWhiteSpace(displayName))
+        {
+            DisplayName = displayName.Trim();
+            HasCustomDisplayName = true;
+        }
+        else if (HasCustomDisplayName)
+        {
+            DisplayName = EmailAddress[..EmailAddress.IndexOf('@', StringComparison.Ordinal)];
+            HasCustomDisplayName = false;
+        }
+    }
+
+    /// <summary>
+    /// Changes the server settings of a password account; OAuth accounts use the fixed servers of their provider.
+    /// </summary>
+    /// <param name="imap">The IMAP server settings.</param>
+    /// <param name="smtp">The SMTP server settings.</param>
+    /// <exception cref="InvalidOperationException">The account signs in with OAuth 2.0.</exception>
+    public void ChangeServers(ServerEndpoint imap, ServerEndpoint smtp)
+    {
+        if (AuthMethod != AuthMethod.Password)
+        {
+            throw new InvalidOperationException("The server settings of an OAuth 2.0 account cannot be changed.");
+        }
+
+        Validate(imap, nameof(imap));
+        Validate(smtp, nameof(smtp));
+        Imap = imap;
+        Smtp = smtp;
+    }
+
+    /// <summary>
     /// Changes the background synchronization interval.
     /// </summary>
     /// <param name="interval">The new interval; must be at least one minute.</param>
@@ -123,5 +161,20 @@ public sealed class MailAccount
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(interval, TimeSpan.FromMinutes(1));
         SyncInterval = interval;
+    }
+
+    /// <summary>
+    /// Rejects server settings that cannot be connected to.
+    /// </summary>
+    /// <param name="endpoint">The settings to check.</param>
+    /// <param name="parameterName">The name reported by the exception.</param>
+    private static void Validate(ServerEndpoint endpoint, string parameterName)
+    {
+        ArgumentNullException.ThrowIfNull(endpoint, parameterName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(endpoint.Host, parameterName);
+        if (endpoint.Port is < 1 or > 65535)
+        {
+            throw new ArgumentOutOfRangeException(parameterName, endpoint.Port, "The port must be between 1 and 65535.");
+        }
     }
 }

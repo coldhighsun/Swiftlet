@@ -468,6 +468,12 @@ internal sealed class CancellingAccountRepository : IAccountRepository
     }
 
     /// <inheritdoc />
+    public Task UpdateAsync(MailAccount account, CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException();
+    }
+
+    /// <inheritdoc />
     public Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         throw new NotSupportedException();

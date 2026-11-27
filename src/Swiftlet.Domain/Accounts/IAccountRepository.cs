@@ -29,6 +29,14 @@ public interface IAccountRepository
     Task<IReadOnlyList<MailAccount>> GetAllAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Saves the changes made to an account that was read from this repository.
+    /// </summary>
+    /// <param name="account">The changed account.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the changes are saved.</returns>
+    Task UpdateAsync(MailAccount account, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Deletes an account together with its folders, messages, attachments and label links.
     /// </summary>
     /// <param name="id">The account identifier; an unknown id is ignored.</param>

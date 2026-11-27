@@ -18,13 +18,15 @@ internal static class MailAuthentication
     /// <param name="secrets">The secret store holding passwords.</param>
     /// <param name="accessTokens">The OAuth 2.0 access token provider.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="passwordOverride">A password to use instead of the stored one, for password accounts.</param>
     /// <returns>A task that completes when the client is authenticated.</returns>
     public static async Task AuthenticateAsync(
         MailService client,
         MailAccount account,
         ISecretStore secrets,
         IAccessTokenProvider accessTokens,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? passwordOverride = null)
     {
         ArgumentNullException.ThrowIfNull(client);
         ArgumentNullException.ThrowIfNull(account);
@@ -36,7 +38,8 @@ internal static class MailAuthentication
             return;
         }
 
-        var password = await secrets.GetAsync(AccountSecrets.PasswordKey(account.Id), cancellationToken)
+        var password = passwordOverride
+            ?? await secrets.GetAsync(AccountSecrets.PasswordKey(account.Id), cancellationToken)
             ?? throw new InvalidOperationException($"No password is stored for account {account.EmailAddress}.");
         await client.AuthenticateAsync(account.EmailAddress, password, cancellationToken);
     }
