@@ -1,0 +1,134 @@
+name: CI / Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  # ── Build & Test ─────────────────────────────────────────────────────────────
+  build-and-test:
+    name: Build & Test
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0          # MinVer needs full git history for tag resolution
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+
+      - name: Build
+        run: dotnet build Swiftlet.slnx -c Release
+
+      # "dotnet test --solution" does not work with this setup, so each project is run on its own.
+      - name: Test
+        run: |
+          foreach ($project in 'Domain', 'Application', 'Infrastructure', 'Desktop') {
+            dotnet test --project "tests/Swiftlet.$project.Tests" --no-build -c Release
+            if ($LASTEXITCODE -ne 0) { throw "Tests of $project failed" }
+          }
+        shell: pwsh
+
+  # ── Release ──────────────────────────────────────────────────────────────────
+  release:
+    name: Release
+    needs: build-and-test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+
+    permissions:
+      contents: write         # needed to create GitHub Releases
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+
+      - name: Resolve version from tag
+        id: version
+        env:
+          TAG: ${{ github.ref_name }}          # e.g. v1.2.3 or v1.2.3-beta.1
+        run: |
+          # The installer name and the app's update check rely on this exact shape.
+          if ($env:TAG -notmatch '^v\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
+            throw "Release tags must look like v1.2.3 or v1.2.3-beta.1, got '$env:TAG'"
+          }
+          $version = $env:TAG.Substring(1)
+          # A pre-release is never offered by the app's update check.
+          $isPrerelease = $version.Contains('-')
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "is_prerelease=$($isPrerelease.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Publish (win-x64, self-contained)
+        run: dotnet publish src/Swiftlet.Desktop/Swiftlet.Desktop.csproj -c Release -r win-x64 --self-contained -o artifacts/installer-input
+
+      - name: Install Inno Setup
+        # "--source winget" avoids the msstore source, which fails on runners. Inno Setup 6 is also
+        # present on the runner, hence the version-specific lookup below.
+        run: winget install --id JRSoftware.InnoSetup.7 --source winget --scope machine --silent --accept-package-agreements --accept-source-agreements
+        shell: pwsh
+
+      - name: Build installer
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $iscc = Get-ChildItem -Path "$env:ProgramFiles", "${env:ProgramFiles(x86)}", "$env:LOCALAPPDATA\Programs" `
+            -Recurse -Filter "ISCC.exe" -ErrorAction SilentlyContinue |
+            Where-Object { $_.DirectoryName -like "*Inno Setup 7*" } |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $iscc) {
+            throw "ISCC.exe (Inno Setup 7) not found after installing it."
+          }
+          & $iscc "/DAppVersion=$env:VERSION" installer\Swiftlet.iss
+          if ($LASTEXITCODE -ne 0) { throw "Building the installer failed" }
+        shell: pwsh
+
+      - name: Build portable package and checksums
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          $zip = "artifacts/installer/Swiftlet-$env:TAG-win-x64-portable.zip"
+          Compress-Archive -Path artifacts/installer-input/* -DestinationPath $zip
+          # Format is compatible with "sha256sum -c": lowercase hash, two spaces, bare file name, LF endings, no BOM.
+          # The app refuses to run an installer that is not listed here with the right hash.
+          $lines = foreach ($file in "artifacts/installer/Swiftlet-Setup-$env:TAG.exe", $zip) {
+            $hash = (Get-FileHash -Path $file -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $(Split-Path $file -Leaf)"
+          }
+          $text = ($lines -join "`n") + "`n"
+          [System.IO.File]::WriteAllText("$PWD/artifacts/installer/SHA256SUMS.txt", $text, [System.Text.UTF8Encoding]::new($false))
+          Get-Content artifacts/installer/SHA256SUMS.txt
+        shell: pwsh
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Swiftlet ${{ github.ref_name }}
+          generate_release_notes: true
+          prerelease: ${{ steps.version.outputs.is_prerelease }}
+          fail_on_unmatched_files: true
+          files: |
+            artifacts/installer/Swiftlet-Setup-${{ github.ref_name }}.exe
+            artifacts/installer/Swiftlet-${{ github.ref_name }}-win-x64-portable.zip
+            artifacts/installer/SHA256SUMS.txt
