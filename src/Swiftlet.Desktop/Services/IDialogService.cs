@@ -43,6 +43,13 @@ public sealed record ComposeRequest(
     string? InReplyTo);
 
 /// <summary>
+/// An address the contacts window is opened for.
+/// </summary>
+/// <param name="Name">The name that came with the address; may be empty.</param>
+/// <param name="Address">The address.</param>
+public sealed record ContactsRequest(string Name, string Address);
+
+/// <summary>
 /// Windows and pickers the view models need, abstracted so they can be tested without a UI.
 /// </summary>
 public interface IDialogService
@@ -81,6 +88,19 @@ public interface IDialogService
     /// </summary>
     /// <returns>A task that completes when the dialog has been closed.</returns>
     Task ShowLabelManagerAsync();
+
+    /// <summary>
+    /// Shows the contacts dialog.
+    /// </summary>
+    /// <param name="request">An address to show or add, or <see langword="null"/>.</param>
+    /// <returns>The recipient the user chose to write to, or <see langword="null"/>.</returns>
+    Task<string?> ShowContactsAsync(ContactsRequest? request);
+
+    /// <summary>
+    /// Asks the user to pick a contact file (vCard or CSV) to import.
+    /// </summary>
+    /// <returns>The chosen path, or <see langword="null"/> if cancelled.</returns>
+    Task<string?> PickContactFileAsync();
 
     /// <summary>
     /// Opens a compose window.

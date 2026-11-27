@@ -96,7 +96,7 @@
             </Button>
           </StackPanel>
 
-          <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="8">
+          <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto,Auto" Margin="8">
             <Button Classes="icon" HorizontalAlignment="Left" Command="{Binding AddAccountCommand}"
                     ToolTip.Tip="{loc:Loc Toolbar_AddAccount}" AutomationProperties.Name="{loc:Loc Toolbar_AddAccount}">
               <StackPanel Orientation="Horizontal" Spacing="8">
@@ -104,7 +104,11 @@
                 <TextBlock Text="{loc:Loc Toolbar_AddAccount}" />
               </StackPanel>
             </Button>
-            <Button Grid.Column="1" Classes="icon" Command="{Binding OpenSettingsCommand}"
+            <Button Grid.Column="1" Classes="icon" Command="{Binding OpenContactsCommand}"
+                    ToolTip.Tip="{loc:Loc Toolbar_Contacts}" AutomationProperties.Name="{loc:Loc Toolbar_Contacts}">
+              <PathIcon Data="{StaticResource Icon.Contacts}" />
+            </Button>
+            <Button Grid.Column="2" Classes="icon" Command="{Binding OpenSettingsCommand}"
                     ToolTip.Tip="{loc:Loc Toolbar_Settings}" AutomationProperties.Name="{loc:Loc Toolbar_Settings}">
               <PathIcon Data="{StaticResource Icon.Settings}" />
             </Button>
@@ -287,6 +291,7 @@
                 <ContextMenu Opening="OnMessageMenuOpening">
                   <MenuItem Header="{loc:Loc Toolbar_Archive}" Command="{Binding ArchiveSelectedCommand}" />
                   <MenuItem Header="{loc:Loc Toolbar_Delete}" Command="{Binding DeleteSelectedCommand}" />
+                  <MenuItem Header="{loc:Loc Menu_Message_AddContact}" Command="{Binding AddSenderToContactsCommand}" />
                   <MenuItem Header="{loc:Loc Menu_Message_MoveTo}" ItemsSource="{Binding MoveTargets}" IsEnabled="{Binding CanMove}">
                     <MenuItem.ItemContainerTheme>
                       <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}"
@@ -429,6 +434,10 @@
               </Flyout>
               </Button.Flyout>
               <PathIcon Data="{StaticResource Icon.Tag}" />
+            </Button>
+            <Button Classes="icon" Command="{Binding AddSenderToContactsCommand}"
+                    ToolTip.Tip="{loc:Loc Menu_Message_AddContact}" AutomationProperties.Name="{loc:Loc Menu_Message_AddContact}">
+              <PathIcon Data="{StaticResource Icon.AddAccount}" />
             </Button>
             <Button Classes="icon" Command="{Binding OpenHtmlCommand}"
                     ToolTip.Tip="{loc:Loc Toolbar_ViewInBrowser}" AutomationProperties.Name="{loc:Loc Toolbar_ViewInBrowser}">

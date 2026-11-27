@@ -36,7 +36,7 @@ public class ThemeTests
     [
         "Compose", "Reply", "Forward", "Star", "StarFilled", "Tag", "Browser", "Delete", "Sync", "Search", "Settings",
         "AddAccount", "Attach", "Download", "Close", "Inbox", "AllInboxes", "Sent", "Drafts", "Trash", "Junk", "Archive",
-        "AllMail", "Folder", "Mail", "Shield", "Info", "Logo",
+        "AllMail", "Folder", "Mail", "Shield", "Info", "Contacts", "Logo",
     ];
 
     /// <summary>

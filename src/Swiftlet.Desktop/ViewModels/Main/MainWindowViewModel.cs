@@ -13,6 +13,7 @@ using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
 using Swiftlet.Desktop.ViewModels.Compose;
 using Swiftlet.Domain.Accounts;
+using Swiftlet.Domain.Contacts;
 using Swiftlet.Domain.Folders;
 using Swiftlet.Domain.Labels;
 using Swiftlet.Domain.Messages;
@@ -583,6 +584,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(ForwardCommand))]
     [NotifyCanExecuteChangedFor(nameof(ToggleFlagCommand))]
     [NotifyCanExecuteChangedFor(nameof(OpenHtmlCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddSenderToContactsCommand))]
     [NotifyCanExecuteChangedFor(nameof(DeleteSelectedCommand))]
     [NotifyCanExecuteChangedFor(nameof(ArchiveSelectedCommand))]
     [NotifyPropertyChangedFor(nameof(IsNoMessageSelected))]
@@ -849,11 +851,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// </summary>
     /// <returns>A task that completes when the window has been opened.</returns>
     [RelayCommand]
-    private async Task ComposeAsync()
-    {
-        var accountId = ScopeAccountId(SelectedNode) ?? (_accounts.Count > 0 ? _accounts[0].Id : null);
-        await _dialogs.ShowComposeAsync(_accounts, new ComposeRequest(ComposeMode.New, accountId, string.Empty, string.Empty, string.Empty, null));
-    }
+    private Task ComposeAsync() => ComposeToAsync(string.Empty);
 
     /// <summary>
     /// Opens a compose window replying to the selected message.
@@ -1347,6 +1345,48 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Opens the contacts window, and a compose window afterwards when the user chose someone to write to.
+    /// </summary>
+    /// <returns>A task that completes when the windows have been handled.</returns>
+    [RelayCommand]
+    private Task OpenContactsAsync() => ShowContactsAsync(null);
+
+    /// <summary>
+    /// Opens the contacts window for the sender of the selected message, to look it up or add it.
+    /// </summary>
+    /// <returns>A task that completes when the windows have been handled.</returns>
+    [RelayCommand(CanExecute = nameof(HasContactSender))]
+    private Task AddSenderToContactsAsync()
+    {
+        var message = SelectedMessage!.Message;
+        return ShowContactsAsync(new ContactsRequest(message.FromName, message.FromAddress));
+    }
+
+    /// <summary>
+    /// Shows the contacts window and writes to the recipient it returns.
+    /// </summary>
+    /// <param name="request">An address to show or add, or <see langword="null"/>.</param>
+    /// <returns>A task that completes when the windows have been handled.</returns>
+    private async Task ShowContactsAsync(ContactsRequest? request)
+    {
+        if (await _dialogs.ShowContactsAsync(request) is { } recipient)
+        {
+            await ComposeToAsync(recipient);
+        }
+    }
+
+    /// <summary>
+    /// Opens a compose window for a new message from the account of the current view.
+    /// </summary>
+    /// <param name="to">The initial recipient list.</param>
+    /// <returns>A task that completes when the window has been opened.</returns>
+    private async Task ComposeToAsync(string to)
+    {
+        var accountId = ScopeAccountId(SelectedNode) ?? (_accounts.Count > 0 ? _accounts[0].Id : null);
+        await _dialogs.ShowComposeAsync(_accounts, new ComposeRequest(ComposeMode.New, accountId, to, string.Empty, string.Empty, null));
+    }
+
+    /// <summary>
     /// Attaches a label to the selected message or removes it, following the state of the choice.
     /// </summary>
     /// <param name="choice">The ticked or unticked label entry; its <see cref="MessageLabelChoiceViewModel.IsAssigned"/> holds the desired state.</param>
@@ -1410,6 +1450,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// Gets a value indicating whether a message is selected.
     /// </summary>
     private bool HasSelectedMessage => SelectedMessage is not null;
+
+    /// <summary>
+    /// Gets a value indicating whether the selected message has a sender that can be a contact. Messages without a
+    /// usable address carry a placeholder in the reserved <c>invalid</c> domain.
+    /// </summary>
+    private bool HasContactSender => SelectedMessage is { } item
+        && Contact.IsValidEmail(item.Message.FromAddress)
+        && !item.Message.FromAddress.EndsWith("@invalid", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Gets a value indicating whether there is at least one message to delete.

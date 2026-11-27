@@ -307,4 +307,46 @@
   <data name="AccountPage_SenderName" xml:space="preserve"><value>Sender name</value></data>
   <data name="AccountPage_AddedAt" xml:space="preserve"><value>Added</value></data>
   <data name="AccountPage_Servers" xml:space="preserve"><value>Servers</value></data>
+  <data name="Toolbar_Contacts" xml:space="preserve"><value>Contacts</value></data>
+  <data name="Menu_Message_AddContact" xml:space="preserve"><value>Add sender to contacts</value></data>
+  <data name="Contacts_Title" xml:space="preserve"><value>Contacts</value></data>
+  <data name="Contacts_TabContacts" xml:space="preserve"><value>Contacts</value></data>
+  <data name="Contacts_TabCollected" xml:space="preserve"><value>Collected</value></data>
+  <data name="Contacts_SearchPlaceholder" xml:space="preserve"><value>Search contacts</value></data>
+  <data name="Contacts_New" xml:space="preserve"><value>New contact</value></data>
+  <data name="Contacts_Company" xml:space="preserve"><value>Company</value></data>
+  <data name="Contacts_Note" xml:space="preserve"><value>Note</value></data>
+  <data name="Contacts_Save" xml:space="preserve"><value>Save</value></data>
+  <data name="Contacts_Delete" xml:space="preserve"><value>Delete</value></data>
+  <data name="Contacts_Write" xml:space="preserve"><value>Write mail</value></data>
+  <data name="Contacts_Add" xml:space="preserve"><value>Add to contacts</value></data>
+  <data name="Contacts_Remove" xml:space="preserve"><value>Remove from collected addresses</value></data>
+  <data name="Contacts_Import" xml:space="preserve"><value>Import…</value></data>
+  <data name="Contacts_Export" xml:space="preserve"><value>Export</value></data>
+  <data name="Contacts_ExportVCard" xml:space="preserve"><value>vCard file (.vcf)…</value></data>
+  <data name="Contacts_ExportCsv" xml:space="preserve"><value>CSV file (.csv)…</value></data>
+  <data name="Contacts_FileType" xml:space="preserve"><value>Contact files</value></data>
+  <data name="Contacts_NoSelection" xml:space="preserve"><value>Select a contact or create a new one</value></data>
+  <data name="Contacts_EmptyCollected" xml:space="preserve"><value>Addresses you send mail to appear here</value></data>
+  <data name="Contacts_DeleteTitle" xml:space="preserve"><value>Delete contact</value></data>
+  <data name="Contacts_DeleteMessage" xml:space="preserve"><value>Delete the contact {0}?</value></data>
+  <data name="Contacts_ImportDone" xml:space="preserve"><value>Import finished: {0} added, {1} updated, {2} skipped</value></data>
+  <data name="Contacts_ExportDone" xml:space="preserve"><value>{0} contacts exported</value></data>
+  <data name="Contacts_ErrorNoEmail" xml:space="preserve"><value>Enter at least one email address.</value></data>
+  <data name="Contacts_ErrorInvalidEmail" xml:space="preserve"><value>{0} is not a valid email address.</value></data>
+  <data name="Contacts_ErrorDuplicate" xml:space="preserve"><value>{0} already belongs to another contact.</value></data>
+  <data name="Contacts_ErrorFileFormat" xml:space="preserve"><value>The file is not a vCard file or a CSV file with an email column.</value></data>
+  <data name="Contacts_ErrorFileTooLarge" xml:space="preserve"><value>The file is larger than 10 MB.</value></data>
+  <data name="Contacts_ErrorFailed" xml:space="preserve"><value>Contacts operation failed</value></data>
+  <data name="Contacts_FirstName" xml:space="preserve"><value>First name</value></data>
+  <data name="Contacts_LastName" xml:space="preserve"><value>Last name</value></data>
+  <data name="Contacts_FamilyNameFirst" xml:space="preserve"><value>false</value></data>
+  <data name="Contacts_Emails" xml:space="preserve"><value>Email addresses</value></data>
+  <data name="Contacts_Phones" xml:space="preserve"><value>Phone numbers</value></data>
+  <data name="Contacts_EmailAddress" xml:space="preserve"><value>Email address</value></data>
+  <data name="Contacts_PhoneNumber" xml:space="preserve"><value>Phone number</value></data>
+  <data name="Contacts_AddEmail" xml:space="preserve"><value>Add email address</value></data>
+  <data name="Contacts_AddPhone" xml:space="preserve"><value>Add phone number</value></data>
+  <data name="Contacts_RemoveEmail" xml:space="preserve"><value>Remove email address</value></data>
+  <data name="Contacts_RemovePhone" xml:space="preserve"><value>Remove phone number</value></data>
 </root>

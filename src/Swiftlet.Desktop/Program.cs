@@ -12,6 +12,7 @@ using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
 using Swiftlet.Desktop.Settings;
 using Swiftlet.Desktop.ViewModels;
+using Swiftlet.Desktop.ViewModels.Contacts;
 using Swiftlet.Desktop.ViewModels.Main;
 using Swiftlet.Desktop.ViewModels.Settings;
 using Swiftlet.Infrastructure;
@@ -80,6 +81,7 @@ internal static class Program
         builder.Services.AddTransient<AddAccountViewModel>();
         builder.Services.AddTransient<EditAccountViewModel>();
         builder.Services.AddTransient<LabelManagerViewModel>();
+        builder.Services.AddTransient<ContactsViewModel>();
         builder.Services.AddTransient<SettingsViewModel>();
         builder.Services.AddTransient<AboutViewModel>();
         builder.Services.ConfigureHostShutdown();

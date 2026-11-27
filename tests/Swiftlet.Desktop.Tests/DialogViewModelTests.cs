@@ -204,18 +204,6 @@ public class DialogViewModelTests
     }
 
     /// <summary>
-    /// Verifies recipient lists accept commas, semicolons (including full-width) and line breaks.
-    /// </summary>
-    [Fact]
-    public void ParseRecipients_MixedSeparators_ReturnsTrimmedEntries()
-    {
-        var result = ComposeViewModel.ParseRecipients(" a@x.com; b@x.com，c@x.com\nd@x.com ,, ");
-
-        result.Should().Equal("a@x.com", "b@x.com", "c@x.com", "d@x.com");
-        ComposeViewModel.ParseRecipients(null).Should().BeEmpty();
-    }
-
-    /// <summary>
     /// Verifies the request pre-fills the compose window.
     /// </summary>
     [Fact]

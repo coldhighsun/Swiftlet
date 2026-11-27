@@ -1115,6 +1115,43 @@ public class MainWindowViewModelTests
     }
 
     /// <summary>
+    /// Verifies the recipient chosen in the contacts window is written to, and nothing opens when none is chosen.
+    /// </summary>
+    /// <param name="recipient">The recipient the window returns.</param>
+    [Theory]
+    [InlineData("Ann <ann@x.com>")]
+    [InlineData(null)]
+    public async Task OpenContactsCommand_Closed_ComposesToChosenRecipient(string? recipient)
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        scenario.Dialogs.ContactsRecipient = recipient;
+
+        await scenario.ViewModel.OpenContactsCommand.ExecuteAsync(null);
+
+        scenario.Dialogs.ContactsRequests.Should().ContainSingle().Which.Should().BeNull();
+        scenario.Dialogs.ComposeRequests.Select(r => r.To).Should().Equal(recipient is null ? [] : [recipient]);
+    }
+
+    /// <summary>
+    /// Verifies adding the sender opens the contacts window for the selected message.
+    /// </summary>
+    [Fact]
+    public async Task AddSenderToContactsCommand_SelectedMessage_PassesSender()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        scenario.ViewModel.AddSenderToContactsCommand.CanExecute(null).Should().BeFalse();
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+
+        await scenario.ViewModel.AddSenderToContactsCommand.ExecuteAsync(null);
+
+        var message = scenario.ViewModel.Messages[0].Message;
+        scenario.Dialogs.ContactsRequests.Should().ContainSingle()
+            .Which.Should().Be(new ContactsRequest(message.FromName, message.FromAddress));
+    }
+
+    /// <summary>
     /// Verifies forward opens a compose request with a forwarded body and no recipients.
     /// </summary>
     [Fact]

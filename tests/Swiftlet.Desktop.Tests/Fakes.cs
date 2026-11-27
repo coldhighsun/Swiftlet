@@ -252,6 +252,34 @@ internal sealed class FakeDialogService : IDialogService
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Gets or sets the recipient the contacts dialog returns.
+    /// </summary>
+    public string? ContactsRecipient { get; set; }
+
+    /// <summary>
+    /// Gets the requests the contacts dialog was shown with.
+    /// </summary>
+    public List<ContactsRequest?> ContactsRequests { get; } = [];
+
+    /// <summary>
+    /// Gets or sets the path returned by the contact file picker.
+    /// </summary>
+    public string? ContactFile { get; set; }
+
+    /// <inheritdoc />
+    public Task<string?> ShowContactsAsync(ContactsRequest? request)
+    {
+        ContactsRequests.Add(request);
+        return Task.FromResult(ContactsRecipient);
+    }
+
+    /// <inheritdoc />
+    public Task<string?> PickContactFileAsync()
+    {
+        return Task.FromResult(ContactFile);
+    }
+
     /// <inheritdoc />
     public Task ShowComposeAsync(IReadOnlyList<MailAccount> accounts, ComposeRequest request)
     {

@@ -7,11 +7,13 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Microsoft.Extensions.DependencyInjection;
+using Swiftlet.Desktop.Controls;
 using Swiftlet.Desktop.Hosting;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
 using Swiftlet.Desktop.ViewModels;
 using Swiftlet.Desktop.ViewModels.Compose;
+using Swiftlet.Desktop.ViewModels.Contacts;
 using Swiftlet.Desktop.ViewModels.Main;
 using Swiftlet.Desktop.ViewModels.Settings;
 using Swiftlet.Desktop.Views;
@@ -848,6 +850,101 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies the contacts window shows the contact list with the form, and the collected addresses with their
+    /// actions, in both languages.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    /// <param name="title">The expected window title.</param>
+    /// <param name="add">The expected caption of the button adding a collected address.</param>
+    [Theory]
+    [InlineData("zh-Hans", "通讯录", "加入联系人")]
+    [InlineData("en", "Contacts", "Add to contacts")]
+    public async Task ContactsWindow_Renders(string language, string title, string add)
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference(language);
+                var viewModel = await CreateContactsAsync(LocalizationManager.Instance);
+                var window = new ContactsWindow { DataContext = viewModel };
+                Render(window, $"contacts-{language}", language);
+                viewModel.SelectedContact = viewModel.Contacts[0];
+                Snapshot(window, $"contacts-selected-{language}");
+
+                window.Title.Should().Be(title);
+                var boxes = window.GetVisualDescendants().OfType<TextBox>().ToList();
+                boxes.Select(t => t.Text).Should().Contain(["张", "三", "zhang@example.com", "zhangsan@work.example.com"]);
+                var familyName = boxes.Single(t => t.Text == "张").TranslatePoint(default, window)!.Value.X;
+                var givenName = boxes.Single(t => t.Text == "三").TranslatePoint(default, window)!.Value.X;
+                (familyName < givenName).Should().Be(language == "zh-Hans", "Chinese names put the family name first");
+                var remove = window.GetVisualDescendants().OfType<Button>()
+                    .Where(b => viewModel.Emails.Any(f => f.RemoveCommand == b.Command)).ToList();
+                remove.Should().HaveCount(2).And.OnlyContain(b => ToolTip.GetTip(b) != null);
+
+                viewModel.SelectedPage = 1;
+                Snapshot(window, $"contacts-collected-{language}");
+
+                var buttons = window.GetVisualDescendants().OfType<Button>().ToList();
+                buttons.Should().Contain(b => b.Content as string == add && b.Command == viewModel.AddCollectedCommand);
+                buttons.Single(b => b.Command == viewModel.RemoveCollectedCommand).Content.Should().BeOfType<PathIcon>();
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies typing a recipient opens the suggestions, and choosing one with the keyboard completes the entry.
+    /// </summary>
+    [Fact]
+    public async Task ComposeWindow_TypingRecipient_SuggestsAndCompletes()
+    {
+        await DispatchAsync(
+            () =>
+            {
+                LocalizationManager.Instance.SetPreference("en");
+                var account = TestData.Account();
+                var viewModel = new ComposeViewModel(
+                    new FakeDispatcher(),
+                    new FakeDialogService(),
+                    TestLocalizer.English(),
+                    [account],
+                    new ComposeRequest(ComposeMode.New, account.Id, string.Empty, string.Empty, string.Empty, null))
+                {
+                    Suggestions = [new("Alice", "alice@example.com"), new("Bob", "bob@example.com")],
+                };
+                var window = new ComposeWindow { DataContext = viewModel };
+                Render(window, "compose-suggestions-closed", "en");
+                var box = window.GetVisualDescendants().OfType<RecipientBox>().First();
+                var input = box.GetVisualDescendants().OfType<TextBox>().Single();
+                input.Focus();
+                Dispatcher.UIThread.RunJobs();
+
+                window.KeyTextInput("carol@example.com, ali");
+                Dispatcher.UIThread.RunJobs();
+
+                box.IsDropDownOpen.Should().BeTrue();
+                Snapshot(window, "compose-suggestions-open");
+
+                window.KeyPressQwerty(PhysicalKey.ArrowDown, RawInputModifiers.None);
+                window.KeyPressQwerty(PhysicalKey.Enter, RawInputModifiers.None);
+                Dispatcher.UIThread.RunJobs();
+
+                viewModel.To.Should().Be("carol@example.com, Alice <alice@example.com>, ");
+                input.CaretIndex.Should().Be(viewModel.To.Length);
+                box.IsDropDownOpen.Should().BeFalse();
+
+                window.KeyTextInput("bo");
+                Dispatcher.UIThread.RunJobs();
+
+                viewModel.To.Should().Be("carol@example.com, Alice <alice@example.com>, bo");
+                box.IsDropDownOpen.Should().BeTrue();
+                window.Close();
+                return Task.CompletedTask;
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Verifies the settings window shows the pickers, the checkboxes, their hints and the close button on their pages, in
     /// both languages.
     /// </summary>
@@ -1351,7 +1448,7 @@ public class UiSmokeTests
                 reader.Bounds.Width.Should().BeGreaterThanOrEqualTo(300);
                 reader.Bounds.Right.Should().BeLessThanOrEqualTo(800);
                 var buttons = window.FindControl<Control>("ReaderActions")!.GetVisualDescendants().OfType<Button>().ToList();
-                buttons.Should().HaveCount(7);
+                buttons.Should().HaveCount(8);
                 foreach (var button in buttons)
                 {
                     button.Bounds.Width.Should().BeGreaterThan(0);
@@ -1755,7 +1852,11 @@ public class UiSmokeTests
                 var remove = window.GetVisualDescendants().OfType<Button>()
                     .Single(b => UiQueries.Caption(b) == "Remove attachment");
                 ToolTip.GetTip(remove).Should().Be("Remove attachment");
-                window.GetVisualDescendants().OfType<TextBox>().Where(t => t.Classes.Contains("flat")).Should().HaveCount(5);
+                window.GetVisualDescendants().OfType<TextBox>().Where(t => t.Classes.Contains("flat")).Should().HaveCount(2);
+                var recipientBoxes = window.GetVisualDescendants().OfType<RecipientBox>().ToList();
+                recipientBoxes.Should().HaveCount(3).And.OnlyContain(b => b.Classes.Contains("flat"));
+                recipientBoxes[0].GetVisualDescendants().OfType<Border>().First(b => b.Name == "PART_BorderElement")
+                    .BorderThickness.Should().Be(new Thickness(0));
                 var border = window.GetVisualDescendants().OfType<TextBox>().First(t => t.Classes.Contains("flat"))
                     .GetVisualDescendants().OfType<Border>().First(b => b.Name == "PART_BorderElement");
                 border.BorderThickness.Should().Be(new Thickness(0));
@@ -1766,6 +1867,22 @@ public class UiSmokeTests
                 window.Close();
             },
             TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Creates a loaded contacts view model with one contact and one collected address.
+    /// </summary>
+    /// <param name="localizer">The localizer.</param>
+    /// <returns>The view model.</returns>
+    private static async Task<ContactsViewModel> CreateContactsAsync(ILocalizer localizer)
+    {
+        var dispatcher = new FakeDispatcher();
+        dispatcher.On<Swiftlet.Application.Contacts.GetAddressBookQuery>(_ => new Swiftlet.Application.Contacts.AddressBook(
+            [Swiftlet.Domain.Contacts.Contact.Create("三", "张", ["zhang@example.com", "zhangsan@work.example.com"], ["+86 138 0000 0000"], "Acme", "同事")],
+            [new("bob@example.com", "Bob", DateTimeOffset.UnixEpoch)]));
+        var viewModel = new ContactsViewModel(dispatcher, new FakeDialogService(), localizer);
+        await viewModel.InitializeAsync();
+        return viewModel;
     }
 
     /// <summary>
@@ -1834,6 +1951,7 @@ public class UiSmokeTests
                 var editAccount = new EditAccountViewModel(new FakeDispatcher(), localizer);
                 editAccount.Load(account, []);
                 scenario.ViewModel.Filter.IsExpanded = true;
+                var contacts = await CreateContactsAsync(localizer);
                 var application = Avalonia.Application.Current!;
                 application.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark;
                 try
@@ -1846,6 +1964,7 @@ public class UiSmokeTests
                         ("edit-account", new EditAccountWindow { DataContext = editAccount }),
                         ("settings", new SettingsWindow { DataContext = new SettingsViewModel(new FakeAppSettings(), localizer, new FakeRemoteImageRules()) }),
                         ("labels", new LabelManagerWindow { DataContext = labels }),
+                        ("contacts", new ContactsWindow { DataContext = contacts }),
                         ("startup", new StartupWindow { DataContext = startup }),
                         ("confirm", ConfirmWindow.Create("删除", "确定删除这封邮件吗？", "删除", "取消")),
                         ("new-mail", new NewMailWindow

@@ -3,11 +3,13 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Accounts;
 using Swiftlet.Desktop.Html;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.ViewModels;
 using Swiftlet.Desktop.ViewModels.Compose;
+using Swiftlet.Desktop.ViewModels.Contacts;
 using Swiftlet.Desktop.ViewModels.Settings;
 using Swiftlet.Desktop.Views;
 using Swiftlet.Domain.Accounts;
@@ -158,18 +160,52 @@ public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogSe
     }
 
     /// <inheritdoc />
-    public Task ShowComposeAsync(IReadOnlyList<MailAccount> accounts, ComposeRequest request)
+    public async Task<string?> ShowContactsAsync(ContactsRequest? request)
+    {
+        var owner = ActiveWindow;
+        if (owner is null)
+        {
+            return null;
+        }
+
+        var viewModel = services.GetRequiredService<ContactsViewModel>();
+        var window = new ContactsWindow { DataContext = viewModel };
+        viewModel.CloseRequested += (_, recipient) => window.Close(recipient);
+        await viewModel.InitializeAsync(request);
+        return await window.ShowDialog<string?>(owner);
+    }
+
+    /// <inheritdoc />
+    public async Task<string?> PickContactFileAsync()
+    {
+        var window = ActiveWindow;
+        if (window is null)
+        {
+            return null;
+        }
+
+        var localizer = services.GetRequiredService<ILocalizer>();
+        var files = await window.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            FileTypeFilter = [new FilePickerFileType(localizer["Contacts_FileType"]) { Patterns = ["*.vcf", "*.csv"] }],
+        });
+        return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+    }
+
+    /// <inheritdoc />
+    public async Task ShowComposeAsync(IReadOnlyList<MailAccount> accounts, ComposeRequest request)
     {
         var viewModel = new ComposeViewModel(
             services.GetRequiredService<IRequestDispatcher>(),
             this,
             services.GetRequiredService<ILocalizer>(),
             accounts,
-            request);
+            request,
+            services.GetService<ILogger<ComposeViewModel>>());
         var window = new ComposeWindow { DataContext = viewModel };
         viewModel.CloseRequested += (_, _) => window.Close();
         window.Show();
-        return Task.CompletedTask;
+        await viewModel.InitializeAsync();
     }
 
     /// <inheritdoc />

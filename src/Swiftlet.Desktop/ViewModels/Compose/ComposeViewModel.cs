@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Contacts;
 using Swiftlet.Application.Sending;
 using Swiftlet.Desktop.Formatting;
 using Swiftlet.Desktop.Localization;
@@ -80,6 +82,11 @@ public sealed partial class ComposeViewModel : ObservableObject
     private readonly string? _inReplyTo;
 
     /// <summary>
+    /// The logger, if any.
+    /// </summary>
+    private readonly ILogger? _logger;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ComposeViewModel"/> class.
     /// </summary>
     /// <param name="dispatcher">The request dispatcher.</param>
@@ -87,12 +94,14 @@ public sealed partial class ComposeViewModel : ObservableObject
     /// <param name="localizer">The localizer.</param>
     /// <param name="accounts">The accounts that can send.</param>
     /// <param name="request">The initial values.</param>
+    /// <param name="logger">The logger; optional.</param>
     public ComposeViewModel(
         IRequestDispatcher dispatcher,
         IDialogService dialogs,
         ILocalizer localizer,
         IReadOnlyList<MailAccount> accounts,
-        ComposeRequest request)
+        ComposeRequest request,
+        ILogger<ComposeViewModel>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(accounts);
         ArgumentNullException.ThrowIfNull(request);
@@ -100,6 +109,8 @@ public sealed partial class ComposeViewModel : ObservableObject
         _dialogs = dialogs;
         _localizer = localizer;
         _inReplyTo = request.InReplyTo;
+        _logger = logger;
+        Suggestions = [];
         Accounts = accounts;
         Title = request.Mode switch
         {
@@ -135,6 +146,12 @@ public sealed partial class ComposeViewModel : ObservableObject
     /// Gets the attachments added so far.
     /// </summary>
     public ObservableCollection<ComposeAttachmentViewModel> Attachments { get; } = [];
+
+    /// <summary>
+    /// Gets or sets the addresses suggested while recipients are typed.
+    /// </summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<RecipientSuggestion> Suggestions { get; set; }
 
     /// <summary>
     /// Gets or sets the sending account.
@@ -187,14 +204,20 @@ public sealed partial class ComposeViewModel : ObservableObject
     public partial bool IsSending { get; set; }
 
     /// <summary>
-    /// Splits a recipient list on commas, semicolons and line breaks.
+    /// Loads the recipient suggestions from the address book.
     /// </summary>
-    /// <param name="text">The user-entered list.</param>
-    /// <returns>The trimmed, non-empty entries.</returns>
-    public static IReadOnlyList<string> ParseRecipients(string? text)
+    /// <returns>A task that completes when the suggestions are available or loading failed.</returns>
+    public async Task InitializeAsync()
     {
-        return (text ?? string.Empty)
-            .Split([',', ';', '，', '；', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        try
+        {
+            Suggestions = RecipientSuggestions.From(await _dispatcher.SendAsync(new GetAddressBookQuery()));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Suggestions are a convenience: the message can be written and sent without them.
+            _logger?.LogWarning(ex, "The recipient suggestions could not be loaded");
+        }
     }
 
     /// <summary>
@@ -205,9 +228,9 @@ public sealed partial class ComposeViewModel : ObservableObject
     private async Task SendAsync()
     {
         ErrorMessage = string.Empty;
-        var to = ParseRecipients(To);
-        var cc = ParseRecipients(Cc);
-        var bcc = ParseRecipients(Bcc);
+        var to = RecipientList.Split(To);
+        var cc = RecipientList.Split(Cc);
+        var bcc = RecipientList.Split(Bcc);
         var all = to.Concat(cc).Concat(bcc).ToList();
         if (all.Count == 0)
         {
@@ -215,7 +238,7 @@ public sealed partial class ComposeViewModel : ObservableObject
             return;
         }
 
-        var invalid = all.FirstOrDefault(a => !a.Contains('@', StringComparison.Ordinal));
+        var invalid = all.FirstOrDefault(a => !RecipientList.Parse(a).Address.Contains('@', StringComparison.Ordinal));
         if (invalid is not null)
         {
             ErrorMessage = _localizer.Format("Compose_InvalidRecipient", invalid);
