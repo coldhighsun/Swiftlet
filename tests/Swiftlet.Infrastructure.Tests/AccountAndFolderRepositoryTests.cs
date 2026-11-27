@@ -1,6 +1,8 @@
 using AwesomeAssertions;
+using Swiftlet.Application.Logging;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Folders;
+using Swiftlet.Infrastructure.Persistence;
 using Swiftlet.Infrastructure.Persistence.Repositories;
 
 namespace Swiftlet.Infrastructure.Tests;
@@ -57,6 +59,25 @@ public class AccountAndFolderRepositoryTests
             MailAccount.Create("B", "dup@example.com", AuthMethod.Password, imap, smtp, DateTimeOffset.UtcNow), ct);
 
         await act.Should().ThrowAsync<Exception>();
+    }
+
+    /// <summary>
+    /// Verifies reading accounts and folders makes their names known to the log.
+    /// </summary>
+    [Fact]
+    public async Task GetAsync_AccountsAndFolders_RemembersNamesForTheLog()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var names = new LogNames();
+
+        await new AccountRepository(db.Context, db.Factory, names).GetAllAsync(ct);
+        await using var provider = new AccountContextProvider(db.Factory);
+        await new FolderRepository(provider, names).GetByAccountAsync(account.Id, ct);
+
+        names.Account(account.Id).Should().Be(account.EmailAddress);
+        names.Folder(folder.Id).Should().Be(folder.FullName);
     }
 
     /// <summary>

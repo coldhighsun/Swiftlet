@@ -1,4 +1,5 @@
 using Mediator;
+using Swiftlet.Application.Logging;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Folders;
 using Swiftlet.Domain.Messages;
@@ -28,7 +29,7 @@ public sealed class GetAccountsQueryHandler(IAccountRepository accounts)
 /// Gets the folders of an account.
 /// </summary>
 /// <param name="AccountId">The account identifier.</param>
-public sealed record GetFoldersQuery(Guid AccountId) : IQuery<IReadOnlyList<MailFolder>>;
+public sealed record GetFoldersQuery(Guid AccountId) : IQuery<IReadOnlyList<MailFolder>>, IAccountRequest;
 
 /// <summary>
 /// Handles <see cref="GetFoldersQuery"/>.
@@ -52,7 +53,14 @@ public sealed class GetFoldersQueryHandler(IFolderRepository folders)
 /// <param name="FolderId">The folder identifier.</param>
 /// <param name="Skip">The number of messages to skip.</param>
 /// <param name="Take">The maximum number of messages to return.</param>
-public sealed record GetMessagesQuery(Guid AccountId, Guid FolderId, int Skip, int Take) : IQuery<IReadOnlyList<MailMessage>>;
+public sealed record GetMessagesQuery(Guid AccountId, Guid FolderId, int Skip, int Take) : IQuery<IReadOnlyList<MailMessage>>, IFolderRequest, ILogDetails
+{
+    /// <inheritdoc />
+    public string DescribeForLog(LogNames names)
+    {
+        return $"skip {Skip}, take {Take}";
+    }
+}
 
 /// <summary>
 /// Handles <see cref="GetMessagesQuery"/>.
@@ -73,7 +81,7 @@ public sealed class GetMessagesQueryHandler(IMessageRepository messages)
 /// Counts the unread cached messages of an account per folder.
 /// </summary>
 /// <param name="AccountId">The account.</param>
-public sealed record GetUnreadCountsQuery(Guid AccountId) : IQuery<IReadOnlyDictionary<Guid, int>>;
+public sealed record GetUnreadCountsQuery(Guid AccountId) : IQuery<IReadOnlyDictionary<Guid, int>>, IAccountRequest;
 
 /// <summary>
 /// Handles <see cref="GetUnreadCountsQuery"/>.
@@ -95,7 +103,14 @@ public sealed class GetUnreadCountsQueryHandler(IMessageRepository messages)
 /// </summary>
 /// <param name="Skip">The number of messages to skip.</param>
 /// <param name="Take">The maximum number of messages to return.</param>
-public sealed record GetUnifiedInboxQuery(int Skip, int Take) : IQuery<IReadOnlyList<MailMessage>>;
+public sealed record GetUnifiedInboxQuery(int Skip, int Take) : IQuery<IReadOnlyList<MailMessage>>, ILogDetails
+{
+    /// <inheritdoc />
+    public string DescribeForLog(LogNames names)
+    {
+        return $"skip {Skip}, take {Take}";
+    }
+}
 
 /// <summary>
 /// Handles <see cref="GetUnifiedInboxQuery"/>.
@@ -118,7 +133,15 @@ public sealed class GetUnifiedInboxQueryHandler(IMessageRepository messages)
 /// <param name="LabelId">The label identifier.</param>
 /// <param name="Skip">The number of messages to skip.</param>
 /// <param name="Take">The maximum number of messages to return.</param>
-public sealed record GetMessagesByLabelQuery(Guid LabelId, int Skip, int Take) : IQuery<IReadOnlyList<MailMessage>>;
+public sealed record GetMessagesByLabelQuery(Guid LabelId, int Skip, int Take) : IQuery<IReadOnlyList<MailMessage>>, ILogDetails
+{
+    /// <inheritdoc />
+    public string DescribeForLog(LogNames names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        return $"label {names.Label(LabelId)}, skip {Skip}, take {Take}";
+    }
+}
 
 /// <summary>
 /// Handles <see cref="GetMessagesByLabelQuery"/>.
@@ -142,7 +165,15 @@ public sealed class GetMessagesByLabelQueryHandler(IMessageRepository messages)
 /// <param name="AccountId">Restricts the search to one account, or <see langword="null"/> for all.</param>
 /// <param name="Skip">The number of results to skip.</param>
 /// <param name="Take">The maximum number of results.</param>
-public sealed record SearchMessagesQuery(string Text, Guid? AccountId, int Skip, int Take) : IQuery<IReadOnlyList<MailMessage>>;
+public sealed record SearchMessagesQuery(string Text, Guid? AccountId, int Skip, int Take) : IQuery<IReadOnlyList<MailMessage>>, ILogDetails
+{
+    /// <inheritdoc />
+    public string DescribeForLog(LogNames names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        return $"{(AccountId is { } id ? names.Account(id) : "all accounts")}, {Text?.Length ?? 0} characters, skip {Skip}, take {Take}";
+    }
+}
 
 /// <summary>
 /// Handles <see cref="SearchMessagesQuery"/>.

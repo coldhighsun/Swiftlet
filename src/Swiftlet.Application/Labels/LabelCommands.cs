@@ -1,4 +1,5 @@
 using Mediator;
+using Swiftlet.Application.Logging;
 using Swiftlet.Domain.Labels;
 using Swiftlet.Domain.Messages;
 
@@ -9,7 +10,14 @@ namespace Swiftlet.Application.Labels;
 /// </summary>
 /// <param name="Name">The label name.</param>
 /// <param name="Color">The color as <c>#RRGGBB</c>.</param>
-public sealed record CreateLabelCommand(string Name, string Color) : ICommand<Guid>;
+public sealed record CreateLabelCommand(string Name, string Color) : ICommand<Guid>, ILogDetails
+{
+    /// <inheritdoc />
+    public string DescribeForLog(LogNames names)
+    {
+        return $"label {Name}";
+    }
+}
 
 /// <summary>
 /// Handles <see cref="CreateLabelCommand"/>.
@@ -38,7 +46,15 @@ public sealed class CreateLabelCommandHandler(ILabelRepository labels) : IComman
 /// <param name="LabelId">The label identifier.</param>
 /// <param name="Name">The new name.</param>
 /// <param name="Color">The new color as <c>#RRGGBB</c>.</param>
-public sealed record UpdateLabelCommand(Guid LabelId, string Name, string Color) : ICommand<Unit>;
+public sealed record UpdateLabelCommand(Guid LabelId, string Name, string Color) : ICommand<Unit>, ILogDetails
+{
+    /// <inheritdoc />
+    public string DescribeForLog(LogNames names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        return $"label {names.Label(LabelId)}, name {Name}";
+    }
+}
 
 /// <summary>
 /// Handles <see cref="UpdateLabelCommand"/>.
@@ -68,7 +84,15 @@ public sealed class UpdateLabelCommandHandler(ILabelRepository labels) : IComman
 /// Deletes a label. Messages that carried it are kept.
 /// </summary>
 /// <param name="LabelId">The label identifier.</param>
-public sealed record DeleteLabelCommand(Guid LabelId) : ICommand<Unit>;
+public sealed record DeleteLabelCommand(Guid LabelId) : ICommand<Unit>, ILogDetails
+{
+    /// <inheritdoc />
+    public string DescribeForLog(LogNames names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        return $"label {names.Label(LabelId)}";
+    }
+}
 
 /// <summary>
 /// Handles <see cref="DeleteLabelCommand"/>.
@@ -92,7 +116,15 @@ public sealed class DeleteLabelCommandHandler(ILabelRepository labels) : IComman
 /// <param name="MessageId">The message identifier.</param>
 /// <param name="LabelId">The label identifier.</param>
 /// <param name="Assigned">Whether the label should be attached.</param>
-public sealed record SetMessageLabelCommand(Guid AccountId, Guid MessageId, Guid LabelId, bool Assigned) : ICommand<Unit>;
+public sealed record SetMessageLabelCommand(Guid AccountId, Guid MessageId, Guid LabelId, bool Assigned) : ICommand<Unit>, IAccountRequest, ILogDetails
+{
+    /// <inheritdoc />
+    public string DescribeForLog(LogNames names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        return $"message {MessageId}, label {names.Label(LabelId)}, assigned {Assigned}";
+    }
+}
 
 /// <summary>
 /// Handles <see cref="SetMessageLabelCommand"/>.

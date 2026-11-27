@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Logging;
 using Swiftlet.Application.Sync;
 using Swiftlet.Domain.Folders;
 using Swiftlet.Domain.Messages;
@@ -14,12 +15,19 @@ namespace Swiftlet.Application.Messages;
 /// <param name="messages">The message repository.</param>
 /// <param name="flags">Serializes the flag work of a folder with the regular sync.</param>
 /// <param name="logger">The logger.</param>
+/// <param name="names">Resolves the names shown in the log; optional.</param>
 public sealed class PendingFlagService(
     IFolderRepository folders,
     IMessageRepository messages,
     FlagCoordinator flags,
-    ILogger<PendingFlagService> logger)
+    ILogger<PendingFlagService> logger,
+    LogNames? names = null)
 {
+    /// <summary>
+    /// The names shown in the log; identifiers when no directory is supplied.
+    /// </summary>
+    private readonly LogNames _names = names ?? new LogNames();
+
     /// <summary>
     /// Gets the folders of an account that hold changes waiting to be written.
     /// </summary>
@@ -61,6 +69,7 @@ public sealed class PendingFlagService(
                     return 0;
                 }
 
+                using var logScope = logger.BeginMailScope(_names.Account(accountId), folder.FullName);
                 var pending = await messages.GetPendingFlagStatesAsync(accountId, folderId, cancellationToken);
                 if (pending.Count == 0)
                 {

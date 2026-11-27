@@ -1,4 +1,5 @@
 using Mediator;
+using Swiftlet.Application.Logging;
 
 namespace Swiftlet.Application.Sync;
 
@@ -6,7 +7,7 @@ namespace Swiftlet.Application.Sync;
 /// Synchronizes one account.
 /// </summary>
 /// <param name="AccountId">The account identifier.</param>
-public sealed record SyncAccountCommand(Guid AccountId) : ICommand<SyncResult>;
+public sealed record SyncAccountCommand(Guid AccountId) : ICommand<SyncResult>, IAccountRequest;
 
 /// <summary>
 /// Handles <see cref="SyncAccountCommand"/>.

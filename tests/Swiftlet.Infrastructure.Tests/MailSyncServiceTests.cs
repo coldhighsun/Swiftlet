@@ -648,6 +648,36 @@ public class MailSyncServiceTests
     }
 
     /// <summary>
+    /// Verifies the lines written about a folder are tagged with its account and name.
+    /// </summary>
+    [Fact]
+    public async Task SyncAsync_FolderFails_LogsItUnderTheAccountAndFolder()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, _) = await db.SeedAccountAsync(ct);
+        var factory = new FakeImapSessionFactory();
+        factory.Session.Folders.Add(TestData.Folder("Broken"));
+        factory.Session.FailingFolders.Add("Broken");
+        var logger = new ScopeLogger<MailSyncService>();
+        var service = new MailSyncService(
+            db.CreateAccountRepository(),
+            db.CreateFolderRepository(),
+            db.CreateMessageRepository(),
+            factory,
+            new FakeSyncSettings(),
+            new MailSyncOptions(),
+            logger);
+
+        await service.SyncAsync(account.Id, ct);
+
+        logger.Entries.Should().Contain(e => e.Message.StartsWith("Failed to synchronize")
+            && e.Tags == $" [{account.EmailAddress}] [Broken]");
+        logger.Entries.Should().Contain(e => e.Message.StartsWith("Synchronized account")
+            && e.Tags == $" [{account.EmailAddress}]");
+    }
+
+    /// <summary>
     /// Verifies the first sync creates selectable folders and caches their messages.
     /// </summary>
     [Fact]

@@ -1,6 +1,7 @@
 using Mediator;
 using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Logging;
 using Swiftlet.Domain.Accounts;
 
 namespace Swiftlet.Application.Accounts;
@@ -18,7 +19,14 @@ public sealed record AddAccountCommand(
     string EmailAddress,
     string Password,
     ServerEndpoint? Imap = null,
-    ServerEndpoint? Smtp = null) : ICommand<Guid>;
+    ServerEndpoint? Smtp = null) : ICommand<Guid>, ILogDetails
+{
+    /// <inheritdoc />
+    public string DescribeForLog(LogNames names)
+    {
+        return EmailAddress;
+    }
+}
 
 /// <summary>
 /// Handles <see cref="AddAccountCommand"/>.

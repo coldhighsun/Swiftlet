@@ -1,5 +1,6 @@
 using Mediator;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Logging;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Folders;
 using Swiftlet.Domain.Messages;
@@ -12,7 +13,14 @@ namespace Swiftlet.Application.Queries;
 /// <param name="AccountId">The account that owns the message.</param>
 /// <param name="MessageId">The cached message identifier.</param>
 public sealed record GetInlineImagesQuery(Guid AccountId, Guid MessageId)
-    : IQuery<IReadOnlyDictionary<string, InlineImage>>;
+    : IQuery<IReadOnlyDictionary<string, InlineImage>>, IAccountRequest, ILogDetails
+{
+    /// <inheritdoc />
+    public string DescribeForLog(LogNames names)
+    {
+        return $"message {MessageId}";
+    }
+}
 
 /// <summary>
 /// Handles <see cref="GetInlineImagesQuery"/>.

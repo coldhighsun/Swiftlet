@@ -1,4 +1,5 @@
 using Mediator;
+using Swiftlet.Application.Logging;
 using Swiftlet.Domain.Folders;
 using Swiftlet.Domain.Messages;
 
@@ -11,7 +12,15 @@ namespace Swiftlet.Application.Messages;
 /// <param name="AccountId">The account that owns the messages and the folder.</param>
 /// <param name="MessageIds">The cached message identifiers.</param>
 /// <param name="TargetFolderId">The folder to move the messages to.</param>
-public sealed record MoveMessagesCommand(Guid AccountId, IReadOnlyList<Guid> MessageIds, Guid TargetFolderId) : ICommand<int>;
+public sealed record MoveMessagesCommand(Guid AccountId, IReadOnlyList<Guid> MessageIds, Guid TargetFolderId) : ICommand<int>, IAccountRequest, ILogDetails
+{
+    /// <inheritdoc />
+    public string DescribeForLog(LogNames names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        return $"{MessageIds.Count} messages to {names.Folder(TargetFolderId)}";
+    }
+}
 
 /// <summary>
 /// Handles <see cref="MoveMessagesCommand"/> by marking the messages and waking the background worker it shares with deletion.

@@ -1,6 +1,7 @@
 using Mediator;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Application.Accounts;
+using Swiftlet.Application.Logging;
 using Swiftlet.Application.Sync;
 using Swiftlet.Domain.Accounts;
 
@@ -15,7 +16,7 @@ namespace Swiftlet.Application.Sending;
 /// Whether to append a copy to Sent; <see langword="null"/> decides from the provider
 /// (skipped for providers that store the copy themselves).
 /// </param>
-public sealed record SendMessageCommand(Guid AccountId, OutgoingMessage Message, bool? SaveToSent = null) : ICommand<Unit>;
+public sealed record SendMessageCommand(Guid AccountId, OutgoingMessage Message, bool? SaveToSent = null) : ICommand<Unit>, IAccountRequest;
 
 /// <summary>
 /// Handles <see cref="SendMessageCommand"/>.

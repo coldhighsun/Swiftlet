@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Polly;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Logging;
 using Swiftlet.Application.Sync;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Folders;
@@ -19,12 +20,19 @@ namespace Swiftlet.Infrastructure.Sync;
 /// <param name="timeProvider">The clock used for every delay.</param>
 /// <param name="revisions">Reports changed connection settings, which restart the loop of the account.</param>
 /// <param name="logger">The logger.</param>
+/// <param name="names">Resolves the names shown in the log; optional.</param>
 public sealed class InboxWatcher(
     IServiceScopeFactory scopeFactory,
     TimeProvider timeProvider,
     AccountConnectionRevisions revisions,
-    ILogger<InboxWatcher> logger) : BackgroundService
+    ILogger<InboxWatcher> logger,
+    LogNames? names = null) : BackgroundService
 {
+    /// <summary>
+    /// The names shown in the log; identifiers when no directory is supplied.
+    /// </summary>
+    private readonly LogNames _names = names ?? new LogNames();
+
     /// <summary>
     /// How often the set of watched accounts is reconciled with the stored accounts; also the poll interval while an account has no inbox folder yet.
     /// </summary>
@@ -166,6 +174,8 @@ public sealed class InboxWatcher(
     /// <returns>A task that completes when the loop ends.</returns>
     private async Task RunAccountLoopAsync(Guid accountId, AccountLoop state, CancellationToken cancellationToken)
     {
+        var accountName = _names.Account(accountId);
+        using var logScope = logger.BeginMailScope(accountName);
         var streak = new FailureStreak();
         var pipeline = RetryPipelines.Endless(
             timeProvider,
@@ -175,11 +185,11 @@ public sealed class InboxWatcher(
                 if (error is OAuthReauthenticationRequiredException)
                 {
                     // Retrying cannot help until the user signs in again, so it is checked only rarely.
-                    logger.LogWarning(error, "Account {Account} needs to sign in again; IDLE watching is paused.", accountId);
+                    logger.LogWarning(error, "Account {Account} needs to sign in again; IDLE watching is paused.", accountName);
                 }
                 else
                 {
-                    logger.LogWarning(error, "IDLE watching failed for account {Account}; retrying in {Delay}.", accountId, delay);
+                    logger.LogWarning(error, "IDLE watching failed for account {Account}; retrying in {Delay}.", accountName, delay);
                 }
             });
         var context = RetryPipelines.Rent(streak, cancellationToken);
@@ -293,7 +303,7 @@ public sealed class InboxWatcher(
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             // A failed sync (offline, bad credentials, a timed-out token refresh) must not tear down the IDLE connection; the next change or poll retries.
-            logger.LogError(ex, "IDLE-triggered sync failed for account {Account}.", accountId);
+            logger.LogError(ex, "IDLE-triggered sync failed for account {Account}.", _names.Account(accountId));
         }
     }
 

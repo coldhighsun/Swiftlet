@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Swiftlet.Application.Logging;
 using Swiftlet.Domain.Labels;
 
 namespace Swiftlet.Infrastructure.Persistence.Repositories;
@@ -7,25 +8,37 @@ namespace Swiftlet.Infrastructure.Persistence.Repositories;
 /// EF Core implementation of <see cref="ILabelRepository"/>.
 /// </summary>
 /// <param name="context">The database context.</param>
-internal sealed class LabelRepository(GlobalDbContext context) : ILabelRepository
+/// <param name="names">Remembers the names shown in the log; optional.</param>
+internal sealed class LabelRepository(GlobalDbContext context, LogNames? names = null) : ILabelRepository
 {
     /// <inheritdoc />
     public async Task AddAsync(Label label, CancellationToken cancellationToken = default)
     {
         context.Labels.Add(label);
         await context.SaveChangesAsync(cancellationToken);
+        names?.RememberLabel(label.Id, label.Name);
     }
 
     /// <inheritdoc />
     public async Task<Label?> GetAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return await context.Labels.FirstOrDefaultAsync(l => l.Id == id, cancellationToken);
+        var label = await context.Labels.FirstOrDefaultAsync(l => l.Id == id, cancellationToken);
+        if (label is not null)
+        {
+            names?.RememberLabel(label.Id, label.Name);
+        }
+
+        return label;
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<Label>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         var labels = await context.Labels.ToListAsync(cancellationToken);
+        foreach (var label in labels)
+        {
+            names?.RememberLabel(label.Id, label.Name);
+        }
 
         // Sorted in memory because SQLite's default collation is case-sensitive and ASCII-only.
         return labels.OrderBy(l => l.Name, StringComparer.CurrentCultureIgnoreCase).ToList();

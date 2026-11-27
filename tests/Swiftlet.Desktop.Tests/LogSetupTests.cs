@@ -1,5 +1,8 @@
 using AwesomeAssertions;
+using Microsoft.Extensions.Logging;
 using Serilog;
+using Serilog.Extensions.Logging;
+using Swiftlet.Application.Logging;
 using Swiftlet.Desktop.Hosting;
 
 namespace Swiftlet.Desktop.Tests;
@@ -72,6 +75,35 @@ public sealed class LogSetupTests : IDisposable
 
         var text = string.Concat(Directory.GetFiles(_directory).Select(File.ReadAllText));
         text.Should().Contain("swiftlet-debug-marker").And.NotContain("framework-info-marker");
+    }
+
+    /// <summary>
+    /// Verifies the tags of a mail scope are printed in front of the message, the innermost scope wins, and a line outside
+    /// any scope has none.
+    /// </summary>
+    [Fact]
+    public void Create_MailScopes_PrintsTagsBeforeTheMessage()
+    {
+        using (var serilog = LogSetup.Create(_directory))
+        using (var factory = new SerilogLoggerFactory(serilog))
+        {
+            var logger = factory.CreateLogger("Swiftlet.Test");
+            using (logger.BeginMailScope("me@example.com", "INBOX"))
+            {
+                logger.LogInformation("in folder");
+                using (logger.BeginMailScope("you@example.com"))
+                {
+                    logger.LogInformation("in account");
+                }
+            }
+
+            logger.LogInformation("outside");
+        }
+
+        var text = string.Concat(Directory.GetFiles(_directory).Select(File.ReadAllText));
+        text.Should().Contain("[INF] [me@example.com] [INBOX] in folder")
+            .And.Contain("[INF] [you@example.com] in account")
+            .And.Contain("[INF] outside");
     }
 
     /// <inheritdoc />

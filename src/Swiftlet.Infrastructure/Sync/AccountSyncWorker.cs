@@ -2,6 +2,7 @@ using Mediator;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Swiftlet.Application.Logging;
 using Swiftlet.Application.Sync;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Infrastructure.Resilience;
@@ -73,6 +74,7 @@ public sealed class AccountSyncWorker(
     /// <returns>A task that completes when the account has been attempted.</returns>
     private async Task SyncAsync(MailAccount account, CancellationToken cancellationToken)
     {
+        using var logScope = logger.BeginMailScope(account.EmailAddress);
         var pipeline = RetryPipelines.Transient(timeProvider, Retries, RetryPipelines.InitialDelay, logger, $"Sync of {account.EmailAddress}");
         try
         {

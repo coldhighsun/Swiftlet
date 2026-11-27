@@ -1,6 +1,7 @@
 using Mediator;
 using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Logging;
 using Swiftlet.Application.Sync;
 using Swiftlet.Domain.Accounts;
 
@@ -24,7 +25,7 @@ public sealed record UpdateAccountCommand(
     ServerEndpoint? Imap = null,
     ServerEndpoint? Smtp = null,
     string? Password = null,
-    string? ArchiveFolderName = null) : ICommand<UpdateAccountResult>;
+    string? ArchiveFolderName = null) : ICommand<UpdateAccountResult>, IAccountRequest;
 
 /// <summary>
 /// The outcome of <see cref="UpdateAccountCommand"/>.

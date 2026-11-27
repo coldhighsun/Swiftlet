@@ -1,4 +1,5 @@
 using Mediator;
+using Swiftlet.Application.Logging;
 using Swiftlet.Domain.Folders;
 using Swiftlet.Domain.Messages;
 
@@ -11,7 +12,7 @@ namespace Swiftlet.Application.Messages;
 /// </summary>
 /// <param name="AccountId">The account that owns the folder.</param>
 /// <param name="FolderId">The folder.</param>
-public sealed record EmptyFolderCommand(Guid AccountId, Guid FolderId) : ICommand<bool>;
+public sealed record EmptyFolderCommand(Guid AccountId, Guid FolderId) : ICommand<bool>, IFolderRequest;
 
 /// <summary>
 /// Handles <see cref="EmptyFolderCommand"/>.

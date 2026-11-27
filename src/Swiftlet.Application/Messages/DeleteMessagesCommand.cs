@@ -1,4 +1,5 @@
 using Mediator;
+using Swiftlet.Application.Logging;
 using Swiftlet.Domain.Messages;
 
 namespace Swiftlet.Application.Messages;
@@ -15,7 +16,15 @@ public sealed record MessageKey(Guid AccountId, Guid MessageId);
 /// The result is the number of messages queued for deletion.
 /// </summary>
 /// <param name="Messages">The messages, which may belong to several accounts.</param>
-public sealed record DeleteMessagesCommand(IReadOnlyList<MessageKey> Messages) : ICommand<int>;
+public sealed record DeleteMessagesCommand(IReadOnlyList<MessageKey> Messages) : ICommand<int>, ILogDetails
+{
+    /// <inheritdoc />
+    public string DescribeForLog(LogNames names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        return $"{Messages.Count} messages of {string.Join(", ", Messages.Select(m => m.AccountId).Distinct().Select(names.Account))}";
+    }
+}
 
 /// <summary>
 /// Handles <see cref="DeleteMessagesCommand"/> by marking the messages and waking the background deletion.

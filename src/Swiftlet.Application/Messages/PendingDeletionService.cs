@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Logging;
 using Swiftlet.Domain.Folders;
 using Swiftlet.Domain.Messages;
 
@@ -22,11 +23,18 @@ public sealed record DeletionBatchResult(string FolderName, int Deleted, int Rem
 /// <param name="folders">The folder repository.</param>
 /// <param name="messages">The message repository.</param>
 /// <param name="logger">The logger.</param>
+/// <param name="names">Resolves the names shown in the log; optional.</param>
 public sealed class PendingDeletionService(
     IFolderRepository folders,
     IMessageRepository messages,
-    ILogger<PendingDeletionService> logger)
+    ILogger<PendingDeletionService> logger,
+    LogNames? names = null)
 {
+    /// <summary>
+    /// The names shown in the log; identifiers when no directory is supplied.
+    /// </summary>
+    private readonly LogNames _names = names ?? new LogNames();
+
     /// <summary>
     /// The largest number of messages deleted per batch, so syncs waiting for the account are not blocked for long.
     /// </summary>
@@ -78,6 +86,7 @@ public sealed class PendingDeletionService(
             targetId = batchTargetId;
         }
 
+        using var logScope = logger.BeginMailScope(_names.Account(accountId), folder.FullName);
         try
         {
             // UIDs are only meaningful within one UIDVALIDITY epoch; a stale UID could delete a different message.

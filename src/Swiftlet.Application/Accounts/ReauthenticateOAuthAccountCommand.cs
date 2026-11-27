@@ -2,6 +2,7 @@ using System.Text.Json;
 using Mediator;
 using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Logging;
 using Swiftlet.Domain.Accounts;
 
 namespace Swiftlet.Application.Accounts;
@@ -10,7 +11,7 @@ namespace Swiftlet.Application.Accounts;
 /// Signs an existing OAuth account in again in the browser and replaces its stored tokens.
 /// </summary>
 /// <param name="AccountId">The account identifier.</param>
-public sealed record ReauthenticateOAuthAccountCommand(Guid AccountId) : ICommand<Unit>;
+public sealed record ReauthenticateOAuthAccountCommand(Guid AccountId) : ICommand<Unit>, IAccountRequest;
 
 /// <summary>
 /// Handles <see cref="ReauthenticateOAuthAccountCommand"/>.

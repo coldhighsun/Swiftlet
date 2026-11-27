@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Logging;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Folders;
 using Swiftlet.Domain.Labels;
@@ -50,7 +51,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAccountDbContextFactory>(sp => new AccountDbContextFactory(
             Path.Combine(dataDirectory, "accounts"),
             sp.GetService<ILogger<AccountDbContextFactory>>(),
-            sp.GetRequiredService<IDatabaseConnectionStrings>()));
+            sp.GetRequiredService<IDatabaseConnectionStrings>(),
+            sp.GetService<LogNames>()));
         services.AddScoped<AccountContextProvider>();
         services.AddScoped<IAccountRepository, AccountRepository>();
         services.AddScoped<IFolderRepository, FolderRepository>();

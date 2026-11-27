@@ -1,5 +1,6 @@
 using Mediator;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Logging;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Folders;
 using Swiftlet.Domain.Messages;
@@ -20,7 +21,14 @@ public sealed record DownloadedAttachment(string FileName, string ContentType, R
 /// <param name="AccountId">The account that owns the message.</param>
 /// <param name="MessageId">The cached message identifier.</param>
 /// <param name="AttachmentId">The attachment identifier.</param>
-public sealed record DownloadAttachmentQuery(Guid AccountId, Guid MessageId, Guid AttachmentId) : IQuery<DownloadedAttachment>;
+public sealed record DownloadAttachmentQuery(Guid AccountId, Guid MessageId, Guid AttachmentId) : IQuery<DownloadedAttachment>, IAccountRequest, ILogDetails
+{
+    /// <inheritdoc />
+    public string DescribeForLog(LogNames names)
+    {
+        return $"message {MessageId}, attachment {AttachmentId}";
+    }
+}
 
 /// <summary>
 /// Handles <see cref="DownloadAttachmentQuery"/>.

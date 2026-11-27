@@ -1,6 +1,7 @@
 using Mediator;
 using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Logging;
 using Swiftlet.Domain.Accounts;
 
 namespace Swiftlet.Application.Accounts;
@@ -9,7 +10,7 @@ namespace Swiftlet.Application.Accounts;
 /// Deletes an account and all of its locally cached mail and stored credentials.
 /// </summary>
 /// <param name="AccountId">The account identifier.</param>
-public sealed record DeleteAccountCommand(Guid AccountId) : ICommand<Unit>;
+public sealed record DeleteAccountCommand(Guid AccountId) : ICommand<Unit>, IAccountRequest;
 
 /// <summary>
 /// Handles <see cref="DeleteAccountCommand"/>.

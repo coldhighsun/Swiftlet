@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Logging;
 using Swiftlet.Domain.Folders;
 using Swiftlet.Domain.Messages;
 
@@ -52,12 +53,19 @@ public sealed record BackfillBatchResult(BackfillOutcome Outcome, int Added, int
 /// <param name="messages">The message repository.</param>
 /// <param name="options">The synchronization limits.</param>
 /// <param name="logger">The logger.</param>
+/// <param name="names">Resolves the names shown in the log; optional.</param>
 public sealed class MailBackfillService(
     IFolderRepository folders,
     IMessageRepository messages,
     MailSyncOptions options,
-    ILogger<MailBackfillService> logger)
+    ILogger<MailBackfillService> logger,
+    LogNames? names = null)
 {
+    /// <summary>
+    /// The names shown in the log; identifiers when no directory is supplied.
+    /// </summary>
+    private readonly LogNames _names = names ?? new LogNames();
+
     /// <summary>
     /// How many times a batch whose messages all vanished is retried further back before the folder is given up for this pass.
     /// </summary>
@@ -156,6 +164,8 @@ public sealed class MailBackfillService(
         {
             return new BackfillBatchResult(BackfillOutcome.Skipped, 0, 0);
         }
+
+        using var logScope = logger.BeginMailScope(_names.Account(accountId), folder.FullName);
 
         // Cached UIDs are only meaningful for the UIDVALIDITY they were stored under; after a change the regular sync clears them.
         var uidValidity = await session.GetUidValidityAsync(folder.FullName, cancellationToken);

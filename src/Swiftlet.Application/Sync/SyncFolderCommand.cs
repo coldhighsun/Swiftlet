@@ -1,4 +1,5 @@
 using Mediator;
+using Swiftlet.Application.Logging;
 
 namespace Swiftlet.Application.Sync;
 
@@ -7,7 +8,7 @@ namespace Swiftlet.Application.Sync;
 /// </summary>
 /// <param name="AccountId">The account identifier.</param>
 /// <param name="FolderId">The folder identifier.</param>
-public sealed record SyncFolderCommand(Guid AccountId, Guid FolderId) : ICommand<FolderSyncResult>;
+public sealed record SyncFolderCommand(Guid AccountId, Guid FolderId) : ICommand<FolderSyncResult>, IFolderRequest;
 
 /// <summary>
 /// Handles <see cref="SyncFolderCommand"/>.

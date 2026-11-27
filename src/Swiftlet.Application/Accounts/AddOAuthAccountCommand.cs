@@ -1,6 +1,7 @@
 using Mediator;
 using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Logging;
 using Swiftlet.Domain.Accounts;
 
 namespace Swiftlet.Application.Accounts;
@@ -10,7 +11,14 @@ namespace Swiftlet.Application.Accounts;
 /// </summary>
 /// <param name="Provider">The identity provider.</param>
 /// <param name="DisplayName">The name typed by the user; defaults to the name reported by the provider.</param>
-public sealed record AddOAuthAccountCommand(OAuthProvider Provider, string? DisplayName = null) : ICommand<Guid>;
+public sealed record AddOAuthAccountCommand(OAuthProvider Provider, string? DisplayName = null) : ICommand<Guid>, ILogDetails
+{
+    /// <inheritdoc />
+    public string DescribeForLog(LogNames names)
+    {
+        return $"{Provider} sign-in";
+    }
+}
 
 /// <summary>
 /// Handles <see cref="AddOAuthAccountCommand"/>.

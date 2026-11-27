@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Logging;
 using Swiftlet.Application.Messages;
 using Swiftlet.Application.Sync;
 using Swiftlet.Domain.Accounts;
@@ -20,14 +21,21 @@ namespace Swiftlet.Infrastructure.Sync;
 /// <param name="timeProvider">The clock.</param>
 /// <param name="revisions">Reports changed connection settings, which retire a kept connection.</param>
 /// <param name="logger">The logger.</param>
+/// <param name="names">Resolves the names shown in the log; optional.</param>
 public sealed class FlagPushWorker(
     IServiceScopeFactory scopeFactory,
     IImapSessionFactory imapFactory,
     FlagPushSignal signal,
     TimeProvider timeProvider,
     AccountConnectionRevisions revisions,
-    ILogger<FlagPushWorker> logger) : BackgroundService
+    ILogger<FlagPushWorker> logger,
+    LogNames? names = null) : BackgroundService
 {
+    /// <summary>
+    /// The names shown in the log; identifiers when no directory is supplied.
+    /// </summary>
+    private readonly LogNames _names = names ?? new LogNames();
+
     /// <summary>
     /// How long a change waits for further ones, so several quick changes go out together.
     /// </summary>
@@ -83,9 +91,11 @@ public sealed class FlagPushWorker(
     /// <returns>A task that completes at shutdown.</returns>
     private async Task RunAccountAsync(Guid accountId, ChannelReader<bool> wake, CancellationToken cancellationToken)
     {
+        var accountName = _names.Account(accountId);
+        using var logScope = logger.BeginMailScope(accountName);
         IImapSession? session = null;
         var sessionRevision = 0;
-        var pipeline = RetryPipelines.Transient(timeProvider, Retries, RetryPipelines.InitialDelay, logger, $"Flag push of account {accountId}");
+        var pipeline = RetryPipelines.Transient(timeProvider, Retries, RetryPipelines.InitialDelay, logger, $"Flag push of account {accountName}");
         try
         {
             while (true)
@@ -146,7 +156,7 @@ public sealed class FlagPushWorker(
                 catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
                 {
                     // The changes stay pending and the next regular sync writes them.
-                    logger.LogWarning(ex, "Pushing flag changes of account {Account} failed; leaving them to the next sync.", accountId);
+                    logger.LogWarning(ex, "Pushing flag changes of account {Account} failed; leaving them to the next sync.", accountName);
                 }
             }
         }

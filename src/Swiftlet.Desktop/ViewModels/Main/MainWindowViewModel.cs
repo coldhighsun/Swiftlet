@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Application.Labels;
+using Swiftlet.Application.Logging;
 using Swiftlet.Application.Messages;
 using Swiftlet.Application.Queries;
 using Swiftlet.Application.Sync;
@@ -566,9 +567,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task SyncAsync()
     {
-        _logger.LogInformation("Manual sync requested");
         var scope = ScopeAccountId(SelectedNode);
         var targets = scope is { } id ? _accounts.Where(a => a.Id == id).ToList() : _accounts.ToList();
+        _logger.LogInformation("Manual sync requested for {Accounts}", string.Join(", ", targets.Select(a => a.EmailAddress)));
         await SyncAccountsAsync(targets);
     }
 
@@ -1186,7 +1187,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [RelayCommand(CanExecute = nameof(CanOpenHtml))]
     private void OpenHtml()
     {
-        _logger.LogInformation("Opening message {MessageId} in the browser", SelectedMessage!.Id);
+        using (BeginMessageScope(SelectedMessage!))
+        {
+            _logger.LogInformation("Opening message {MessageId} in the browser", SelectedMessage!.Id);
+        }
+
         _dialogs.ShowHtmlInBrowser(SelectedMessage!.Message.BodyHtml!);
     }
 
@@ -1237,7 +1242,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <param name="value">The new selection.</param>
     partial void OnSelectedNodeChanged(object? value)
     {
-        _logger.LogInformation("Selected {Node}", value?.GetType().Name);
+        LogSelectedNode(value);
         SearchText = string.Empty;
         _loadTask = LoadMessagesAsync(value);
         if (value is FolderNodeViewModel folder)
@@ -1286,6 +1291,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // The cached messages stay listed, and the regular sync retries and reports a lasting problem.
+            using var logScope = _logger.BeginMailScope(AccountName(accountId), FolderName(folderId));
             _logger.LogWarning(ex, "Checking folder {FolderId} of account {AccountId} failed", folderId, accountId);
         }
     }
@@ -1313,7 +1319,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <param name="value">The new selection.</param>
     partial void OnSelectedMessageChanged(MessageItemViewModel? value)
     {
-        _logger.LogDebug("Selected message {MessageId}", value?.Id);
+        using (value is null ? null : BeginMessageScope(value))
+        {
+            _logger.LogDebug("Selected message {MessageId}", value?.Id);
+        }
+
         RebuildLabelChoices();
         var sideEffects = new List<Task>();
         if (value is { IsRead: false })
@@ -1430,7 +1440,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
-        _logger.LogInformation("Saving attachment {Ordinal} of message {MessageId}", attachment.Attachment.Ordinal, attachment.Attachment.MessageId);
+        using (_logger.BeginMailScope(AccountName(attachment.AccountId)))
+        {
+            _logger.LogInformation("Saving attachment {Ordinal} of message {MessageId}", attachment.Attachment.Ordinal, attachment.Attachment.MessageId);
+        }
 
         await GuardedAsync("Error_SaveAttachment", async () =>
         {
@@ -1689,6 +1702,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // The badges are a hint; the old ones stay, and the next reload tries again.
+            using var logScope = _logger.BeginMailScope(AccountName(accountId));
             _logger.LogWarning(ex, "Counting unread messages of account {AccountId} failed", accountId);
         }
     }
@@ -1952,6 +1966,61 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             AccountNodeViewModel account => account.Account.Id,
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// Logs which account, folder, view or label was selected.
+    /// </summary>
+    /// <param name="node">The selected tree node.</param>
+    private void LogSelectedNode(object? node)
+    {
+        var (account, folder) = node switch
+        {
+            FolderNodeViewModel selected => (selected.Account.EmailAddress, selected.Folder.FullName),
+            AccountNodeViewModel selected => (selected.Account.EmailAddress, null),
+            _ => (null, (string?)null),
+        };
+        var target = node switch
+        {
+            FolderNodeViewModel => "folder",
+            AccountNodeViewModel => "account",
+            UnifiedInboxNodeViewModel => "all inboxes",
+            LabelNodeViewModel selected => $"label {selected.Label.Name}",
+            _ => "nothing",
+        };
+        using var logScope = _logger.BeginMailScope(account, folder);
+        _logger.LogInformation("Selected {Node}", target);
+    }
+
+    /// <summary>
+    /// Tags the log lines about a message with its account and folder.
+    /// </summary>
+    /// <param name="message">The message.</param>
+    /// <returns>The scope to dispose.</returns>
+    private IDisposable? BeginMessageScope(MessageItemViewModel message)
+    {
+        return _logger.BeginMailScope(AccountName(message.Message.AccountId), FolderName(message.Message.FolderId));
+    }
+
+    /// <summary>
+    /// Names an account for the log.
+    /// </summary>
+    /// <param name="accountId">The account identifier.</param>
+    /// <returns>The email address, or the identifier if the account is not loaded.</returns>
+    private string AccountName(Guid accountId)
+    {
+        return _accounts.FirstOrDefault(a => a.Id == accountId)?.EmailAddress ?? accountId.ToString();
+    }
+
+    /// <summary>
+    /// Names a folder for the log.
+    /// </summary>
+    /// <param name="folderId">The folder identifier.</param>
+    /// <returns>The full folder name, or the identifier if the folder is not in the tree.</returns>
+    private string FolderName(Guid folderId)
+    {
+        return Accounts.SelectMany(a => a.Folders).FirstOrDefault(f => f.Folder.Id == folderId)?.Folder.FullName
+            ?? folderId.ToString();
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Swiftlet.Application.Logging;
 using Swiftlet.Domain.Accounts;
 
 namespace Swiftlet.Infrastructure.Persistence.Repositories;
@@ -8,25 +9,40 @@ namespace Swiftlet.Infrastructure.Persistence.Repositories;
 /// </summary>
 /// <param name="context">The global database context.</param>
 /// <param name="accountDatabases">The factory of the per-account mail databases.</param>
-internal sealed class AccountRepository(GlobalDbContext context, IAccountDbContextFactory accountDatabases) : IAccountRepository
+/// <param name="names">Remembers the names shown in the log; optional.</param>
+internal sealed class AccountRepository(GlobalDbContext context, IAccountDbContextFactory accountDatabases, LogNames? names = null)
+    : IAccountRepository
 {
     /// <inheritdoc />
     public async Task AddAsync(MailAccount account, CancellationToken cancellationToken = default)
     {
         context.Accounts.Add(account);
         await context.SaveChangesAsync(cancellationToken);
+        names?.RememberAccount(account.Id, account.EmailAddress);
     }
 
     /// <inheritdoc />
     public async Task<MailAccount?> GetAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return await context.Accounts.FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+        var account = await context.Accounts.FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+        if (account is not null)
+        {
+            names?.RememberAccount(account.Id, account.EmailAddress);
+        }
+
+        return account;
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<MailAccount>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        return await context.Accounts.OrderBy(a => a.CreatedAt).ToListAsync(cancellationToken);
+        var accounts = await context.Accounts.OrderBy(a => a.CreatedAt).ToListAsync(cancellationToken);
+        foreach (var account in accounts)
+        {
+            names?.RememberAccount(account.Id, account.EmailAddress);
+        }
+
+        return accounts;
     }
 
     /// <inheritdoc />

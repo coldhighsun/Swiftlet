@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Logging;
 using Swiftlet.Application.Sync;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Infrastructure.Resilience;
@@ -164,6 +165,7 @@ public sealed class BackfillWorker(
     /// <returns>A task that completes when the pass is over.</returns>
     private async Task RunPassAsync(MailAccount account, CancellationToken cancellationToken)
     {
+        using var logScope = logger.BeginMailScope(account.EmailAddress);
         var downloaded = 0;
         try
         {

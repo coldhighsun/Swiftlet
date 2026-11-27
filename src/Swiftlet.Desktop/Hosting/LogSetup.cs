@@ -1,6 +1,7 @@
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
+using Swiftlet.Application.Logging;
 
 namespace Swiftlet.Desktop.Hosting;
 
@@ -18,6 +19,15 @@ internal static class LogSetup
     /// The number of log files kept; older ones are deleted.
     /// </summary>
     public const int RetainedFiles = 7;
+
+    /// <summary>
+    /// The layout of one entry: the standard file layout with the account and folder tags (empty outside a mail scope)
+    /// in front of the message.
+    /// </summary>
+    private const string OutputTemplate =
+        "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}]"
+        + "{" + MailLogScope.AccountProperty + ":l}{" + MailLogScope.FolderProperty + ":l}"
+        + " {Message:lj}{NewLine}{Exception}";
 
     /// <summary>
     /// Creates the logger. Files roll every day and whenever one passes the size limit.
@@ -41,6 +51,7 @@ internal static class LogSetup
                 fileSizeLimitBytes: fileSizeLimitBytes,
                 rollOnFileSizeLimit: true,
                 retainedFileCountLimit: retainedFiles,
+                outputTemplate: OutputTemplate,
                 formatProvider: System.Globalization.CultureInfo.InvariantCulture)
             .CreateLogger();
     }

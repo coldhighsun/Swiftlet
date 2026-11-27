@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Logging;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Folders;
 using Swiftlet.Domain.Messages;
@@ -100,6 +101,7 @@ public sealed class MailSyncService(
     {
         var account = await accounts.GetAsync(accountId, cancellationToken)
             ?? throw new InvalidOperationException($"Account {accountId} was not found.");
+        using var logScope = logger.BeginMailScope(account.EmailAddress);
 
         await using var session = await imapFactory.ConnectAsync(account, cancellationToken);
 
@@ -136,6 +138,7 @@ public sealed class MailSyncService(
             return new FolderSyncResult(0, false);
         }
 
+        using var logScope = logger.BeginMailScope(account.EmailAddress, folder.FullName);
         await using var session = await imapFactory.ConnectAsync(account, cancellationToken);
         using var run = new SyncRun(account, [folder], null);
         var (newMessages, changed) = await SyncFolderAsync(session, run, folder, cancellationToken);
@@ -244,6 +247,7 @@ public sealed class MailSyncService(
         bool isHelper,
         CancellationToken cancellationToken)
     {
+        using var logScope = logger.BeginMailScope(run.Account.EmailAddress, folder.FullName);
         try
         {
             var (newMessages, changed) = await SyncFolderAsync(session, run, folder, cancellationToken);

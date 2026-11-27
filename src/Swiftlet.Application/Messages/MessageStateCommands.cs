@@ -1,4 +1,5 @@
 using Mediator;
+using Swiftlet.Application.Logging;
 using Swiftlet.Domain.Messages;
 
 namespace Swiftlet.Application.Messages;
@@ -9,7 +10,14 @@ namespace Swiftlet.Application.Messages;
 /// <param name="AccountId">The account that owns the message.</param>
 /// <param name="MessageId">The message identifier.</param>
 /// <param name="IsRead">The new read state.</param>
-public sealed record SetMessageReadCommand(Guid AccountId, Guid MessageId, bool IsRead) : ICommand<Unit>;
+public sealed record SetMessageReadCommand(Guid AccountId, Guid MessageId, bool IsRead) : ICommand<Unit>, IAccountRequest, ILogDetails
+{
+    /// <inheritdoc />
+    public string DescribeForLog(LogNames names)
+    {
+        return $"message {MessageId}, read {IsRead}";
+    }
+}
 
 /// <summary>
 /// Handles <see cref="SetMessageReadCommand"/>.
@@ -38,7 +46,14 @@ public sealed class SetMessageReadCommandHandler(IMessageRepository messages, Fl
 /// <param name="AccountId">The account that owns the message.</param>
 /// <param name="MessageId">The message identifier.</param>
 /// <param name="IsFlagged">The new flagged state.</param>
-public sealed record SetMessageFlaggedCommand(Guid AccountId, Guid MessageId, bool IsFlagged) : ICommand<Unit>;
+public sealed record SetMessageFlaggedCommand(Guid AccountId, Guid MessageId, bool IsFlagged) : ICommand<Unit>, IAccountRequest, ILogDetails
+{
+    /// <inheritdoc />
+    public string DescribeForLog(LogNames names)
+    {
+        return $"message {MessageId}, flagged {IsFlagged}";
+    }
+}
 
 /// <summary>
 /// Handles <see cref="SetMessageFlaggedCommand"/>.

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Swiftlet.Application.Logging;
 using Swiftlet.Application.Sync;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Infrastructure.Persistence;
@@ -78,6 +79,7 @@ internal sealed class DatabaseMaintenanceWorker(
 
         foreach (var account in accounts)
         {
+            using var logScope = logger.BeginMailScope(account.EmailAddress);
             try
             {
                 await MaintainAsync(account.Id, cancellationToken);
@@ -85,7 +87,7 @@ internal sealed class DatabaseMaintenanceWorker(
             catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
                 // A busy database or a full disk only postpones the work of this account; the others are still handled.
-                logger.LogWarning(ex, "Maintaining the database of account {AccountId} failed; trying again later.", account.Id);
+                logger.LogWarning(ex, "Maintaining the database of account {Account} failed; trying again later.", account.EmailAddress);
             }
         }
     }

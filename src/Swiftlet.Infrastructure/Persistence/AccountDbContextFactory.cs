@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Swiftlet.Application.Logging;
 using Swiftlet.Infrastructure.Persistence.Encryption;
 
 namespace Swiftlet.Infrastructure.Persistence;
@@ -12,11 +13,18 @@ namespace Swiftlet.Infrastructure.Persistence;
 /// <param name="directory">The directory holding the account databases.</param>
 /// <param name="logger">The logger; optional.</param>
 /// <param name="connections">Gives the connection string of each database; plain connection strings when omitted.</param>
+/// <param name="names">Resolves the names shown in the log; optional.</param>
 public sealed class AccountDbContextFactory(
     string directory,
     ILogger<AccountDbContextFactory>? logger = null,
-    IDatabaseConnectionStrings? connections = null) : IAccountDbContextFactory, IDisposable
+    IDatabaseConnectionStrings? connections = null,
+    LogNames? names = null) : IAccountDbContextFactory, IDisposable
 {
+    /// <summary>
+    /// The names shown in the log; identifiers when no directory is supplied.
+    /// </summary>
+    private readonly LogNames _names = names ?? new LogNames();
+
     /// <summary>
     /// The accounts whose database schema has already been ensured in this process.
     /// </summary>
@@ -41,6 +49,7 @@ public sealed class AccountDbContextFactory(
                     if (!_initialized.ContainsKey(accountId))
                     {
                         Directory.CreateDirectory(directory);
+                        using var logScope = logger.BeginMailScope(_names.Account(accountId));
                         logger?.LogInformation("Opening the database of account {AccountId} for the first time in this run", accountId);
                         await SqliteSchemaInitializer.InitializeAccountAsync(context, cancellationToken);
                         _initialized[accountId] = true;
@@ -79,6 +88,7 @@ public sealed class AccountDbContextFactory(
             }
 
             var path = GetDatabasePath(accountId);
+            using var logScope = logger.BeginMailScope(_names.Account(accountId));
             logger?.LogInformation("Deleting the database files of account {AccountId}", accountId);
             foreach (var file in new[] { path, $"{path}-wal", $"{path}-shm", $"{path}-journal" })
             {

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Swiftlet.Application.Logging;
 using Swiftlet.Domain.Folders;
 
 namespace Swiftlet.Infrastructure.Persistence.Repositories;
@@ -7,7 +8,8 @@ namespace Swiftlet.Infrastructure.Persistence.Repositories;
 /// EF Core implementation of <see cref="IFolderRepository"/> on the per-account databases.
 /// </summary>
 /// <param name="contexts">The scope's account database contexts.</param>
-internal sealed class FolderRepository(AccountContextProvider contexts) : IFolderRepository
+/// <param name="names">Remembers the names shown in the log; optional.</param>
+internal sealed class FolderRepository(AccountContextProvider contexts, LogNames? names = null) : IFolderRepository
 {
     /// <inheritdoc />
     public async Task AddAsync(MailFolder folder, CancellationToken cancellationToken = default)
@@ -16,13 +18,20 @@ internal sealed class FolderRepository(AccountContextProvider contexts) : IFolde
         var context = await contexts.GetAsync(folder.AccountId, cancellationToken);
         context.Folders.Add(folder);
         await context.SaveChangesAsync(cancellationToken);
+        names?.RememberFolder(folder.Id, folder.FullName);
     }
 
     /// <inheritdoc />
     public async Task<MailFolder?> GetAsync(Guid accountId, Guid id, CancellationToken cancellationToken = default)
     {
         var context = await contexts.GetAsync(accountId, cancellationToken);
-        return await context.Folders.FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
+        var folder = await context.Folders.FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
+        if (folder is not null)
+        {
+            names?.RememberFolder(folder.Id, folder.FullName);
+        }
+
+        return folder;
     }
 
     /// <inheritdoc />
@@ -31,10 +40,16 @@ internal sealed class FolderRepository(AccountContextProvider contexts) : IFolde
         CancellationToken cancellationToken = default)
     {
         var context = await contexts.GetAsync(accountId, cancellationToken);
-        return await context.Folders
+        var folders = await context.Folders
             .Where(f => f.AccountId == accountId)
             .OrderBy(f => f.FullName)
             .ToListAsync(cancellationToken);
+        foreach (var folder in folders)
+        {
+            names?.RememberFolder(folder.Id, folder.FullName);
+        }
+
+        return folders;
     }
 
     /// <inheritdoc />

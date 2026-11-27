@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Polly;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Logging;
 using Swiftlet.Application.Messages;
 using Swiftlet.Application.Sync;
 using Swiftlet.Domain.Accounts;
@@ -23,6 +24,7 @@ namespace Swiftlet.Infrastructure.Sync;
 /// <param name="timeProvider">The clock.</param>
 /// <param name="revisions">Reports changed connection settings, which replace the connection and lift a block.</param>
 /// <param name="logger">The logger.</param>
+/// <param name="names">Resolves the names shown in the log; optional.</param>
 public sealed class DeletionWorker(
     IServiceScopeFactory scopeFactory,
     IImapSessionFactory imapFactory,
@@ -31,8 +33,14 @@ public sealed class DeletionWorker(
     SyncEvents events,
     TimeProvider timeProvider,
     AccountConnectionRevisions revisions,
-    ILogger<DeletionWorker> logger) : BackgroundService
+    ILogger<DeletionWorker> logger,
+    LogNames? names = null) : BackgroundService
 {
+    /// <summary>
+    /// The names shown in the log; identifiers when no directory is supplied.
+    /// </summary>
+    private readonly LogNames _names = names ?? new LogNames();
+
     /// <summary>
     /// How often the worker looks for pending deletions when nobody signals, which picks up those left from the last run.
     /// </summary>
@@ -177,6 +185,7 @@ public sealed class DeletionWorker(
     /// <returns>A task that completes when no further pass is wanted or allowed.</returns>
     private async Task RunAccountAsync(Guid accountId, CancellationToken cancellationToken)
     {
+        using var logScope = logger.BeginMailScope(_names.Account(accountId));
         var released = false;
         try
         {
@@ -227,7 +236,7 @@ public sealed class DeletionWorker(
             TransientErrors.IsTransient,
             (error, delay) =>
             {
-                logger.LogWarning(error, "Deleting messages of account {Account} failed; retrying in {Delay}.", accountId, delay);
+                logger.LogWarning(error, "Deleting messages of account {Account} failed; retrying in {Delay}.", _names.Account(accountId), delay);
                 events.RaiseDeletionProgressed(new DeletionProgressEventArgs(accountId, deleted, 0, false, error.Message, true));
             });
         var context = RetryPipelines.Rent(streak, cancellationToken);
@@ -261,7 +270,7 @@ public sealed class DeletionWorker(
         catch (Exception ex)
         {
             // A rejected password, an expired sign-in or an unexpected error: the marks stay and a later run tries again.
-            logger.LogWarning(ex, "Deleting messages of account {Account} is blocked; trying again later.", accountId);
+            logger.LogWarning(ex, "Deleting messages of account {Account} is blocked; trying again later.", _names.Account(accountId));
             _notBefore[accountId] = (timeProvider.GetUtcNow() + BlockedInterval, revision);
             events.RaiseDeletionProgressed(new DeletionProgressEventArgs(accountId, deleted, 0, true, ex.Message, true));
         }
@@ -287,7 +296,7 @@ public sealed class DeletionWorker(
     {
         while (await DrainConnectionAsync(accountId, readRevision(), onBatch, cancellationToken))
         {
-            logger.LogInformation("The connection settings of account {Account} changed; deleting continues on a new connection.", accountId);
+            logger.LogInformation("The connection settings of account {Account} changed; deleting continues on a new connection.", _names.Account(accountId));
         }
     }
 

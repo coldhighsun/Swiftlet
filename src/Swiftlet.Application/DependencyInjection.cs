@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Logging;
 using Swiftlet.Application.Messages;
 using Swiftlet.Application.Sync;
 
@@ -26,6 +27,7 @@ public static class DependencyInjection
             options.ServiceLifetime = ServiceLifetime.Scoped;
             options.PipelineBehaviors = [typeof(LoggingBehavior<,>)];
         });
+        services.AddSingleton<LogNames>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new MailSyncOptions());
         services.AddSingleton<SyncSchedule>();
