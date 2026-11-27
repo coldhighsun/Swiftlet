@@ -78,6 +78,7 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IImapSessionFactory, MailKitImapSessionFactory>();
         services.AddSingleton<IMailSender, MailKitMailSender>();
+        services.AddSingleton<IAttachmentPreviewer, AttachmentPreviewer>();
         services.AddHostedService<AccountSyncWorker>();
         services.AddHostedService<InboxWatcher>();
         services.AddHostedService<BackfillWorker>();

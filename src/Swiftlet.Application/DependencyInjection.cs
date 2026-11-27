@@ -32,6 +32,7 @@ public static class DependencyInjection
         services.AddSingleton(new MailSyncOptions());
         services.AddSingleton<SyncSchedule>();
         services.TryAddSingleton<ISyncSettings, DefaultSyncSettings>();
+        services.AddSingleton<AttachmentPreviewCache>();
         services.AddSingleton<SyncCoordinator>();
         services.AddSingleton<AccountSyncStatusTracker>();
         services.AddSingleton<AccountConnectionRevisions>();
