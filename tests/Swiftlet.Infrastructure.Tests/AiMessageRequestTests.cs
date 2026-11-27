@@ -7,6 +7,8 @@ using Microsoft.Extensions.Logging;
 using Swiftlet.Application;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Application.Ai;
+using Swiftlet.Application.Messages;
+using Swiftlet.Domain.Labels;
 using Swiftlet.Domain.Messages;
 
 namespace Swiftlet.Infrastructure.Tests;
@@ -68,6 +70,7 @@ public sealed class AiMessageRequestTests : IAsyncLifetime
         services.AddSingleton<IAiClientFactory>(_model);
         services.AddSingleton<ISecretStore>(new EmptySecrets());
         services.AddScoped<IMessageRepository>(_ => _database.CreateMessageRepository());
+        services.AddScoped<ILabelRepository>(_ => _database.CreateLabelRepository());
         _services = services.BuildServiceProvider();
     }
 
@@ -268,6 +271,152 @@ public sealed class AiMessageRequestTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// Each message is asked about on its own with the label names, and only changes are suggested.
+    /// </summary>
+    /// <returns>A task that completes when the test finished.</returns>
+    [Fact]
+    public async Task Classify_Messages_SuggestsOnlyChangesOnePerRequest()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var work = Label.Create("private-work", "#E53935");
+        var home = Label.Create("private-home", "#1E88E5");
+        await _database.CreateLabelRepository().AddAsync(work, ct);
+        await _database.CreateLabelRepository().AddAsync(home, ct);
+        var second = await AddMessageAsync(2, "second-body");
+        second.AddLabel(work);
+        await _database.CreateMessageRepository().SaveLabelsAsync(second, ct);
+        _model.Reply = _ => """{"labels":["private-work"],"priority":"normal"}""";
+
+        var results = await ClassifyAsync(Reference(_message), Reference(second), new(_message.AccountId, Guid.NewGuid()));
+
+        results.Should().HaveCount(3);
+        results.Single(r => r.Message == Reference(_message)).Should().Match<MessageClassification>(r =>
+            r.Status == ClassificationStatus.Suggested && r.LabelIds.Single() == work.Id && r.Priority == null);
+        results.Where(r => r.Message != Reference(_message))
+            .Should().OnlyContain(r => r.Status == ClassificationStatus.NoSuggestion);
+        _model.Prompts.Should().HaveCount(2).And.OnlyContain(prompt =>
+            prompt[0].Text.Contains("private-home")
+            && prompt[1].Text.Contains("private-body") != prompt[1].Text.Contains("second-body"));
+        _log.Messages.Should().NotContain(m => m.Contains("private-", StringComparison.Ordinal));
+        (await _database.CreateMessageRepository().GetAsync(_message.AccountId, _message.Id, ct))!
+            .Labels.Should().BeEmpty("nothing is applied by classifying");
+    }
+
+    /// <summary>
+    /// At most two requests run at once and at most twenty messages are classified.
+    /// </summary>
+    /// <returns>A task that completes when the test finished.</returns>
+    [Fact]
+    public async Task Classify_ManyMessages_LimitsCountAndConcurrency()
+    {
+        _model.Reply = _ => """{"priority":"low"}""";
+
+        var results = await ClassifyAsync([.. Enumerable.Repeat(Reference(_message), 25)]);
+
+        results.Should().HaveCount(ClassifyMessagesQuery.MaxMessages)
+            .And.OnlyContain(r => r.Priority == MessagePriority.Low);
+        _model.MostAtOnce.Should().Be(2);
+    }
+
+    /// <summary>
+    /// A failure that may concern one message is reported for it and the others go on.
+    /// </summary>
+    /// <returns>A task that completes when the test finished.</returns>
+    [Fact]
+    public async Task Classify_OneRejected_ContinuesWithTheOthers()
+    {
+        var second = await AddMessageAsync(2, "second-body");
+        _model.Reply = content => content.Contains("second-body", StringComparison.Ordinal)
+            ? throw new AiException(AiFailure.Rejected)
+            : """{"priority":"high"}""";
+
+        var results = await ClassifyAsync(Reference(_message), Reference(second));
+
+        results.Single(r => r.Message == Reference(second)).Should().Match<MessageClassification>(r =>
+            r.Status == ClassificationStatus.Failed && r.Failure == AiFailure.Rejected);
+        results.Single(r => r.Message == Reference(_message)).Priority.Should().Be(MessagePriority.High);
+    }
+
+    /// <summary>
+    /// A failure that concerns every message ends the request.
+    /// </summary>
+    /// <returns>A task that completes when the test finished.</returns>
+    [Fact]
+    public async Task Classify_Unauthorized_Stops()
+    {
+        _model.Reply = _ => throw new AiException(AiFailure.Unauthorized);
+
+        var act = () => ClassifyAsync([.. Enumerable.Repeat(Reference(_message), 10)]);
+
+        (await act.Should().ThrowAsync<AiException>()).Which.Failure.Should().Be(AiFailure.Unauthorized);
+        _model.Prompts.Count.Should().BeLessThan(10);
+    }
+
+    /// <summary>
+    /// The priority is stored, kept by a repeated read and cleared again.
+    /// </summary>
+    /// <returns>A task that completes when the test finished.</returns>
+    [Fact]
+    public async Task SetMessagePriority_Value_IsStoredAndCleared()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var repository = _database.CreateMessageRepository();
+        var handler = new SetMessagePriorityCommandHandler(repository);
+
+        await handler.Handle(new SetMessagePriorityCommand(_message.AccountId, _message.Id, MessagePriority.High), ct);
+
+        (await repository.GetAsync(_message.AccountId, _message.Id, ct))!.AiPriority.Should().Be(MessagePriority.High);
+        await using var verifier = _database.CreateVerifier();
+        (await verifier.Messages().GetAsync(_message.AccountId, _message.Id, ct))!.AiPriority.Should().Be(MessagePriority.High);
+
+        await handler.Handle(new SetMessagePriorityCommand(_message.AccountId, _message.Id, null), ct);
+        await using var later = _database.CreateVerifier();
+        (await later.Messages().GetAsync(_message.AccountId, _message.Id, ct))!.AiPriority.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Gets the reference of a message.
+    /// </summary>
+    /// <param name="message">The message.</param>
+    /// <returns>The reference.</returns>
+    private static MessageReference Reference(MailMessage message)
+    {
+        return new MessageReference(message.AccountId, message.Id);
+    }
+
+    /// <summary>
+    /// Adds another message to the seeded folder.
+    /// </summary>
+    /// <param name="uid">The UID.</param>
+    /// <param name="body">The body.</param>
+    /// <returns>The message.</returns>
+    private async Task<MailMessage> AddMessageAsync(uint uid, string body)
+    {
+        var message = MailMessage.Create(
+            _message.AccountId, _message.FolderId, uid, "s", "A", "a@example.com", "r", DateTimeOffset.UtcNow, body);
+        await _database.CreateMessageRepository().AddAsync(message, TestContext.Current.CancellationToken);
+        return message;
+    }
+
+    /// <summary>
+    /// Runs a classification.
+    /// </summary>
+    /// <param name="references">The messages.</param>
+    /// <returns>The results.</returns>
+    private async Task<List<MessageClassification>> ClassifyAsync(params MessageReference[] references)
+    {
+        await using var scope = _services.CreateAsyncScope();
+        var results = new List<MessageClassification>();
+        await foreach (var result in scope.ServiceProvider.GetRequiredService<ISender>()
+            .CreateStream(new ClassifyMessagesQuery(references), TestContext.Current.CancellationToken))
+        {
+            results.Add(result);
+        }
+
+        return results;
+    }
+
+    /// <summary>
     /// Runs a streamed request through Mediator.
     /// </summary>
     /// <param name="query">The request.</param>
@@ -320,6 +469,21 @@ public sealed class AiMessageRequestTests : IAsyncLifetime
         public ChatFinishReason Finish { get; set; } = ChatFinishReason.Stop;
 
         /// <summary>
+        /// Gets or sets a function answering by the sent content, used instead of <see cref="Pieces"/>.
+        /// </summary>
+        public Func<string, string>? Reply { get; set; }
+
+        /// <summary>
+        /// Gets the largest number of requests that ran at the same time.
+        /// </summary>
+        public int MostAtOnce { get; private set; }
+
+        /// <summary>
+        /// How many requests run now.
+        /// </summary>
+        private int _active;
+
+        /// <summary>
         /// Gets the conversations received.
         /// </summary>
         public List<List<ChatMessage>> Prompts { get; } = [];
@@ -350,12 +514,34 @@ public sealed class AiMessageRequestTests : IAsyncLifetime
             ChatOptions? options = null,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            Prompts.Add([.. messages]);
-            Options.Add(options);
-            foreach (var piece in Pieces)
+            List<ChatMessage> prompt = [.. messages];
+            lock (Prompts)
             {
-                await Task.Yield();
-                yield return new ChatResponseUpdate(ChatRole.Assistant, piece);
+                Prompts.Add(prompt);
+                Options.Add(options);
+                MostAtOnce = Math.Max(MostAtOnce, ++_active);
+            }
+
+            try
+            {
+                if (Reply is not null)
+                {
+                    // Long enough for a second request to start while this one is still running.
+                    await Task.Delay(TimeSpan.FromMilliseconds(20), cancellationToken);
+                }
+
+                foreach (var piece in Reply is null ? Pieces : [Reply(prompt[1].Text)])
+                {
+                    await Task.Yield();
+                    yield return new ChatResponseUpdate(ChatRole.Assistant, piece);
+                }
+            }
+            finally
+            {
+                lock (Prompts)
+                {
+                    _active--;
+                }
             }
 
             yield return new ChatResponseUpdate { FinishReason = Finish };
