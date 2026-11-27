@@ -4,115 +4,159 @@
              xmlns:loc="using:Swiftlet.Desktop.Localization"
              x:Class="Swiftlet.Desktop.Views.AccountPage"
              x:DataType="main:AccountPageViewModel">
+  <!-- The page fills the pane. Everything that depends on its width is set by these styles only, because a value set on a
+       control would win over them: first the narrow, single column layout, then the wide one. -->
+  <UserControl.Styles>
+    <Style Selector="WrapPanel#HeaderActions">
+      <Setter Property="Grid.Row" Value="1" />
+      <Setter Property="Grid.Column" Value="0" />
+      <Setter Property="Grid.ColumnSpan" Value="3" />
+      <Setter Property="Margin" Value="0,12,0,0" />
+    </Style>
+    <Style Selector="Border#StatisticsCard">
+      <Setter Property="Grid.ColumnSpan" Value="2" />
+    </Style>
+    <Style Selector="StackPanel#SettingsColumn">
+      <Setter Property="Grid.Row" Value="1" />
+      <Setter Property="Grid.Column" Value="0" />
+      <Setter Property="Grid.ColumnSpan" Value="2" />
+      <Setter Property="Margin" Value="0,12,0,0" />
+    </Style>
+    <ContainerQuery Name="account" Query="min-width:800">
+      <Style Selector="WrapPanel#HeaderActions">
+        <Setter Property="Grid.Row" Value="0" />
+        <Setter Property="Grid.Column" Value="2" />
+        <Setter Property="Grid.ColumnSpan" Value="1" />
+        <Setter Property="Margin" Value="16,0,0,0" />
+      </Style>
+      <Style Selector="Border#StatisticsCard">
+        <Setter Property="Grid.ColumnSpan" Value="1" />
+      </Style>
+      <Style Selector="StackPanel#SettingsColumn">
+        <Setter Property="Grid.Row" Value="0" />
+        <Setter Property="Grid.Column" Value="1" />
+        <Setter Property="Grid.ColumnSpan" Value="1" />
+        <Setter Property="Margin" Value="12,0,0,0" />
+      </Style>
+    </ContainerQuery>
+  </UserControl.Styles>
   <Border Background="{DynamicResource Brush.WindowBg}" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource Brush.Border}">
     <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-      <StackPanel Margin="24,16" Spacing="12" MaxWidth="900">
-        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
-          <Border Width="48" Height="48" CornerRadius="24" Background="{Binding Node.AvatarBrush}" VerticalAlignment="Center">
-            <TextBlock Text="{Binding Node.Initial}" Foreground="White" FontSize="20" HorizontalAlignment="Center"
-                       VerticalAlignment="Center" />
-          </Border>
-          <StackPanel Grid.Column="1" VerticalAlignment="Center">
-            <TextBlock Classes="title" Text="{Binding Node.DisplayName}" TextWrapping="Wrap" />
-            <!-- Without a name of its own the title already is the address. -->
-            <SelectableTextBlock Classes="secondary" Text="{Binding Node.Account.EmailAddress}" TextWrapping="Wrap"
-                                 IsVisible="{Binding Node.Account.HasCustomDisplayName}" />
-          </StackPanel>
-        </Grid>
+      <Border Container.Name="account" Container.Sizing="Width">
+        <StackPanel x:Name="PageContent" Margin="24,16" Spacing="12">
+          <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto">
+            <Border Width="48" Height="48" CornerRadius="24" Background="{Binding Node.AvatarBrush}" VerticalAlignment="Center">
+              <TextBlock Text="{Binding Node.Initial}" Foreground="White" FontSize="20" HorizontalAlignment="Center"
+                         VerticalAlignment="Center" />
+            </Border>
+            <StackPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
+              <TextBlock Classes="title" Text="{Binding Node.DisplayName}" TextWrapping="Wrap" />
+              <!-- Without a name of its own the title already is the address. -->
+              <SelectableTextBlock Classes="secondary" Text="{Binding Node.Account.EmailAddress}" TextWrapping="Wrap"
+                                   IsVisible="{Binding Node.Account.HasCustomDisplayName}" />
+            </StackPanel>
 
-        <WrapPanel ItemSpacing="8" LineSpacing="8">
-          <Button Classes="accent" Command="{Binding SyncCommand}" Content="{loc:Loc AccountPage_SyncNow}" />
-          <Button Command="{Binding EditCommand}" CommandParameter="{Binding Node}" Content="{loc:Loc Menu_Account_Settings}" />
-          <Button Command="{Binding ReauthenticateCommand}" CommandParameter="{Binding Node}"
-                  IsVisible="{Binding Node.CanReauthenticate}" Content="{loc:Loc Menu_Account_Reauthenticate}" />
-          <Button Classes="danger" Command="{Binding DeleteCommand}" CommandParameter="{Binding Node}"
-                  Content="{loc:Loc Menu_Account_Delete}" />
-        </WrapPanel>
+            <WrapPanel x:Name="HeaderActions" ItemSpacing="8" LineSpacing="8" VerticalAlignment="Center">
+              <Button Classes="accent" Command="{Binding SyncCommand}" Content="{loc:Loc AccountPage_SyncNow}" />
+              <Button Command="{Binding EditCommand}" CommandParameter="{Binding Node}" Content="{loc:Loc Menu_Account_Settings}" />
+              <Button Command="{Binding ReauthenticateCommand}" CommandParameter="{Binding Node}"
+                      IsVisible="{Binding Node.CanReauthenticate}" Content="{loc:Loc Menu_Account_Reauthenticate}" />
+              <Button Classes="danger" Command="{Binding DeleteCommand}" CommandParameter="{Binding Node}"
+                      Content="{loc:Loc Menu_Account_Delete}" />
+            </WrapPanel>
+          </Grid>
 
-        <Border Classes="card">
-          <StackPanel Spacing="8">
-            <TextBlock Classes="section" Text="{loc:Loc AccountPage_SyncStatus}" />
-            <TextBlock Text="{Binding SyncSummary}" TextWrapping="Wrap" />
-            <SelectableTextBlock Foreground="{DynamicResource Brush.Danger}" Text="{Binding SyncError}"
-                                 IsVisible="{Binding HasSyncError}" TextWrapping="Wrap" />
-            <TextBlock Classes="error" Text="{Binding FailedFoldersText}" IsVisible="{Binding HasFailedFolders}"
-                       TextWrapping="Wrap" />
-            <TextBlock Classes="caption" Text="{Binding LastSuccessText}" IsVisible="{Binding HasLastSuccess}"
-                       TextWrapping="Wrap" />
-          </StackPanel>
-        </Border>
-
-        <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
-          <Border Classes="card" VerticalAlignment="Top">
+          <Border Classes="card">
             <StackPanel Spacing="8">
-              <TextBlock Classes="section" Text="{loc:Loc AccountPage_Statistics}" />
-              <WrapPanel LineSpacing="8">
-              <StackPanel Margin="0,0,16,0">
-                <TextBlock Classes="title" Text="{Binding InboxUnreadText}" />
-                <TextBlock Classes="caption" Text="{loc:Loc AccountPage_InboxUnread}" />
-              </StackPanel>
-              <StackPanel Margin="0,0,16,0">
-                <TextBlock Classes="title" Text="{Binding MessageCountText}" />
-                <TextBlock Classes="caption" Text="{loc:Loc AccountPage_Messages}" />
-              </StackPanel>
-              <StackPanel Margin="0,0,16,0">
-                <TextBlock Classes="title" Text="{Binding FolderCountText}" />
-                <TextBlock Classes="caption" Text="{loc:Loc AccountPage_Folders}" />
-              </StackPanel>
-              </WrapPanel>
-              <Border Height="1" Background="{DynamicResource Brush.Border}" />
-              <Grid ColumnDefinitions="*,56,56" ColumnSpacing="8">
-                <TextBlock Classes="caption" Text="{loc:Loc AccountPage_ColumnFolder}" />
-                <TextBlock Grid.Column="1" Classes="caption" Text="{loc:Loc AccountPage_ColumnMessages}" TextAlignment="Right" />
-                <TextBlock Grid.Column="2" Classes="caption" Text="{loc:Loc AccountPage_ColumnUnread}" TextAlignment="Right" />
-              </Grid>
-              <ItemsControl ItemsSource="{Binding FolderRows}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate DataType="main:AccountFolderRow">
-                    <Grid ColumnDefinitions="*,56,56" ColumnSpacing="8" Margin="0,2">
-                      <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
-                      <TextBlock Grid.Column="1" Text="{Binding Total}" TextAlignment="Right" />
-                      <TextBlock Grid.Column="2" Text="{Binding Unread}" TextAlignment="Right" />
-                    </Grid>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-              <TextBlock Classes="caption" Text="{loc:Loc AccountPage_StatisticsHint}" TextWrapping="Wrap" />
+              <TextBlock Classes="section" Text="{loc:Loc AccountPage_SyncStatus}" />
+              <TextBlock Text="{Binding SyncSummary}" TextWrapping="Wrap" />
+              <SelectableTextBlock Foreground="{DynamicResource Brush.Danger}" Text="{Binding SyncError}"
+                                   IsVisible="{Binding HasSyncError}" TextWrapping="Wrap" />
+              <TextBlock Classes="error" Text="{Binding FailedFoldersText}" IsVisible="{Binding HasFailedFolders}"
+                         TextWrapping="Wrap" />
+              <TextBlock Classes="caption" Text="{Binding LastSuccessText}" IsVisible="{Binding HasLastSuccess}"
+                         TextWrapping="Wrap" />
             </StackPanel>
           </Border>
-          <Border Grid.Column="1" Classes="card" VerticalAlignment="Top">
-            <StackPanel Spacing="8">
-              <TextBlock Classes="section" Text="{loc:Loc AccountPage_Details}" />
-              <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="8">
-              <TextBlock Grid.Row="0" Classes="secondary" Text="{loc:Loc AccountPage_SignInMethod}" />
-              <SelectableTextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SignInMethodText}" TextWrapping="Wrap" />
-              <TextBlock Grid.Row="1" Classes="secondary" Text="{loc:Loc AccountPage_SenderName}" />
-              <SelectableTextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SenderName}" TextWrapping="Wrap" />
-              <TextBlock Grid.Row="2" Classes="secondary" Text="{loc:Loc EditAccount_SyncInterval}" />
-              <SelectableTextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SyncIntervalDescription}" TextWrapping="Wrap" />
-              <TextBlock Grid.Row="3" Classes="secondary" Text="{loc:Loc EditAccount_ArchiveFolder}" />
-              <SelectableTextBlock Grid.Row="3" Grid.Column="1" Text="{Binding ArchiveFolderText}" TextWrapping="Wrap" />
-              <TextBlock Grid.Row="4" Classes="secondary" Text="{loc:Loc AccountPage_AddedAt}" />
-              <SelectableTextBlock Grid.Row="4" Grid.Column="1" Text="{Binding AddedAtText}" TextWrapping="Wrap" />
-              </Grid>
-            </StackPanel>
-          </Border>
-        </Grid>
 
-        <Border Classes="card">
-          <StackPanel Spacing="8">
-            <TextBlock Classes="section" Text="{loc:Loc AccountPage_Servers}" />
-            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="8">
-              <TextBlock Classes="secondary" Text="IMAP" />
-              <SelectableTextBlock Grid.Column="1" Text="{Binding ImapAddress}" TextWrapping="Wrap" />
-              <TextBlock Grid.Column="2" Classes="secondary" Text="{Binding ImapSecurity}" />
-              <TextBlock Grid.Row="1" Classes="secondary" Text="SMTP" />
-              <SelectableTextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SmtpAddress}" TextWrapping="Wrap" />
-              <TextBlock Grid.Row="1" Grid.Column="2" Classes="secondary" Text="{Binding SmtpSecurity}" />
-            </Grid>
-          </StackPanel>
-        </Border>
-      </StackPanel>
+          <Grid ColumnDefinitions="3*,2*" RowDefinitions="Auto,Auto">
+            <Border x:Name="StatisticsCard" Classes="card" VerticalAlignment="Top">
+              <StackPanel Spacing="8">
+                <TextBlock Classes="section" Text="{loc:Loc AccountPage_Statistics}" />
+                <WrapPanel LineSpacing="8">
+                  <StackPanel Margin="0,0,32,0">
+                    <TextBlock Classes="title" Text="{Binding InboxUnreadText}" />
+                    <TextBlock Classes="caption" Text="{loc:Loc AccountPage_InboxUnread}" />
+                  </StackPanel>
+                  <StackPanel Margin="0,0,32,0">
+                    <TextBlock Classes="title" Text="{Binding MessageCountText}" />
+                    <TextBlock Classes="caption" Text="{loc:Loc AccountPage_Messages}" />
+                  </StackPanel>
+                  <StackPanel>
+                    <TextBlock Classes="title" Text="{Binding FolderCountText}" />
+                    <TextBlock Classes="caption" Text="{loc:Loc AccountPage_Folders}" />
+                  </StackPanel>
+                </WrapPanel>
+                <Border Height="1" Background="{DynamicResource Brush.Border}" />
+                <Grid ColumnDefinitions="*,72,72" ColumnSpacing="8">
+                  <TextBlock Classes="caption" Text="{loc:Loc AccountPage_ColumnFolder}" />
+                  <TextBlock Grid.Column="1" Classes="caption" Text="{loc:Loc AccountPage_ColumnMessages}" TextAlignment="Right" />
+                  <TextBlock Grid.Column="2" Classes="caption" Text="{loc:Loc AccountPage_ColumnUnread}" TextAlignment="Right" />
+                </Grid>
+                <ItemsControl ItemsSource="{Binding FolderRows}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="main:AccountFolderRow">
+                      <!-- The line leads the eye from a name to its numbers in a wide window. -->
+                      <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Brush.Border}" Padding="0,4">
+                        <Grid ColumnDefinitions="*,72,72" ColumnSpacing="8">
+                          <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
+                          <TextBlock Grid.Column="1" Text="{Binding Total}" TextAlignment="Right" />
+                          <TextBlock Grid.Column="2" Text="{Binding Unread}" TextAlignment="Right" />
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Classes="caption" Text="{loc:Loc AccountPage_StatisticsHint}" TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+
+            <StackPanel x:Name="SettingsColumn" Spacing="12" VerticalAlignment="Top">
+              <Border Classes="card">
+                <StackPanel Spacing="8">
+                  <TextBlock Classes="section" Text="{loc:Loc AccountPage_Details}" />
+                  <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="8">
+                    <TextBlock Grid.Row="0" Classes="secondary" Text="{loc:Loc AccountPage_SignInMethod}" />
+                    <SelectableTextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SignInMethodText}" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="1" Classes="secondary" Text="{loc:Loc AccountPage_SenderName}" />
+                    <SelectableTextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SenderName}" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="2" Classes="secondary" Text="{loc:Loc EditAccount_SyncInterval}" />
+                    <SelectableTextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SyncIntervalDescription}" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="3" Classes="secondary" Text="{loc:Loc EditAccount_ArchiveFolder}" />
+                    <SelectableTextBlock Grid.Row="3" Grid.Column="1" Text="{Binding ArchiveFolderText}" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="4" Classes="secondary" Text="{loc:Loc AccountPage_AddedAt}" />
+                    <SelectableTextBlock Grid.Row="4" Grid.Column="1" Text="{Binding AddedAtText}" TextWrapping="Wrap" />
+                  </Grid>
+                </StackPanel>
+              </Border>
+
+              <Border Classes="card">
+                <StackPanel Spacing="8">
+                  <TextBlock Classes="section" Text="{loc:Loc AccountPage_Servers}" />
+                  <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="8">
+                    <TextBlock Classes="secondary" Text="IMAP" />
+                    <SelectableTextBlock Grid.Column="1" Text="{Binding ImapAddress}" TextWrapping="Wrap" />
+                    <TextBlock Grid.Column="2" Classes="secondary" Text="{Binding ImapSecurity}" />
+                    <TextBlock Grid.Row="1" Classes="secondary" Text="SMTP" />
+                    <SelectableTextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SmtpAddress}" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="1" Grid.Column="2" Classes="secondary" Text="{Binding SmtpSecurity}" />
+                  </Grid>
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </Grid>
+        </StackPanel>
+      </Border>
     </ScrollViewer>
   </Border>
 </UserControl>

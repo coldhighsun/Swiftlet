@@ -1363,8 +1363,8 @@ public class UiSmokeTests
     }
 
     /// <summary>
-    /// Verifies selecting an account replaces the message list and reader with the account page, which fits the narrowest
-    /// window in both themes.
+    /// Verifies selecting an account replaces the message list and reader with the account page, which fills a wide window
+    /// with two columns and fits the narrowest window with one, in both themes.
     /// </summary>
     /// <param name="language">The UI language.</param>
     /// <param name="sync">The caption of the sync button.</param>
@@ -1407,9 +1407,28 @@ public class UiSmokeTests
                         .ToList();
                     captions.Should().Contain(sync).And.HaveCount(3, "the password account cannot sign in again in the browser");
 
+                    window.Width = 1920;
+                    window.Height = 900;
+                    Snapshot(window, $"main-window-account-wide-{suffix}");
+                    var page = pane.GetVisualDescendants().OfType<Swiftlet.Desktop.Views.AccountPage>().Single();
+                    var content = page.FindControl<Control>("PageContent")!;
+                    var actions = page.FindControl<Control>("HeaderActions")!;
+                    var statistics = page.FindControl<Control>("StatisticsCard")!;
+                    var settings = page.FindControl<Control>("SettingsColumn")!;
+                    content.Bounds.Width.Should().BeApproximately(
+                        page.Bounds.Width - content.Margin.Left - content.Margin.Right, 2, "the page fills the pane");
+                    settings.Bounds.Top.Should().Be(statistics.Bounds.Top, "a wide page has two columns");
+                    settings.Bounds.Left.Should().BeGreaterThan(statistics.Bounds.Right);
+                    settings.Bounds.Right.Should().BeApproximately(content.Bounds.Width, 2);
+                    Grid.GetRow(actions).Should().Be(0, "the buttons stand beside the name");
+
                     window.Width = 800;
                     window.Height = 480;
                     Snapshot(window, $"main-window-account-narrow-{suffix}");
+                    settings.Bounds.Top.Should().BeGreaterThan(statistics.Bounds.Bottom, "a narrow page has one column");
+                    statistics.Bounds.Width.Should().BeApproximately(content.Bounds.Width, 2);
+                    settings.Bounds.Width.Should().BeApproximately(content.Bounds.Width, 2);
+                    Grid.GetRow(actions).Should().Be(1, "the buttons move below the name");
                     foreach (var button in pane.GetVisualDescendants().OfType<Button>().Where(b => b.IsEffectivelyVisible))
                     {
                         button.Bounds.Width.Should().BeGreaterThan(0);
