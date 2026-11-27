@@ -5,6 +5,7 @@ using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Swiftlet.Application.Ai;
 using Swiftlet.Application;
 using Swiftlet.Application.Accounts;
 using Swiftlet.Desktop.Html;
@@ -276,9 +277,11 @@ public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogSe
             accounts,
             request,
             services.GetService<ILogger<ComposeViewModel>>(),
-            ContactNameOrder.ToNameOrder(services.GetService<IAppSettings>()?.ContactNameOrder));
+            ContactNameOrder.ToNameOrder(services.GetService<IAppSettings>()?.ContactNameOrder),
+            services.GetService<IAiSettings>());
         var window = new ComposeWindow { DataContext = viewModel };
         viewModel.CloseRequested += (_, _) => window.Close();
+        window.Closed += (_, _) => viewModel.Assist?.Dispose();
         window.Show();
         await viewModel.InitializeAsync();
     }

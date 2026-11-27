@@ -30,7 +30,9 @@ public static class ComposeTemplates
             message.FromAddress,
             Prefix(message.Subject, "Re:", "回复:", "回复："),
             body.ToString(),
-            message.MessageIdHeader);
+            message.MessageIdHeader,
+            body.ToString().TrimStart('\n'),
+            message.Id);
     }
 
     /// <summary>
@@ -56,7 +58,8 @@ public static class ComposeTemplates
             string.Empty,
             Prefix(message.Subject, "Fwd:", "Fw:", "转发:", "转发："),
             body.ToString(),
-            null);
+            null,
+            body.ToString().TrimStart('\n'));
     }
 
     /// <summary>

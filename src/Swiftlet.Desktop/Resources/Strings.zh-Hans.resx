@@ -428,7 +428,7 @@
   <data name="Ai_ModelRequired" xml:space="preserve"><value>请填写模型。</value></data>
   <data name="Ai_KeyRequired" xml:space="preserve"><value>请为该地址填写 API Key。</value></data>
   <data name="Ai_ConsentTitle" xml:space="preserve"><value>要把邮件内容发送到该服务吗？</value></data>
-  <data name="Ai_ConsentMessage" xml:space="preserve"><value>使用 AI 操作时，邮件的主题、发件人、时间和正文会发送到 {0}。该服务按其自身条款处理这些内容，并可能向你收费。</value></data>
+  <data name="Ai_ConsentMessage" xml:space="preserve"><value>使用 AI 操作时，相关邮件的主题、发件人、时间和正文，或你撰写的文字，会发送到 {0}。该服务按其自身条款处理这些内容，并可能向你收费。</value></data>
   <data name="Ai_ConsentAllow" xml:space="preserve"><value>允许</value></data>
   <data name="Ai_ErrorUnauthorized" xml:space="preserve"><value>服务拒绝了该 API Key。</value></data>
   <data name="Ai_ErrorNotFound" xml:space="preserve"><value>找不到该地址或模型。</value></data>
@@ -455,4 +455,21 @@
   <data name="Ai_Refused" xml:space="preserve"><value>模型拒绝处理此邮件。</value></data>
   <data name="Ai_EmptyAnswer" xml:space="preserve"><value>模型没有返回内容。</value></data>
   <data name="Ai_ErrorNotConfigured" xml:space="preserve"><value>AI 尚未配置，请检查设置中的 AI 页。</value></data>
+  <data name="Ai_Writing" xml:space="preserve"><value>写作辅助</value></data>
+  <data name="Ai_Notes" xml:space="preserve"><value>想回复什么？（可不填）</value></data>
+  <data name="Ai_DraftReply" xml:space="preserve"><value>起草回复</value></data>
+  <data name="Ai_RewriteHint" xml:space="preserve"><value>改写你写的内容，引用的邮件保持不变：</value></data>
+  <data name="Ai_Polish" xml:space="preserve"><value>润色</value></data>
+  <data name="Ai_Formal" xml:space="preserve"><value>更正式</value></data>
+  <data name="Ai_Concise" xml:space="preserve"><value>更简洁</value></data>
+  <data name="Ai_Friendly" xml:space="preserve"><value>更亲切</value></data>
+  <data name="Ai_Proofread" xml:space="preserve"><value>纠错</value></data>
+  <data name="Ai_ToEnglish" xml:space="preserve"><value>译成英文</value></data>
+  <data name="Ai_ToChinese" xml:space="preserve"><value>译成中文</value></data>
+  <data name="Ai_Replace" xml:space="preserve"><value>替换我的内容</value></data>
+  <data name="Ai_Insert" xml:space="preserve"><value>插入到上方</value></data>
+  <data name="Ai_Discard" xml:space="preserve"><value>丢弃</value></data>
+  <data name="Ai_NothingToRewrite" xml:space="preserve"><value>请先写一些内容；引用的邮件不会被改写。</value></data>
+  <data name="Ai_TextChanged" xml:space="preserve"><value>提问后你的内容有改动，因此没有替换。请改用插入，或重新提问。</value></data>
+  <data name="Ai_ErrorTooLong" xml:space="preserve"><value>内容超过了 AI 设置中的字符上限，没有发送。</value></data>
 </root>

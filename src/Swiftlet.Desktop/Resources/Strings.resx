@@ -428,7 +428,7 @@
   <data name="Ai_ModelRequired" xml:space="preserve"><value>Enter a model.</value></data>
   <data name="Ai_KeyRequired" xml:space="preserve"><value>Enter the API key for this address.</value></data>
   <data name="Ai_ConsentTitle" xml:space="preserve"><value>Send mail content to this service?</value></data>
-  <data name="Ai_ConsentMessage" xml:space="preserve"><value>When you use an AI action, the subject, sender, date and text of the message are sent to {0}. The service handles them under its own terms and may charge you.</value></data>
+  <data name="Ai_ConsentMessage" xml:space="preserve"><value>When you use an AI action, the subject, sender, date and text of the message concerned, or the text you write, are sent to {0}. The service handles them under its own terms and may charge you.</value></data>
   <data name="Ai_ConsentAllow" xml:space="preserve"><value>Allow</value></data>
   <data name="Ai_ErrorUnauthorized" xml:space="preserve"><value>The service rejected the API key.</value></data>
   <data name="Ai_ErrorNotFound" xml:space="preserve"><value>The address or the model was not found.</value></data>
@@ -455,4 +455,21 @@
   <data name="Ai_Refused" xml:space="preserve"><value>The model declined to process this message.</value></data>
   <data name="Ai_EmptyAnswer" xml:space="preserve"><value>The model returned no text.</value></data>
   <data name="Ai_ErrorNotConfigured" xml:space="preserve"><value>AI is not set up. Check the AI page in the settings.</value></data>
+  <data name="Ai_Writing" xml:space="preserve"><value>Writing help</value></data>
+  <data name="Ai_Notes" xml:space="preserve"><value>What should the reply say? (optional)</value></data>
+  <data name="Ai_DraftReply" xml:space="preserve"><value>Draft a reply</value></data>
+  <data name="Ai_RewriteHint" xml:space="preserve"><value>Rewrite your own text; quoted mail stays unchanged:</value></data>
+  <data name="Ai_Polish" xml:space="preserve"><value>Polish</value></data>
+  <data name="Ai_Formal" xml:space="preserve"><value>More formal</value></data>
+  <data name="Ai_Concise" xml:space="preserve"><value>Shorter</value></data>
+  <data name="Ai_Friendly" xml:space="preserve"><value>Friendlier</value></data>
+  <data name="Ai_Proofread" xml:space="preserve"><value>Fix mistakes</value></data>
+  <data name="Ai_ToEnglish" xml:space="preserve"><value>To English</value></data>
+  <data name="Ai_ToChinese" xml:space="preserve"><value>To Chinese</value></data>
+  <data name="Ai_Replace" xml:space="preserve"><value>Replace my text</value></data>
+  <data name="Ai_Insert" xml:space="preserve"><value>Insert above</value></data>
+  <data name="Ai_Discard" xml:space="preserve"><value>Discard</value></data>
+  <data name="Ai_NothingToRewrite" xml:space="preserve"><value>Write some text first; quoted mail is not rewritten.</value></data>
+  <data name="Ai_TextChanged" xml:space="preserve"><value>Your text changed since you asked, so it is not replaced. Insert the answer instead, or ask again.</value></data>
+  <data name="Ai_ErrorTooLong" xml:space="preserve"><value>Your text is longer than the limit in the AI settings. Nothing was sent.</value></data>
 </root>

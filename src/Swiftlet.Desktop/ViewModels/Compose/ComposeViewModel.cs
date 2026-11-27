@@ -3,11 +3,13 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Ai;
 using Swiftlet.Application.Contacts;
 using Swiftlet.Application.Sending;
 using Swiftlet.Desktop.Formatting;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
+using Swiftlet.Desktop.ViewModels.Ai;
 using Swiftlet.Domain.Contacts;
 using Swiftlet.Domain.Accounts;
 
@@ -102,6 +104,7 @@ public sealed partial class ComposeViewModel : ObservableObject
     /// <param name="request">The initial values.</param>
     /// <param name="logger">The logger; optional.</param>
     /// <param name="nameOrder">The order of contact names in the suggestions.</param>
+    /// <param name="ai">The AI settings; without them, or while AI is not set up, there is no writing help.</param>
     public ComposeViewModel(
         IRequestDispatcher dispatcher,
         IDialogService dialogs,
@@ -109,7 +112,8 @@ public sealed partial class ComposeViewModel : ObservableObject
         IReadOnlyList<MailAccount> accounts,
         ComposeRequest request,
         ILogger<ComposeViewModel>? logger = null,
-        NameOrder nameOrder = NameOrder.Auto)
+        NameOrder nameOrder = NameOrder.Auto,
+        IAiSettings? ai = null)
     {
         ArgumentNullException.ThrowIfNull(accounts);
         ArgumentNullException.ThrowIfNull(request);
@@ -134,7 +138,20 @@ public sealed partial class ComposeViewModel : ObservableObject
         Subject = request.Subject;
         Body = request.Body;
         ErrorMessage = string.Empty;
+        if (ai?.Ai.IsReady == true)
+        {
+            var source = request is { Mode: ComposeMode.Reply, AccountId: { } account, SourceMessageId: { } message }
+                ? ((Guid, Guid)?)(account, message)
+                : null;
+            Assist = new ComposeAssistViewModel(
+                dispatcher, localizer, () => Body, text => Body = text, request.Quote, source, logger);
+        }
     }
+
+    /// <summary>
+    /// Gets the writing help, or <see langword="null"/> when AI is not set up.
+    /// </summary>
+    public ComposeAssistViewModel? Assist { get; }
 
     /// <summary>
     /// Raised when the window should close; the argument is <see langword="true"/> if the message was sent.

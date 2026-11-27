@@ -1298,6 +1298,72 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies the writing help of the compose window previews an answer and fits the narrowest window.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    /// <param name="writing">The expected caption of the writing help button.</param>
+    /// <param name="minimum">Whether the window has its smallest size.</param>
+    [Theory]
+    [InlineData("zh-Hans", "写作辅助", false)]
+    [InlineData("en", "Writing help", false)]
+    [InlineData("en", "Writing help", true)]
+    public async Task ComposeWindow_WritingHelp_PreviewsTheAnswer(string language, string writing, bool minimum)
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference(language);
+                var account = TestData.Account();
+                var dispatcher = new FakeDispatcher();
+                dispatcher.OnStream<Swiftlet.Application.Ai.RewriteTextQuery, Swiftlet.Application.Ai.AiOutput>(
+                    (_, token) => AiAssistViewModelTests.Parts(
+                        [new(Swiftlet.Application.Ai.AiOutputKind.Text, "A better wording of the text.")], token));
+                var settings = new Swiftlet.Application.Ai.DisabledAiSettings();
+                settings.SetAi(AiAssistViewModelTests.Ready());
+                var request = new ComposeRequest(
+                    ComposeMode.Reply, account.Id, "alice@example.com", "Re: Hello", "my text\n\n> quoted", null, "> quoted",
+                    Guid.NewGuid());
+                var viewModel = new ComposeViewModel(
+                    dispatcher, new FakeDialogService(), LocalizationManager.Instance, [account], request, ai: settings);
+                var window = new ComposeWindow { DataContext = viewModel };
+                if (minimum)
+                {
+                    window.Width = window.MinWidth;
+                    window.Height = window.MinHeight;
+                }
+
+                var suffix = minimum ? $"{language}-minimum" : language;
+                Render(window, $"compose-ai-closed-{suffix}", language);
+                var panel = window.GetVisualDescendants().OfType<ComposeAiPanel>().Single();
+                panel.IsVisible.Should().BeFalse();
+
+                var toggle = window.GetVisualDescendants().OfType<Button>().Single(b => UiQueries.Caption(b) == writing);
+                toggle.Command!.Execute(null);
+                viewModel.Assist!.RewriteCommand.Execute(Swiftlet.Application.Ai.AiWritingAction.Polish);
+                await viewModel.Assist.Running;
+                Snapshot(window, $"compose-ai-open-{suffix}");
+
+                panel.IsEffectivelyVisible.Should().BeTrue();
+                panel.GetVisualDescendants().OfType<SelectableTextBlock>().Single().Text
+                    .Should().Be("A better wording of the text.");
+                panel.GetVisualDescendants().OfType<Button>().Where(b => b.IsEffectivelyVisible)
+                    .Should().HaveCount(11, "the draft button, seven rewrites and what to do with the answer");
+                var send = window.GetVisualDescendants().OfType<Button>().Single(b => b.Command == viewModel.SendCommand);
+                send.TranslatePoint(new Point(0, send.Bounds.Height), window)!.Value.Y
+                    .Should().BeLessThanOrEqualTo(window.Bounds.Height);
+                var body = window.FindControl<TextBox>("BodyBox")!;
+                body.Bounds.Height.Should().BeGreaterThan(30);
+                body.TranslatePoint(new Point(0, body.Bounds.Height), window)!.Value.Y
+                    .Should().BeLessThanOrEqualTo(panel.TranslatePoint(new Point(0, 0), window)!.Value.Y, "the panel covers no text");
+
+                toggle.Command!.Execute(null);
+                window.MinHeight.Should().Be(420);
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Verifies the toolbar label flyout lists the labels and ticking one sends the set-label command.
     /// </summary>
     [Fact]

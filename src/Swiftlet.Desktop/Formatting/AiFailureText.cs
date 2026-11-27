@@ -27,6 +27,7 @@ public static class AiFailureText
             AiFailure.Network => localizer["Ai_ErrorNetwork"],
             AiFailure.Timeout => localizer["Ai_ErrorTimeout"],
             AiFailure.NotConfigured => localizer["Ai_ErrorNotConfigured"],
+            AiFailure.TooLong => localizer["Ai_ErrorTooLong"],
             _ => localizer["Ai_ErrorUnknown"],
         };
     }

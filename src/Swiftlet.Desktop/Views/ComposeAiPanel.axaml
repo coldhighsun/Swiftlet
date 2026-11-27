@@ -1,0 +1,64 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ai="using:Swiftlet.Desktop.ViewModels.Ai"
+             xmlns:app="using:Swiftlet.Application.Ai"
+             xmlns:loc="using:Swiftlet.Desktop.Localization"
+             x:Class="Swiftlet.Desktop.Views.ComposeAiPanel"
+             x:DataType="ai:ComposeAssistViewModel">
+  <UserControl.Styles>
+    <Style Selector="WrapPanel.actions > Button">
+      <Setter Property="Margin" Value="0,0,8,4" />
+    </Style>
+  </UserControl.Styles>
+
+  <!-- Scrolls as a whole in a low window, so the message being written stays visible above it. -->
+  <Border Padding="12,8" Margin="0,8,0,0" Background="{DynamicResource Brush.AccentSubtle}" CornerRadius="8"
+          MaxHeight="240">
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Spacing="4">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" IsVisible="{Binding CanDraft}">
+          <TextBox Text="{Binding Notes}" PlaceholderText="{loc:Loc Ai_Notes}" AcceptsReturn="True" TextWrapping="Wrap"
+                   MaxHeight="64" AutomationProperties.Name="{loc:Loc Ai_Notes}" />
+          <Button Grid.Column="1" VerticalAlignment="Top" Content="{loc:Loc Ai_DraftReply}"
+                  Command="{Binding DraftReplyCommand}" />
+        </Grid>
+        <TextBlock Classes="caption" Text="{loc:Loc Ai_RewriteHint}" TextWrapping="Wrap" />
+        <WrapPanel Classes="actions">
+          <Button Content="{loc:Loc Ai_Polish}" Command="{Binding RewriteCommand}"
+                  CommandParameter="{x:Static app:AiWritingAction.Polish}" />
+          <Button Content="{loc:Loc Ai_Formal}" Command="{Binding RewriteCommand}"
+                  CommandParameter="{x:Static app:AiWritingAction.Formal}" />
+          <Button Content="{loc:Loc Ai_Concise}" Command="{Binding RewriteCommand}"
+                  CommandParameter="{x:Static app:AiWritingAction.Concise}" />
+          <Button Content="{loc:Loc Ai_Friendly}" Command="{Binding RewriteCommand}"
+                  CommandParameter="{x:Static app:AiWritingAction.Friendly}" />
+          <Button Content="{loc:Loc Ai_Proofread}" Command="{Binding RewriteCommand}"
+                  CommandParameter="{x:Static app:AiWritingAction.Proofread}" />
+          <Button Content="{loc:Loc Ai_ToEnglish}" Command="{Binding RewriteCommand}"
+                  CommandParameter="{x:Static app:AiWritingAction.ToEnglish}" />
+          <Button Content="{loc:Loc Ai_ToChinese}" Command="{Binding RewriteCommand}"
+                  CommandParameter="{x:Static app:AiWritingAction.ToChinese}" />
+        </WrapPanel>
+        <StackPanel Spacing="4" IsVisible="{Binding IsRunning}">
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <ProgressBar IsIndeterminate="True" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Content="{loc:Loc Ai_Stop}" Command="{Binding StopCommand}" />
+          </Grid>
+        </StackPanel>
+        <TextBlock Classes="error" Text="{Binding ErrorText}" TextWrapping="Wrap"
+                   IsVisible="{Binding ErrorText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        <TextBlock Classes="caption" Text="{Binding NoticeText}" TextWrapping="Wrap"
+                   IsVisible="{Binding NoticeText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        <StackPanel Spacing="8" IsVisible="{Binding HasResult}">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Classes="accent" Content="{loc:Loc Ai_Replace}" Command="{Binding ReplaceCommand}" />
+            <Button Content="{loc:Loc Ai_Insert}" Command="{Binding InsertCommand}" />
+            <Button Content="{loc:Loc Ai_Discard}" Command="{Binding DiscardCommand}" />
+          </StackPanel>
+          <!-- Plain text only: nothing the model writes is turned into a link or markup. -->
+          <SelectableTextBlock Text="{Binding Result}" TextWrapping="Wrap" />
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+  </Border>
+</UserControl>

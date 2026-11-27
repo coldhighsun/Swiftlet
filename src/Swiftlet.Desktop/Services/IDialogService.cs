@@ -34,13 +34,17 @@ public enum ComposeMode
 /// <param name="Subject">The initial subject.</param>
 /// <param name="Body">The initial body.</param>
 /// <param name="InReplyTo">The Message-ID being replied to, if any.</param>
+/// <param name="Quote">The quoted or forwarded part at the end of the body, if any.</param>
+/// <param name="SourceMessageId">The message being replied to, owned by <paramref name="AccountId"/>, if any.</param>
 public sealed record ComposeRequest(
     ComposeMode Mode,
     Guid? AccountId,
     string To,
     string Subject,
     string Body,
-    string? InReplyTo);
+    string? InReplyTo,
+    string Quote = "",
+    Guid? SourceMessageId = null);
 
 /// <summary>
 /// An address the contacts window is opened for.

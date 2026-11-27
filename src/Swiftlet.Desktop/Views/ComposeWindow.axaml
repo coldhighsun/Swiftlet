@@ -4,6 +4,7 @@
         xmlns:loc="using:Swiftlet.Desktop.Localization"
         xmlns:accounts="using:Swiftlet.Domain.Accounts"
         xmlns:ctl="using:Swiftlet.Desktop.Controls"
+        xmlns:views="using:Swiftlet.Desktop.Views"
         x:Class="Swiftlet.Desktop.Views.ComposeWindow"
         Icon="avares://Swiftlet.Desktop/Assets/swiftlet.ico"
         x:DataType="compose:ComposeViewModel"
@@ -27,7 +28,17 @@
 
   <DockPanel Margin="16">
     <Grid DockPanel.Dock="Bottom" ColumnDefinitions="Auto,*,Auto" Margin="0,12,0,0">
-      <Button Content="{loc:Loc Compose_AddAttachment}" Command="{Binding AddAttachmentsCommand}" />
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button Content="{loc:Loc Compose_AddAttachment}" Command="{Binding AddAttachmentsCommand}" />
+        <!-- Present only while AI is switched on and set up. -->
+        <Button Command="{Binding Assist.ToggleCommand}" IsVisible="{Binding Assist, Converter={x:Static ObjectConverters.IsNotNull}}"
+                AutomationProperties.Name="{loc:Loc Ai_Writing}">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <PathIcon Data="{StaticResource Icon.Sparkle}" />
+            <TextBlock Text="{loc:Loc Ai_Writing}" />
+          </StackPanel>
+        </Button>
+      </StackPanel>
       <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
         <ProgressBar Width="80" MinWidth="80" IsIndeterminate="True" IsVisible="{Binding IsSending}" />
         <Button Content="{loc:Loc Common_Cancel}" Command="{Binding CancelCommand}" />
@@ -38,7 +49,10 @@
     <TextBlock DockPanel.Dock="Bottom" Classes="error" Text="{Binding ErrorMessage}" TextWrapping="Wrap" Margin="0,8,0,0"
                IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
-    <Border Classes="card" Padding="12">
+    <views:ComposeAiPanel DockPanel.Dock="Bottom" DataContext="{Binding Assist}"
+                          IsVisible="{Binding IsOpen, FallbackValue=False}" />
+
+    <Border Classes="card" Padding="12" ClipToBounds="True">
       <DockPanel>
         <Grid DockPanel.Dock="Top" ColumnDefinitions="80,*" RowDefinitions="44,44,44,44,44">
           <Border Grid.Row="0" Grid.ColumnSpan="2" Classes="separator" />
@@ -96,7 +110,7 @@
           </ItemsControl.ItemTemplate>
         </ItemsControl>
 
-        <TextBox Classes="flat" Text="{Binding Body}" AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top"
+        <TextBox x:Name="BodyBox" Classes="flat" Text="{Binding Body}" AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top"
                  Margin="0,8,0,0" />
       </DockPanel>
     </Border>
