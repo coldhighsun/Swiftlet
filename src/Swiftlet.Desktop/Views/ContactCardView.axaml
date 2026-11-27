@@ -1,0 +1,86 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Swiftlet.Desktop.ViewModels.Contacts"
+             xmlns:loc="using:Swiftlet.Desktop.Localization"
+             x:Class="Swiftlet.Desktop.Views.ContactCardView"
+             x:DataType="vm:ContactsViewModel">
+  <!-- The read-only card of the shown contact. -->
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="24" Spacing="16">
+      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
+        <Border Width="56" Height="56" CornerRadius="28" Background="{Binding ShownContact.AvatarBrush}"
+                VerticalAlignment="Center">
+          <TextBlock Text="{Binding ShownContact.Initial}" Foreground="White" FontSize="20" HorizontalAlignment="Center"
+                     VerticalAlignment="Center" />
+        </Border>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+          <SelectableTextBlock Classes="title" Text="{Binding ShownContact.Title}" FontSize="20" FontWeight="SemiBold"
+                               TextWrapping="Wrap" />
+          <TextBlock Classes="secondary" Text="{Binding ShownContact.Company}" TextWrapping="Wrap"
+                     IsVisible="{Binding ShownContact.HasCompany}" />
+        </StackPanel>
+      </Grid>
+
+      <WrapPanel ItemSpacing="8" LineSpacing="8">
+        <Button Classes="accent" Content="{loc:Loc Contacts_Write}" Command="{Binding WriteCommand}" />
+        <Button Content="{loc:Loc Contacts_Edit}" Command="{Binding EditCommand}" />
+      </WrapPanel>
+
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="caption" Text="{loc:Loc Contacts_Emails}" />
+          <ItemsControl ItemsSource="{Binding ShownContact.EmailRows}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="vm:ContactDetailRow">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="4">
+                  <SelectableTextBlock Text="{Binding Value}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                  <Border Grid.Column="1" Background="{DynamicResource Brush.AccentSubtle}" CornerRadius="4"
+                          Padding="8,2" VerticalAlignment="Center" IsVisible="{Binding IsPrimary}">
+                    <TextBlock FontSize="12" Text="{loc:Loc Contacts_Primary}" />
+                  </Border>
+                  <Button Grid.Column="2" Classes="icon" CommandParameter="{Binding Value}"
+                          Command="{Binding $parent[UserControl].((vm:ContactsViewModel)DataContext).WriteCommand}"
+                          ToolTip.Tip="{loc:Loc Contacts_Write}" AutomationProperties.Name="{loc:Loc Contacts_Write}">
+                    <PathIcon Data="{StaticResource Icon.Mail}" />
+                  </Button>
+                  <Button Grid.Column="3" Classes="icon" CommandParameter="{Binding Value}"
+                          Command="{Binding $parent[UserControl].((vm:ContactsViewModel)DataContext).CopyCommand}"
+                          ToolTip.Tip="{loc:Loc Contacts_Copy}" AutomationProperties.Name="{loc:Loc Contacts_Copy}">
+                    <PathIcon Data="{StaticResource Icon.Copy}" />
+                  </Button>
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card" IsVisible="{Binding ShownContact.HasPhones}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="caption" Text="{loc:Loc Contacts_Phones}" />
+          <ItemsControl ItemsSource="{Binding ShownContact.PhoneRows}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="vm:ContactDetailRow">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                  <SelectableTextBlock Text="{Binding Value}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                  <Button Grid.Column="1" Classes="icon" CommandParameter="{Binding Value}"
+                          Command="{Binding $parent[UserControl].((vm:ContactsViewModel)DataContext).CopyCommand}"
+                          ToolTip.Tip="{loc:Loc Contacts_Copy}" AutomationProperties.Name="{loc:Loc Contacts_Copy}">
+                    <PathIcon Data="{StaticResource Icon.Copy}" />
+                  </Button>
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card" IsVisible="{Binding ShownContact.HasNote}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="caption" Text="{loc:Loc Contacts_Note}" />
+          <SelectableTextBlock Text="{Binding ShownContact.Note}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

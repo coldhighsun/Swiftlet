@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Swiftlet.Desktop.ViewModels.Contacts;
 
 namespace Swiftlet.Desktop.Views;
 
@@ -13,5 +14,22 @@ public partial class ContactsWindow : Window
     public ContactsWindow()
     {
         InitializeComponent();
+    }
+
+    /// <inheritdoc />
+    protected override void OnClosing(WindowClosingEventArgs e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+
+        // Only a close by the user is held back: quitting the application and signing out must go through.
+        if (e is { CloseReason: WindowCloseReason.WindowClosing, IsProgrammatic: false }
+            && DataContext is ContactsViewModel { HasUnsavedChanges: true } viewModel)
+        {
+            // The view model asks, and requests the close again when the changes may be dropped.
+            e.Cancel = true;
+            viewModel.CloseCommand.Execute(null);
+        }
+
+        base.OnClosing(e);
     }
 }

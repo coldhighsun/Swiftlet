@@ -59,22 +59,178 @@ public sealed class ContactsViewModelTests
     }
 
     /// <summary>
-    /// Verifies selecting a contact fills the form, and hiding it by searching keeps what is typed.
+    /// Verifies selecting a contact shows its card, and editing fills a form that a search keeps.
     /// </summary>
     [Fact]
-    public async Task SelectedContact_ThenSearch_KeepsEditedForm()
+    public async Task Edit_ThenSearch_KeepsEditedForm()
     {
         var viewModel = await CreateAsync();
 
         viewModel.SelectedContact = viewModel.Contacts[0];
+        viewModel.IsViewing.Should().BeTrue();
+        viewModel.IsFormShown.Should().BeFalse();
+        viewModel.ShownContact!.EmailRows.Should().ContainSingle().Which.Should().Be(new ContactDetailRow("zhang@x.com", false));
+        viewModel.EditCommand.Execute(null);
         viewModel.Emails.Select(f => f.Value).Should().Equal("zhang@x.com");
-        viewModel.IsExisting.Should().BeTrue();
         viewModel.FirstName = "typed";
         viewModel.SearchText = "nothing";
         viewModel.SearchText = string.Empty;
 
         viewModel.FirstName.Should().Be("typed");
+        viewModel.IsFormShown.Should().BeTrue();
         viewModel.SelectedContact.Should().NotBeNull();
+    }
+
+    /// <summary>
+    /// Verifies cancelling an unchanged form returns to the card without asking.
+    /// </summary>
+    [Fact]
+    public async Task Cancel_Unchanged_ShowsCardWithoutAsking()
+    {
+        var viewModel = await CreateEditingAsync();
+        viewModel.AddPhoneCommand.Execute(null);
+        viewModel.Company = " Acme ";
+
+        await viewModel.CancelCommand.ExecuteAsync(null);
+
+        _dialogs.Confirmations.Should().BeEmpty();
+        viewModel.IsViewing.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies cancelling a changed form asks, and only a confirmation drops the change.
+    /// </summary>
+    /// <param name="confirmed">Whether the user confirms.</param>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Cancel_Changed_AsksFirst(bool confirmed)
+    {
+        _dialogs.ConfirmResult = confirmed;
+        var viewModel = await CreateEditingAsync();
+        viewModel.FirstName = "typed";
+
+        await viewModel.CancelCommand.ExecuteAsync(null);
+
+        _dialogs.Confirmations.Should().ContainSingle();
+        viewModel.IsViewing.Should().Be(confirmed);
+        viewModel.IsFormShown.Should().Be(!confirmed);
+        viewModel.HasUnsavedChanges.Should().Be(!confirmed);
+        viewModel.ShownContact!.Title.Should().Be("张三");
+    }
+
+    /// <summary>
+    /// Verifies selecting another contact over unsaved changes asks, and keeping them selects the edited one again.
+    /// </summary>
+    /// <param name="confirmed">Whether the user drops the changes.</param>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task SelectedContact_UnsavedChanges_AsksFirst(bool confirmed)
+    {
+        var other = Contact.Create("Amy", string.Empty, ["amy@x.com"]);
+        _dispatcher.On<GetAddressBookQuery>(_ => new AddressBook([_contact, other], []));
+        _dialogs.ConfirmResult = confirmed;
+        var viewModel = await CreateAsync();
+        viewModel.SelectedContact = viewModel.Contacts.Single(c => c.Contact == _contact);
+        viewModel.EditCommand.Execute(null);
+        viewModel.Note = "typed";
+
+        viewModel.SelectedContact = viewModel.Contacts.Single(c => c.Contact == other);
+        await viewModel.PendingSwitch;
+
+        _dialogs.Confirmations.Should().ContainSingle();
+        viewModel.SelectedContact!.Contact.Should().Be(confirmed ? other : _contact);
+        viewModel.IsFormShown.Should().Be(!confirmed);
+        viewModel.Note.Should().Be("typed");
+        viewModel.ShownContact!.Contact.Should().Be(confirmed ? other : _contact);
+    }
+
+    /// <summary>
+    /// Verifies closing and Escape ask about unsaved changes, and Escape leaves the form before the window.
+    /// </summary>
+    [Fact]
+    public async Task CloseAndEscape_UnsavedChanges_AskFirst()
+    {
+        var viewModel = await CreateEditingAsync();
+        var closed = 0;
+        viewModel.CloseRequested += (_, _) => closed++;
+        viewModel.FirstName = "typed";
+
+        await viewModel.CloseCommand.ExecuteAsync(null);
+        await viewModel.EscapeCommand.ExecuteAsync(null);
+        closed.Should().Be(0);
+        viewModel.IsFormShown.Should().BeTrue();
+
+        _dialogs.ConfirmResult = true;
+        await viewModel.EscapeCommand.ExecuteAsync(null);
+        closed.Should().Be(0);
+        viewModel.IsViewing.Should().BeTrue();
+
+        await viewModel.EscapeCommand.ExecuteAsync(null);
+        closed.Should().Be(1);
+        _dialogs.Confirmations.Should().HaveCount(3);
+    }
+
+    /// <summary>
+    /// Verifies the chosen address becomes the first one that is saved.
+    /// </summary>
+    [Fact]
+    public async Task MakePrimary_SecondAddress_SavesItFirst()
+    {
+        _dispatcher.On<SaveContactCommand>(_ => _contact.Id);
+        var viewModel = await CreateAsync();
+        await viewModel.NewCommand.ExecuteAsync(null);
+        Type(viewModel, "a@x.com", "b@x.com");
+        viewModel.Emails.Select(f => f.IsPrimary).Should().Equal(true, false);
+
+        viewModel.Emails[1].MakePrimaryCommand.Execute(null);
+
+        viewModel.Emails.Select(f => f.IsPrimary).Should().Equal(true, false);
+        await viewModel.SaveCommand.ExecuteAsync(null);
+        _dispatcher.Sent<SaveContactCommand>().Single().Details.Emails.Should().Equal("b@x.com", "a@x.com");
+        viewModel.IsViewing.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies one address of the card can be written to and copied.
+    /// </summary>
+    [Fact]
+    public async Task WriteAndCopy_ChosenValue_UsesIt()
+    {
+        var viewModel = await CreateAsync();
+        viewModel.SelectedContact = viewModel.Contacts[0];
+        string? recipient = null;
+        viewModel.CloseRequested += (_, value) => recipient = value;
+
+        viewModel.WriteCommand.Execute("work@x.com");
+        await viewModel.CopyCommand.ExecuteAsync("123");
+
+        recipient.Should().Be("张三 <work@x.com>");
+        _dialogs.CopiedTexts.Should().Equal("123");
+        viewModel.StatusText.Should().Contain("123");
+    }
+
+    /// <summary>
+    /// Verifies the list is grouped by the first letter, with other names last.
+    /// </summary>
+    [Fact]
+    public async Task Contacts_Several_GroupedByLetter()
+    {
+        _dispatcher.On<GetAddressBookQuery>(_ => new AddressBook(
+            [
+                _contact,
+                Contact.Create("bob", string.Empty, ["bob@x.com"]),
+                Contact.Create("Émile", string.Empty, ["emile@x.com"]),
+                Contact.Create(string.Empty, string.Empty, ["9@x.com"]),
+                Contact.Create("Eve", string.Empty, ["eve@x.com"]),
+            ],
+            []));
+
+        var viewModel = await CreateAsync();
+
+        viewModel.Contacts.Select(c => c.GroupKey).Should().Equal("B", "E", "E", "#", "#");
+        viewModel.Contacts.Select(c => c.IsGroupStart).Should().Equal(true, true, false, true, false);
     }
 
     /// <summary>
@@ -85,7 +241,7 @@ public sealed class ContactsViewModelTests
     {
         _dispatcher.On<SaveContactCommand>(_ => _contact.Id);
         var viewModel = await CreateAsync();
-        viewModel.NewCommand.Execute(null);
+        await viewModel.NewCommand.ExecuteAsync(null);
         viewModel.FirstName = "New";
         viewModel.LastName = "Person";
         Type(viewModel, "a@x.com", " b@x.com ", "  ");
@@ -115,7 +271,7 @@ public sealed class ContactsViewModelTests
     public async Task Save_BadAddresses_ShowsError(string emails, string expected)
     {
         var viewModel = await CreateAsync();
-        viewModel.NewCommand.Execute(null);
+        await viewModel.NewCommand.ExecuteAsync(null);
         Type(viewModel, emails);
 
         await viewModel.SaveCommand.ExecuteAsync(null);
@@ -132,7 +288,7 @@ public sealed class ContactsViewModelTests
     {
         _dispatcher.On<SaveContactCommand>(_ => throw new DuplicateContactEmailException("zhang@x.com"));
         var viewModel = await CreateAsync();
-        viewModel.NewCommand.Execute(null);
+        await viewModel.NewCommand.ExecuteAsync(null);
         Type(viewModel, "zhang@x.com");
 
         await viewModel.SaveCommand.ExecuteAsync(null);
@@ -146,8 +302,7 @@ public sealed class ContactsViewModelTests
     [Fact]
     public async Task RemoveField_LastOne_LeavesListEmptyUntilAdded()
     {
-        var viewModel = await CreateAsync();
-        viewModel.SelectedContact = viewModel.Contacts[0];
+        var viewModel = await CreateEditingAsync();
 
         viewModel.Phones.Single().RemoveCommand.Execute(null);
         viewModel.Phones.Should().BeEmpty();
@@ -187,7 +342,7 @@ public sealed class ContactsViewModelTests
 
         _dialogs.Confirmations.Should().ContainSingle().Which.Message.Should().Contain("张三");
         _dispatcher.Sent<DeleteContactCommand>().Should().HaveCount(confirmed ? 1 : 0);
-        viewModel.IsEditing.Should().Be(!confirmed);
+        viewModel.IsViewing.Should().Be(!confirmed);
     }
 
     /// <summary>
@@ -203,43 +358,112 @@ public sealed class ContactsViewModelTests
         viewModel.SelectedContact = viewModel.Contacts[0];
 
         viewModel.WriteCommand.Execute(null);
-        viewModel.WriteCollectedCommand.Execute(viewModel.Collected[0]);
-        viewModel.CloseCommand.Execute(null);
+        viewModel.SelectedCollected.Add(viewModel.Collected[0]);
+        viewModel.WriteCollectedCommand.Execute(null);
+        await viewModel.CloseCommand.ExecuteAsync(null);
 
         recipients.Should().Equal("张三 <zhang@x.com>", "Bob <bob@x.com>", null);
     }
 
     /// <summary>
-    /// Verifies a collected address becomes a contact with one action.
+    /// Verifies a single collected address becomes a contact that is shown right away.
     /// </summary>
     [Fact]
-    public async Task AddCollected_Item_SavesContact()
+    public async Task AddSelectedCollected_One_SavesAndShowsContact()
     {
         _dispatcher.On<SaveContactCommand>(_ => _contact.Id);
         var viewModel = await CreateAsync();
         viewModel.SelectedPage = 1;
+        viewModel.SelectedCollected.Add(viewModel.Collected[0]);
+        viewModel.IsOneCollectedShown.Should().BeTrue();
 
-        await viewModel.AddCollectedCommand.ExecuteAsync(viewModel.Collected[0]);
+        await viewModel.AddSelectedCollectedCommand.ExecuteAsync(null);
 
         var details = _dispatcher.Sent<SaveContactCommand>().Should().ContainSingle().Subject.Details;
         (details.FirstName, details.LastName).Should().Be(("Bob", string.Empty));
         details.Emails.Should().Equal("bob@x.com");
         viewModel.SelectedPage.Should().Be(ContactsViewModel.ContactsPage);
+        viewModel.IsViewing.Should().BeTrue();
     }
 
     /// <summary>
-    /// Verifies removing a collected address dismisses it.
+    /// Verifies several collected addresses are added at once while the page stays.
     /// </summary>
     [Fact]
-    public async Task RemoveCollected_Item_DismissesAddress()
+    public async Task AddSelectedCollected_Several_SavesEachAndStays()
+    {
+        _dispatcher.On<GetAddressBookQuery>(_ => new AddressBook([], [_collected, Other()]));
+        _dispatcher.On<SaveContactCommand>(_ => Guid.NewGuid());
+        var viewModel = await CreateAsync();
+        SelectAllCollected(viewModel);
+        viewModel.IsManyCollectedShown.Should().BeTrue();
+        viewModel.SelectedCollectedText.Should().Contain("2");
+
+        await viewModel.AddSelectedCollectedCommand.ExecuteAsync(null);
+
+        _dispatcher.Sent<SaveContactCommand>().Should().HaveCount(2);
+        _dispatcher.Sent<GetAddressBookQuery>().Should().HaveCount(2);
+        viewModel.SelectedPage.Should().Be(1);
+        viewModel.IsNoCollectedShown.Should().BeTrue();
+        viewModel.StatusText.Should().Contain("2");
+    }
+
+    /// <summary>
+    /// Verifies a failure part of the way is reported after the lists were loaded again.
+    /// </summary>
+    [Fact]
+    public async Task AddSelectedCollected_Failure_ReloadsAndShowsError()
+    {
+        _dispatcher.On<GetAddressBookQuery>(_ => new AddressBook([], [_collected, Other()]));
+        _dispatcher.On<SaveContactCommand>(c => c.Details.Emails[0] == "amy@x.com"
+            ? throw new DuplicateContactEmailException("amy@x.com")
+            : Guid.NewGuid());
+        var viewModel = await CreateAsync();
+        SelectAllCollected(viewModel);
+
+        await viewModel.AddSelectedCollectedCommand.ExecuteAsync(null);
+
+        _dispatcher.Sent<GetAddressBookQuery>().Should().HaveCount(2);
+        viewModel.ErrorText.Should().Contain("amy@x.com");
+    }
+
+    /// <summary>
+    /// Verifies one collected address is dismissed without asking.
+    /// </summary>
+    [Fact]
+    public async Task RemoveSelectedCollected_One_DismissesAddress()
     {
         _dispatcher.On<DismissCollectedAddressCommand>(_ => Unit.Value);
         var viewModel = await CreateAsync();
+        viewModel.SelectedCollected.Add(viewModel.Collected[0]);
+        _dispatcher.On<GetAddressBookQuery>(_ => new AddressBook([_contact], []));
 
-        await viewModel.RemoveCollectedCommand.ExecuteAsync(viewModel.Collected[0]);
+        await viewModel.RemoveSelectedCollectedCommand.ExecuteAsync(null);
 
+        _dialogs.Confirmations.Should().BeEmpty();
         _dispatcher.Sent<DismissCollectedAddressCommand>().Should().ContainSingle().Which.Address.Should().Be("bob@x.com");
         viewModel.Collected.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies removing several collected addresses needs a confirmation.
+    /// </summary>
+    /// <param name="confirmed">Whether the user confirms.</param>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RemoveSelectedCollected_Several_AsksFirst(bool confirmed)
+    {
+        _dispatcher.On<GetAddressBookQuery>(_ => new AddressBook([], [_collected, Other()]));
+        _dispatcher.On<DismissCollectedAddressCommand>(_ => Unit.Value);
+        _dialogs.ConfirmResult = confirmed;
+        var viewModel = await CreateAsync();
+        SelectAllCollected(viewModel);
+
+        await viewModel.RemoveSelectedCollectedCommand.ExecuteAsync(null);
+
+        _dialogs.Confirmations.Should().ContainSingle().Which.Message.Should().Contain("2");
+        _dispatcher.Sent<DismissCollectedAddressCommand>().Should().HaveCount(confirmed ? 2 : 0);
     }
 
     /// <summary>
@@ -250,8 +474,8 @@ public sealed class ContactsViewModelTests
     {
         var viewModel = await CreateAsync(new ContactsRequest("Someone", "ZHANG@x.com"));
 
-        viewModel.IsExisting.Should().BeTrue();
-        (viewModel.FirstName, viewModel.LastName).Should().Be(("三", "张"));
+        viewModel.IsViewing.Should().BeTrue();
+        viewModel.ShownContact!.Contact.Should().Be(_contact);
     }
 
     /// <summary>
@@ -262,8 +486,9 @@ public sealed class ContactsViewModelTests
     {
         var viewModel = await CreateAsync(new ContactsRequest("Eve Smith", "eve@x.com"));
 
-        viewModel.IsEditing.Should().BeTrue();
+        viewModel.IsFormShown.Should().BeTrue();
         viewModel.IsExisting.Should().BeFalse();
+        viewModel.HasUnsavedChanges.Should().BeFalse();
         (viewModel.FirstName, viewModel.LastName).Should().Be(("Eve", "Smith"));
         viewModel.Emails.Select(f => f.Value).Should().Equal("eve@x.com");
         viewModel.Phones.Should().ContainSingle().Which.Value.Should().BeEmpty();
@@ -395,6 +620,37 @@ public sealed class ContactsViewModelTests
         var failing = new ComposeViewModel(new FakeDispatcher(), _dialogs, TestLocalizer.Chinese(), [account], request);
         await failing.InitializeAsync();
         failing.Suggestions.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// A second collected address.
+    /// </summary>
+    /// <returns>The address.</returns>
+    private static CollectedAddress Other() => new("amy@x.com", "Amy", DateTimeOffset.UnixEpoch);
+
+    /// <summary>
+    /// Selects every collected address on its page.
+    /// </summary>
+    /// <param name="viewModel">The view model.</param>
+    private static void SelectAllCollected(ContactsViewModel viewModel)
+    {
+        viewModel.SelectedPage = 1;
+        foreach (var item in viewModel.Collected)
+        {
+            viewModel.SelectedCollected.Add(item);
+        }
+    }
+
+    /// <summary>
+    /// Creates a view model editing the starting contact.
+    /// </summary>
+    /// <returns>The view model.</returns>
+    private async Task<ContactsViewModel> CreateEditingAsync()
+    {
+        var viewModel = await CreateAsync();
+        viewModel.SelectedContact = viewModel.Contacts[0];
+        viewModel.EditCommand.Execute(null);
+        return viewModel;
     }
 
     /// <summary>

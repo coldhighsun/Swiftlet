@@ -850,12 +850,12 @@ public class UiSmokeTests
     }
 
     /// <summary>
-    /// Verifies the contacts window shows the contact list with the form, and the collected addresses with their
-    /// actions, in both languages.
+    /// Verifies the contacts window shows the card of a contact, the form editing it, and the collected addresses with
+    /// the actions for one and for several of them, in both languages.
     /// </summary>
     /// <param name="language">The UI language.</param>
     /// <param name="title">The expected window title.</param>
-    /// <param name="add">The expected caption of the button adding a collected address.</param>
+    /// <param name="add">The expected caption of the button adding collected addresses.</param>
     [Theory]
     [InlineData("zh-Hans", "通讯录", "加入联系人")]
     [InlineData("en", "Contacts", "Add to contacts")]
@@ -868,25 +868,50 @@ public class UiSmokeTests
                 var viewModel = await CreateContactsAsync(LocalizationManager.Instance);
                 var window = new ContactsWindow { DataContext = viewModel };
                 Render(window, $"contacts-{language}", language);
-                viewModel.SelectedContact = viewModel.Contacts[0];
-                Snapshot(window, $"contacts-selected-{language}");
+                viewModel.SelectedContact = viewModel.Contacts.Single(c => c.Contact.Emails.Count == 2);
+                Snapshot(window, $"contacts-card-{language}");
 
                 window.Title.Should().Be(title);
-                var boxes = window.GetVisualDescendants().OfType<TextBox>().ToList();
+                List<Button> Visible() => window.GetVisualDescendants().OfType<Button>()
+                    .Where(b => b.IsEffectivelyVisible).ToList();
+                Visible().Where(b => b.Command == viewModel.CopyCommand).Should().HaveCount(3)
+                    .And.OnlyContain(b => ToolTip.GetTip(b) != null);
+                Visible().Where(b => b.Command == viewModel.WriteCommand && b.Content is PathIcon).Should().HaveCount(2);
+                window.GetVisualDescendants().OfType<TextBox>().Where(t => t.IsEffectivelyVisible)
+                    .Should().ContainSingle("only the search box can be typed in while viewing");
+
+                viewModel.EditCommand.Execute(null);
+                Snapshot(window, $"contacts-edit-{language}");
+
+                var boxes = window.GetVisualDescendants().OfType<TextBox>().Where(t => t.IsEffectivelyVisible).ToList();
                 boxes.Select(t => t.Text).Should().Contain(["张", "三", "zhang@example.com", "zhangsan@work.example.com"]);
                 var familyName = boxes.Single(t => t.Text == "张").TranslatePoint(default, window)!.Value.X;
                 var givenName = boxes.Single(t => t.Text == "三").TranslatePoint(default, window)!.Value.X;
                 (familyName < givenName).Should().Be(language == "zh-Hans", "Chinese names put the family name first");
-                var remove = window.GetVisualDescendants().OfType<Button>()
-                    .Where(b => viewModel.Emails.Any(f => f.RemoveCommand == b.Command)).ToList();
-                remove.Should().HaveCount(2).And.OnlyContain(b => ToolTip.GetTip(b) != null);
+                Visible().Where(b => viewModel.Emails.Any(f => f.RemoveCommand == b.Command)).Should().HaveCount(2)
+                    .And.OnlyContain(b => ToolTip.GetTip(b) != null);
+                Visible().Where(b => viewModel.Emails.Any(f => f.MakePrimaryCommand == b.Command)).Should().HaveCount(2)
+                    .And.OnlyContain(b => ToolTip.GetTip(b) != null);
+                Visible().Should().Contain(b => b.Command == viewModel.SaveCommand)
+                    .And.Contain(b => b.Command == viewModel.CancelCommand);
 
+                await viewModel.CancelCommand.ExecuteAsync(null);
                 viewModel.SelectedPage = 1;
-                Snapshot(window, $"contacts-collected-{language}");
+                Snapshot(window, $"contacts-collected-empty-selection-{language}");
+                var list = window.GetVisualDescendants().OfType<ListBox>().Single(l => l.IsEffectivelyVisible);
+                list.SelectedIndex = 0;
+                Snapshot(window, $"contacts-collected-one-{language}");
 
-                var buttons = window.GetVisualDescendants().OfType<Button>().ToList();
-                buttons.Should().Contain(b => b.Content as string == add && b.Command == viewModel.AddCollectedCommand);
-                buttons.Single(b => b.Command == viewModel.RemoveCollectedCommand).Content.Should().BeOfType<PathIcon>();
+                viewModel.SelectedCollected.Should().ContainSingle();
+                Visible().Should().ContainSingle(b => b.Command == viewModel.WriteCollectedCommand);
+
+                list.SelectAll();
+                Snapshot(window, $"contacts-collected-many-{language}");
+
+                viewModel.SelectedCollected.Should().HaveCount(2);
+                Visible().Should().ContainSingle(b => b.Command == viewModel.AddSelectedCollectedCommand)
+                    .Which.Content.Should().Be(add);
+                Visible().Should().NotContain(b => b.Command == viewModel.WriteCollectedCommand);
                 window.Close();
             },
             TestContext.Current.CancellationToken);
@@ -1979,7 +2004,7 @@ public class UiSmokeTests
     }
 
     /// <summary>
-    /// Creates a loaded contacts view model with one contact and one collected address.
+    /// Creates a loaded contacts view model with three contacts and two collected addresses.
     /// </summary>
     /// <param name="localizer">The localizer.</param>
     /// <returns>The view model.</returns>
@@ -1987,8 +2012,16 @@ public class UiSmokeTests
     {
         var dispatcher = new FakeDispatcher();
         dispatcher.On<Swiftlet.Application.Contacts.GetAddressBookQuery>(_ => new Swiftlet.Application.Contacts.AddressBook(
-            [Swiftlet.Domain.Contacts.Contact.Create("三", "张", ["zhang@example.com", "zhangsan@work.example.com"], ["+86 138 0000 0000"], "Acme", "同事")],
-            [new("bob@example.com", "Bob", DateTimeOffset.UnixEpoch)]));
+            [
+                Swiftlet.Domain.Contacts.Contact.Create(
+                    "三", "张", ["zhang@example.com", "zhangsan@work.example.com"], ["+86 138 0000 0000"], "Acme", "同事"),
+                Swiftlet.Domain.Contacts.Contact.Create("Alice", "Walker", ["alice@example.com"]),
+                Swiftlet.Domain.Contacts.Contact.Create("Ben", "Ortiz", ["ben@example.com"], company: "Northwind"),
+            ],
+            [
+                new("bob@example.com", "Bob", DateTimeOffset.UnixEpoch),
+                new("newsletter@example.org", string.Empty, DateTimeOffset.UnixEpoch),
+            ]));
         var viewModel = new ContactsViewModel(dispatcher, new FakeDialogService(), localizer);
         await viewModel.InitializeAsync();
         return viewModel;

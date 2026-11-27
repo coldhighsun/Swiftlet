@@ -356,4 +356,17 @@
   <data name="Contacts_AddPhone" xml:space="preserve"><value>添加电话</value></data>
   <data name="Contacts_RemoveEmail" xml:space="preserve"><value>删除此邮箱</value></data>
   <data name="Contacts_RemovePhone" xml:space="preserve"><value>删除此电话</value></data>
+  <data name="Contacts_Edit" xml:space="preserve"><value>编辑</value></data>
+  <data name="Contacts_Copy" xml:space="preserve"><value>复制</value></data>
+  <data name="Contacts_Copied" xml:space="preserve"><value>已复制 {0}</value></data>
+  <data name="Contacts_Primary" xml:space="preserve"><value>首选</value></data>
+  <data name="Contacts_MakePrimary" xml:space="preserve"><value>设为首选</value></data>
+  <data name="Contacts_DiscardTitle" xml:space="preserve"><value>放弃修改</value></data>
+  <data name="Contacts_DiscardMessage" xml:space="preserve"><value>对该联系人的修改尚未保存，确定放弃吗？</value></data>
+  <data name="Contacts_Discard" xml:space="preserve"><value>放弃</value></data>
+  <data name="Contacts_SelectedCount" xml:space="preserve"><value>已选择 {0} 个地址</value></data>
+  <data name="Contacts_AddedCount" xml:space="preserve"><value>已加入 {0} 个联系人</value></data>
+  <data name="Contacts_RemoveManyTitle" xml:space="preserve"><value>移除自动收集的地址</value></data>
+  <data name="Contacts_RemoveManyMessage" xml:space="preserve"><value>确定移除这 {0} 个地址吗？它们不会再被自动收集。</value></data>
+  <data name="Contacts_NoCollectedSelection" xml:space="preserve"><value>选择一个或多个地址</value></data>
 </root>

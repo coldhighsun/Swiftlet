@@ -356,4 +356,17 @@
   <data name="Contacts_AddPhone" xml:space="preserve"><value>Add phone number</value></data>
   <data name="Contacts_RemoveEmail" xml:space="preserve"><value>Remove email address</value></data>
   <data name="Contacts_RemovePhone" xml:space="preserve"><value>Remove phone number</value></data>
+  <data name="Contacts_Edit" xml:space="preserve"><value>Edit</value></data>
+  <data name="Contacts_Copy" xml:space="preserve"><value>Copy</value></data>
+  <data name="Contacts_Copied" xml:space="preserve"><value>Copied {0}</value></data>
+  <data name="Contacts_Primary" xml:space="preserve"><value>Primary</value></data>
+  <data name="Contacts_MakePrimary" xml:space="preserve"><value>Make primary</value></data>
+  <data name="Contacts_DiscardTitle" xml:space="preserve"><value>Discard changes</value></data>
+  <data name="Contacts_DiscardMessage" xml:space="preserve"><value>The changes to this contact have not been saved. Discard them?</value></data>
+  <data name="Contacts_Discard" xml:space="preserve"><value>Discard</value></data>
+  <data name="Contacts_SelectedCount" xml:space="preserve"><value>{0} addresses selected</value></data>
+  <data name="Contacts_AddedCount" xml:space="preserve"><value>{0} contacts added</value></data>
+  <data name="Contacts_RemoveManyTitle" xml:space="preserve"><value>Remove collected addresses</value></data>
+  <data name="Contacts_RemoveManyMessage" xml:space="preserve"><value>Remove {0} collected addresses? They will not be collected again.</value></data>
+  <data name="Contacts_NoCollectedSelection" xml:space="preserve"><value>Select one or more addresses</value></data>
 </root>

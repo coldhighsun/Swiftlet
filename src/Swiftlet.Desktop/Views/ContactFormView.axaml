@@ -1,0 +1,117 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Swiftlet.Desktop.ViewModels.Contacts"
+             xmlns:loc="using:Swiftlet.Desktop.Localization"
+             x:Class="Swiftlet.Desktop.Views.ContactFormView"
+             x:DataType="vm:ContactsViewModel">
+  <!-- The form creating or changing a contact, with its buttons below the scrolling fields. -->
+  <DockPanel>
+    <Border DockPanel.Dock="Bottom" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Brush.Border}"
+            Padding="24,12" Margin="0,0,0,4">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+        <Button Classes="danger" Content="{loc:Loc Contacts_Delete}" Command="{Binding DeleteCommand}"
+                IsVisible="{Binding IsExisting}" />
+        <Button Grid.Column="2" Content="{loc:Loc Common_Cancel}" Command="{Binding CancelCommand}" MinWidth="88"
+                HorizontalContentAlignment="Center" />
+        <Button Grid.Column="3" Classes="accent" Content="{loc:Loc Contacts_Save}" Command="{Binding SaveCommand}"
+                MinWidth="88" HorizontalContentAlignment="Center" />
+      </Grid>
+    </Border>
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Margin="24" Spacing="16">
+        <Border Classes="card">
+          <StackPanel Spacing="12">
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+              <StackPanel Grid.Column="{Binding FirstNameColumn}" Spacing="4" TabIndex="{Binding FirstNameColumn}">
+                <TextBlock Classes="caption" Text="{loc:Loc Contacts_FirstName}" />
+                <TextBox Text="{Binding FirstName}" AutomationProperties.Name="{loc:Loc Contacts_FirstName}" />
+              </StackPanel>
+              <StackPanel Grid.Column="{Binding LastNameColumn}" Spacing="4" TabIndex="{Binding LastNameColumn}">
+                <TextBlock Classes="caption" Text="{loc:Loc Contacts_LastName}" />
+                <TextBox Text="{Binding LastName}" AutomationProperties.Name="{loc:Loc Contacts_LastName}" />
+              </StackPanel>
+            </Grid>
+            <StackPanel Spacing="4">
+              <TextBlock Classes="caption" Text="{loc:Loc Contacts_Company}" />
+              <TextBox Text="{Binding Company}" AutomationProperties.Name="{loc:Loc Contacts_Company}" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="card">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="caption" Text="{loc:Loc Contacts_Emails}" />
+            <ItemsControl ItemsSource="{Binding Emails}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vm:ContactValueViewModel">
+                  <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="4" Margin="0,0,0,4">
+                    <!-- The same place shows the mark of the preferred address and the button choosing another. -->
+                    <Button Classes="icon" Command="{Binding MakePrimaryCommand}" IsVisible="{Binding IsPrimary}"
+                            ToolTip.Tip="{loc:Loc Contacts_Primary}" AutomationProperties.Name="{loc:Loc Contacts_Primary}">
+                      <PathIcon Classes="star flagged" />
+                    </Button>
+                    <Button Classes="icon" Command="{Binding MakePrimaryCommand}" IsVisible="{Binding !IsPrimary}"
+                            ToolTip.Tip="{loc:Loc Contacts_MakePrimary}"
+                            AutomationProperties.Name="{loc:Loc Contacts_MakePrimary}">
+                      <PathIcon Classes="star" />
+                    </Button>
+                    <TextBox Grid.Column="1" Text="{Binding Value}"
+                             AutomationProperties.Name="{loc:Loc Contacts_EmailAddress}" />
+                    <Button Grid.Column="2" Classes="icon" Command="{Binding RemoveCommand}"
+                            ToolTip.Tip="{loc:Loc Contacts_RemoveEmail}"
+                            AutomationProperties.Name="{loc:Loc Contacts_RemoveEmail}">
+                      <PathIcon Data="{StaticResource Icon.Close}" />
+                    </Button>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button Classes="icon" Command="{Binding AddEmailCommand}" HorizontalAlignment="Left"
+                    Foreground="{DynamicResource Brush.AccentText}">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <PathIcon Data="{StaticResource Icon.Add}" />
+                <TextBlock Text="{loc:Loc Contacts_AddEmail}" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="card">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="caption" Text="{loc:Loc Contacts_Phones}" />
+            <ItemsControl ItemsSource="{Binding Phones}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vm:ContactValueViewModel">
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4" Margin="0,0,0,4">
+                    <TextBox Text="{Binding Value}" AutomationProperties.Name="{loc:Loc Contacts_PhoneNumber}" />
+                    <Button Grid.Column="1" Classes="icon" Command="{Binding RemoveCommand}"
+                            ToolTip.Tip="{loc:Loc Contacts_RemovePhone}"
+                            AutomationProperties.Name="{loc:Loc Contacts_RemovePhone}">
+                      <PathIcon Data="{StaticResource Icon.Close}" />
+                    </Button>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button Classes="icon" Command="{Binding AddPhoneCommand}" HorizontalAlignment="Left"
+                    Foreground="{DynamicResource Brush.AccentText}">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <PathIcon Data="{StaticResource Icon.Add}" />
+                <TextBlock Text="{loc:Loc Contacts_AddPhone}" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="card">
+          <StackPanel Spacing="4">
+            <TextBlock Classes="caption" Text="{loc:Loc Contacts_Note}" />
+            <TextBox Text="{Binding Note}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="72"
+                     VerticalContentAlignment="Top" AutomationProperties.Name="{loc:Loc Contacts_Note}" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>
