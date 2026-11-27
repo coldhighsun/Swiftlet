@@ -55,7 +55,13 @@ internal static class Program
 
         InstallerMutex.Hold();
 
-        var builder = Host.CreateApplicationBuilder(args);
+        // The default content root is the working directory, which is "/" for a macOS application bundle started from
+        // Finder; configuration files are watched there, so the application's own directory is used instead.
+        var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+        {
+            Args = args,
+            ContentRootPath = AppContext.BaseDirectory,
+        });
         var paths = new AppPaths(dataDirectory);
         var logger = LogSetup.Create(paths.LogDirectory);
         builder.Services.AddSerilog(logger, dispose: true);
