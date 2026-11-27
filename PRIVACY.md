@@ -20,7 +20,7 @@ Swiftlet is a desktop email client. It runs on your computer and connects direct
 | API key of an AI service, if you enter one | Using that service |
 | Cached folders, messages and attachment information | Showing and searching your mail |
 | Contacts you add or import, addresses you send mail to, and addresses you removed from the suggestions | Address book and recipient suggestions |
-| Labels, remote image rules (sender addresses or domains) and app settings | Features you configure |
+| Labels, message priorities, remote image rules (sender addresses or domains) and app settings | Features you configure |
 | Log files (at most 7) | Troubleshooting |
 
 Attachment contents are downloaded when you ask for them and saved where you choose.
@@ -45,7 +45,7 @@ Logs can contain your email addresses, mail folder names, remote image rules, se
 | Your mail servers (IMAP and SMTP) | Synchronizing, searching for new mail, sending and managing messages | Your sign-in data and mail |
 | Microsoft or Google sign-in services | When you sign in with them, and to renew the sign-in | Authorization codes and tokens |
 | Servers hosting images referenced in a message | Only when you load remote images, or a saved rule allows the sender | The image request, including your IP address |
-| The AI service you configure (the Claude API, another service, or a program on your computer) | Only when you use an AI action, or test the connection | For a summary or translation: the subject, sender, date and plain text of that message, up to the length limit in the settings. For a reply draft: the same of the message you are answering, and the notes you typed for the draft. For rewriting: the text you wrote above the quoted mail. For a test: a fixed short text. Your API key, and your IP address. No attachments and no recipient fields; nothing else of the message you are writing |
+| The AI service you configure (the Claude API, another service, or a program on your computer) | Only when you use an AI action, or test the connection | For a summary or translation: the subject, sender, date and plain text of that message, up to the length limit in the settings. For a reply draft: the same of the message you are answering, and the notes you typed for the draft. For rewriting: the text you wrote above the quoted mail. For classifying: the subject, sender, date and the beginning of the plain text of each selected message (at most 20 at a time, one request per message), and the names of your labels. For a test: a fixed short text. Your API key, and your IP address. No attachments and no recipient fields; nothing else of the message you are writing |
 | Web sites | When you open a link | Handled by your web browser |
 | GitHub (`api.github.com` and GitHub's download servers) | Release builds check for a new version after starting and then daily, and when you ask; the installer is downloaded only when you choose to update | The request, including your IP address, the name of the update library and the files requested. No mail, account or settings data |
 
@@ -57,7 +57,7 @@ Swiftlet displays mail with the web view component of your operating system and 
 
 ## AI features
 
-You choose the service and provide your own API key; the project has no part in it. Before AI features can send anything to a new address, Swiftlet asks you. The service processes what it receives under its own terms and may keep it or charge you, so read them first, and check whether your organization allows sending work mail to it. The text of a message can itself name recipients or quote earlier mail, and is sent as it is. Answers are kept in memory only until you quit. Switching AI off on the "AI" page of the settings stops all of this; the saved key can be removed there.
+You choose the service and provide your own API key; the project has no part in it. Before AI features can send anything to a new address, Swiftlet asks you. The service processes what it receives under its own terms and may keep it or charge you, so read them first, and check whether your organization allows sending work mail to it. The text of a message can itself name recipients or quote earlier mail, and is sent as it is. Summaries and translations are kept in memory only until you quit. Of a classification, only the labels and priorities you apply are stored, on your computer. Switching AI off on the "AI" page of the settings stops all of this; the saved key can be removed there.
 
 ## Sign in with Microsoft
 
