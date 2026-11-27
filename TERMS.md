@@ -8,7 +8,7 @@ These terms apply to your use of Swiftlet, a desktop email client published at <
 
 Swiftlet is provided free of charge. It runs on your computer and connects to mail services that you choose. The project does not operate a mail service and does not host your data. The [Privacy Statement](PRIVACY.md) describes how data is handled.
 
-These terms do not replace any license that applies to the source code of Swiftlet. Third-party components are covered by their own licenses; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+The source code of Swiftlet is available under the [MIT License](LICENSE). These terms do not limit the rights that license grants. Third-party components are covered by their own licenses; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## Your responsibilities
 
