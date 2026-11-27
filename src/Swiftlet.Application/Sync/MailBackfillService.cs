@@ -51,13 +51,11 @@ public sealed record BackfillBatchResult(BackfillOutcome Outcome, int Added, int
 /// <param name="folders">The folder repository.</param>
 /// <param name="messages">The message repository.</param>
 /// <param name="options">The synchronization limits.</param>
-/// <param name="settings">The user-configurable sync behavior.</param>
 /// <param name="logger">The logger.</param>
 public sealed class MailBackfillService(
     IFolderRepository folders,
     IMessageRepository messages,
     MailSyncOptions options,
-    ISyncSettings settings,
     ILogger<MailBackfillService> logger)
 {
     /// <summary>
@@ -67,7 +65,7 @@ public sealed class MailBackfillService(
 
     /// <summary>
     /// Gets the folders of an account whose history should be downloaded, most important first.
-    /// A folder that mirrors all other folders (Gmail's "All Mail") comes after the regular folders, when the user allows it, so most of its
+    /// A folder that mirrors all other folders (Gmail's "All Mail") comes after the regular folders, so most of its
     /// messages are already cached from the other folders and are copied instead of downloaded. Trash and Junk come last of all.
     /// </summary>
     /// <param name="accountId">The account identifier.</param>
@@ -79,7 +77,6 @@ public sealed class MailBackfillService(
         return
         [
             .. all
-                .Where(f => f.Role != FolderRole.AllMail || settings.DownloadAllMail)
                 .OrderBy(f => FolderSyncOrder.Priority(f.Role))
                 .ThenBy(f => f.FullName, StringComparer.Ordinal),
         ];

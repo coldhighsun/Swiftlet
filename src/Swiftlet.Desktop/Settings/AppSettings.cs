@@ -22,12 +22,6 @@ public interface IAppSettings : ISyncSettings
     void SetDownloadFullHistory(bool value);
 
     /// <summary>
-    /// Changes whether the "All Mail" folder is downloaded too, and saves the choice.
-    /// </summary>
-    /// <param name="value">The new value.</param>
-    void SetDownloadAllMail(bool value);
-
-    /// <summary>
     /// Gets a value indicating whether closing the main window hides it in the tray instead of quitting.
     /// </summary>
     bool CloseToTray { get; }
@@ -114,11 +108,6 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     private volatile bool _downloadFullHistory;
 
     /// <summary>
-    /// The in-memory value, read by the backfill worker while the UI thread writes it.
-    /// </summary>
-    private volatile bool _downloadAllMail;
-
-    /// <summary>
     /// The in-memory value, read when the main window is closed.
     /// </summary>
     private volatile bool _closeToTray;
@@ -159,7 +148,6 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
         _language = file.Language;
         _removeServerDeletedMessages = file.SyncServerDeletions ?? true;
         _downloadFullHistory = file.DownloadFullHistory ?? true;
-        _downloadAllMail = file.DownloadAllMail ?? true;
         _closeToTray = file.CloseToTray ?? true;
         _showNewMailNotifications = file.ShowNewMailNotifications ?? true;
         _theme = ThemePreference.Normalize(
@@ -175,7 +163,6 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     /// <param name="Language">The saved language preference.</param>
     /// <param name="SyncServerDeletions">Whether messages deleted on the server are removed locally. Earlier versions stored this as "removeServerDeletedMessages" with an off default, so that key is deliberately not read.</param>
     /// <param name="DownloadFullHistory">Whether the full message history is downloaded in the background.</param>
-    /// <param name="DownloadAllMail">Whether the "All Mail" folder is downloaded too.</param>
     /// <param name="Theme">The theme preference; read as raw JSON so a wrongly typed value does not discard the whole file.</param>
     /// <param name="CloseToTray">Whether closing the main window hides it in the tray.</param>
     /// <param name="ShowNewMailNotifications">Whether newly arrived mail is announced with a pop-up.</param>
@@ -185,7 +172,6 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
         string? Language,
         bool? SyncServerDeletions,
         bool? DownloadFullHistory = null,
-        bool? DownloadAllMail = null,
         JsonElement? Theme = null,
         bool? CloseToTray = null,
         bool? ShowNewMailNotifications = null,
@@ -197,9 +183,6 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
 
     /// <inheritdoc />
     public bool DownloadFullHistory => _downloadFullHistory;
-
-    /// <inheritdoc />
-    public bool DownloadAllMail => _downloadAllMail;
 
     /// <inheritdoc />
     public string Theme => _theme;
@@ -275,16 +258,6 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     }
 
     /// <inheritdoc />
-    public void SetDownloadAllMail(bool value)
-    {
-        lock (_gate)
-        {
-            Write(Snapshot() with { DownloadAllMail = value });
-            _downloadAllMail = value;
-        }
-    }
-
-    /// <inheritdoc />
     public void SetCloseToTray(bool value)
     {
         lock (_gate)
@@ -339,7 +312,6 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
             _language,
             _removeServerDeletedMessages,
             _downloadFullHistory,
-            _downloadAllMail,
             JsonSerializer.SerializeToElement(_theme),
             _closeToTray,
             _showNewMailNotifications,

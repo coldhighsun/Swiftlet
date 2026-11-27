@@ -188,7 +188,7 @@ public class SettingsStoreTests : IDisposable
 
         store.SetMainWindowPlacement(placement);
         store.Save("en");
-        new AppSettings(StorePath).SetDownloadAllMail(false);
+        new AppSettings(StorePath).SetDownloadFullHistory(false);
 
         new AppSettings(StorePath).MainWindowPlacement.Should().Be(placement);
     }
@@ -281,21 +281,18 @@ public class SettingsStoreTests : IDisposable
     }
 
     /// <summary>
-    /// Verifies the All Mail download is on by default and the choice survives a restart without disturbing the other values.
+    /// Verifies the removed "All Mail" key written by earlier versions is ignored without losing the other settings.
     /// </summary>
     [Fact]
-    public void SetDownloadAllMail_Off_DefaultsOnAndPersistsWithOtherSettings()
+    public void Load_RemovedDownloadAllMailKey_IsIgnoredAndKeepsOtherSettings()
     {
+        Directory.CreateDirectory(Path.GetDirectoryName(StorePath)!);
+        File.WriteAllText(StorePath, """{"language":"zh-Hans","downloadAllMail":false,"downloadFullHistory":false}""");
+
         var store = new AppSettings(StorePath);
-        store.DownloadAllMail.Should().BeTrue();
-        store.SetDownloadFullHistory(false);
 
-        store.SetDownloadAllMail(false);
-
-        var reloaded = new AppSettings(StorePath);
-        reloaded.DownloadAllMail.Should().BeFalse();
-        reloaded.DownloadFullHistory.Should().BeFalse();
-        reloaded.RemoveServerDeletedMessages.Should().BeTrue();
+        store.Load().Should().Be("zh-Hans");
+        store.DownloadFullHistory.Should().BeFalse();
     }
 
     /// <summary>
@@ -308,7 +305,7 @@ public class SettingsStoreTests : IDisposable
         store.CloseToTray.Should().BeTrue();
 
         store.SetCloseToTray(false);
-        new AppSettings(StorePath).SetDownloadAllMail(false);
+        new AppSettings(StorePath).SetDownloadFullHistory(false);
 
         new AppSettings(StorePath).CloseToTray.Should().BeFalse();
     }

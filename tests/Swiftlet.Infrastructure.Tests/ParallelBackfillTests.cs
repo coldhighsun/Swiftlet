@@ -276,7 +276,6 @@ public class ParallelBackfillTests
                 db.CreateFolderRepository(),
                 db.CreateMessageRepository(),
                 new MailSyncOptions(),
-                new FakeSyncSettings(),
                 NullLogger<MailBackfillService>.Instance);
             return new Scenario(db, factory.Session, backfill, account.Id, inbox.Id);
         }

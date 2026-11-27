@@ -427,9 +427,6 @@ internal sealed class FakeAppSettings : IAppSettings
     public bool DownloadFullHistory { get; set; } = true;
 
     /// <inheritdoc />
-    public bool DownloadAllMail { get; set; } = true;
-
-    /// <inheritdoc />
     public string Theme { get; set; } = ThemePreference.System;
 
     /// <inheritdoc />
@@ -501,23 +498,6 @@ internal sealed class FakeAppSettings : IAppSettings
         }
 
         MainWindowPlacement = value;
-    }
-
-    /// <summary>
-    /// Gets the values passed to <see cref="SetDownloadAllMail"/>.
-    /// </summary>
-    public List<bool> AllMailCalls { get; } = [];
-
-    /// <inheritdoc />
-    public void SetDownloadAllMail(bool value)
-    {
-        if (Failure is not null)
-        {
-            throw Failure;
-        }
-
-        AllMailCalls.Add(value);
-        DownloadAllMail = value;
     }
 
     /// <summary>

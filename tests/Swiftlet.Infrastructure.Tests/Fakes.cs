@@ -668,9 +668,6 @@ internal sealed class FakeSyncSettings : ISyncSettings
 
     /// <inheritdoc />
     public bool DownloadFullHistory { get; set; } = true;
-
-    /// <inheritdoc />
-    public bool DownloadAllMail { get; set; } = true;
 }
 
 /// <summary>

@@ -377,37 +377,6 @@ public class SettingsViewModelTests
     }
 
     /// <summary>
-    /// Verifies toggling the All Mail download saves the choice and starts from the stored value.
-    /// </summary>
-    [Fact]
-    public void DownloadAllMail_Toggle_SavesValue()
-    {
-        var settings = new FakeAppSettings();
-        var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules());
-        viewModel.DownloadAllMail.Should().BeTrue();
-
-        viewModel.DownloadAllMail = false;
-
-        settings.AllMailCalls.Should().Equal(false);
-        settings.DownloadAllMail.Should().BeFalse();
-    }
-
-    /// <summary>
-    /// Verifies a failed save is reported and the checkbox returns to the stored value.
-    /// </summary>
-    [Fact]
-    public void DownloadAllMail_SaveFails_ShowsErrorAndRevertsValue()
-    {
-        var settings = new FakeAppSettings { Failure = new IOException("disk full") };
-        var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules());
-
-        viewModel.DownloadAllMail = false;
-
-        viewModel.DownloadAllMail.Should().BeTrue();
-        viewModel.ErrorText.Should().Contain("disk full");
-    }
-
-    /// <summary>
     /// Verifies toggling the tray setting saves the choice and starts from the stored value.
     /// </summary>
     [Fact]
@@ -491,7 +460,6 @@ public class SettingsViewModelTests
             settings.SetTheme(ThemePreference.Dark);
 
             settings.Save("en");
-            settings.SetDownloadAllMail(false);
             settings.SetDownloadFullHistory(false);
             settings.SetRemoveServerDeletedMessages(false);
 

@@ -882,10 +882,10 @@ public class UiSmokeTests
                 SelectSettingsPage(window, 1, $"settings-sync-{language}");
 
                 var boxes = window.GetVisualDescendants().OfType<CheckBox>().ToList();
-                boxes.Should().HaveCount(3);
+                boxes.Should().HaveCount(2);
                 var box = boxes.Single(b => b.Content as string == checkbox);
                 box.IsChecked.Should().BeFalse();
-                boxes.Where(b => b != box).Should().OnlyContain(b => b.IsChecked == true, "the history downloads are on by default");
+                boxes.Where(b => b != box).Should().OnlyContain(b => b.IsChecked == true, "the history download is on by default");
                 window.GetVisualDescendants().OfType<TextBlock>().Count(t => !string.IsNullOrEmpty(t.Text) && t.Text.Length > 40).Should().BeGreaterThan(0);
                 window.Close();
                 return Task.CompletedTask;

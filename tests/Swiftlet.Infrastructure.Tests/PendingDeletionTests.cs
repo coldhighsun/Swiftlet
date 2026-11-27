@@ -433,7 +433,6 @@ public class PendingDeletionTests
             s.Folders,
             s.Messages,
             new MailSyncOptions(),
-            new FakeSyncSettings(),
             NullLogger<MailBackfillService>.Instance);
 
         // Act

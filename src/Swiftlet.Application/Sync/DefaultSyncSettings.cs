@@ -12,7 +12,4 @@ internal sealed class DefaultSyncSettings : ISyncSettings
 
     /// <inheritdoc />
     public bool DownloadFullHistory => true;
-
-    /// <inheritdoc />
-    public bool DownloadAllMail => true;
 }

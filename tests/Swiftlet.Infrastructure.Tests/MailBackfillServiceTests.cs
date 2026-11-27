@@ -39,15 +39,13 @@ public class MailBackfillServiceTests
     /// Creates the backfill service.
     /// </summary>
     /// <param name="db">The test database.</param>
-    /// <param name="settings">The sync settings, or <see langword="null"/> for defaults.</param>
     /// <returns>The service.</returns>
-    private static MailBackfillService CreateBackfill(TestDatabase db, FakeSyncSettings? settings = null)
+    private static MailBackfillService CreateBackfill(TestDatabase db)
     {
         return new MailBackfillService(
             db.CreateFolderRepository(),
             db.CreateMessageRepository(),
             new MailSyncOptions(BackfillBatchSize: BatchSize),
-            settings ?? new FakeSyncSettings(),
             NullLogger<MailBackfillService>.Instance);
     }
 
@@ -334,26 +332,6 @@ public class MailBackfillServiceTests
 
         // Assert
         result.Select(f => f.FullName).Should().Equal("INBOX", "Sent", "Archive", "Work", "All Mail", "Junk", "Trash");
-    }
-
-    /// <summary>
-    /// Verifies All Mail is left out when the user turned it off.
-    /// </summary>
-    /// <returns>A task that completes when the test is done.</returns>
-    [Fact]
-    public async Task GetFoldersToBackfillAsync_AllMailDisabled_LeavesItOut()
-    {
-        // Arrange
-        var ct = TestContext.Current.CancellationToken;
-        await using var db = await TestDatabase.CreateAsync(ct);
-        var (account, _) = await db.SeedAccountAsync(ct);
-        await db.CreateFolderRepository().AddAsync(MailFolder.Create(account.Id, "All Mail", "All Mail", FolderRole.AllMail), ct);
-
-        // Act
-        var result = await CreateBackfill(db, new FakeSyncSettings { DownloadAllMail = false }).GetFoldersToBackfillAsync(account.Id, ct);
-
-        // Assert
-        result.Select(f => f.FullName).Should().Equal("INBOX");
     }
 
     /// <summary>

@@ -164,26 +164,6 @@ public class BackfillWorkerTests
     }
 
     /// <summary>
-    /// Verifies All Mail keeps only its first-sync messages when the user turned it off.
-    /// </summary>
-    /// <returns>A task that completes when the test is done.</returns>
-    [Fact]
-    public async Task BackfillAccountAsync_AllMailDisabled_LeavesAllMailAlone()
-    {
-        // Arrange
-        var ct = TestContext.Current.CancellationToken;
-        await using var h = await Harness.CreateAsync(30, ct, extraFolders: [("[Gmail]/All Mail", FolderRole.AllMail)]);
-        h.Settings.DownloadAllMail = false;
-
-        // Act
-        await h.Worker.BackfillAccountAsync(h.Account, _ => { }, ct);
-
-        // Assert
-        (await h.CachedCountAsync("[Gmail]/All Mail", ct)).Should().Be(20);
-        h.Factory.Session.FetchOlderCalls.Select(c => c.Folder).Distinct().Should().Equal("INBOX");
-    }
-
-    /// <summary>
     /// Verifies a folder that is still empty locally does not keep the account in the short retry loop.
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>
@@ -215,7 +195,7 @@ public class BackfillWorkerTests
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        await using var h = await Harness.CreateAsync(250, ct);
+        await using var h = await Harness.CreateAsync(250, ct, extraFolders: [("[Gmail]/All Mail", FolderRole.AllMail)]);
         h.Settings.DownloadFullHistory = false;
 
         // Act
@@ -225,6 +205,7 @@ public class BackfillWorkerTests
         complete.Should().BeFalse();
         h.Factory.Session.FetchOlderCalls.Should().BeEmpty();
         (await h.CachedCountAsync("INBOX", ct)).Should().Be(20);
+        (await h.CachedCountAsync("[Gmail]/All Mail", ct)).Should().Be(20);
     }
 
     /// <summary>

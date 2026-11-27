@@ -14,10 +14,4 @@ public interface ISyncSettings
     /// Gets a value indicating whether the full message history is downloaded in the background after the first sync.
     /// </summary>
     bool DownloadFullHistory { get; }
-
-    /// <summary>
-    /// Gets a value indicating whether the history of a folder that mirrors all other folders (Gmail's "All Mail") is downloaded too.
-    /// Messages already cached from another folder are copied locally instead of downloaded again.
-    /// </summary>
-    bool DownloadAllMail { get; }
 }
