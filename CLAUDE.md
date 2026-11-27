@@ -6,7 +6,7 @@ This file lets Claude Code pick the project up in a fresh session; it also holds
 ## First steps when taking over
 
 1. Run `git log --oneline` and `git status` to see where the project stands and whether anything is uncommitted.
-2. Run `dotnet build Swiftlet.slnx`, then run the tests project by project (see below). The baseline is **983 tests** (Domain 45 / Application 66 / Infrastructure 460 / Desktop 412) with a 0-warning build; on Windows one Unix-only test is skipped.
+2. Run `dotnet build Swiftlet.slnx`, then run the tests project by project (see below). The baseline is **985 tests** (Domain 45 / Application 66 / Infrastructure 460 / Desktop 414) with a 0-warning build; on Windows one Unix-only test is skipped.
 3. Read "Remaining work" at the end of this file. **M5a (unified inbox + labels + server-side delete) and M5.5 (read/starred flag sync) are done.** **Account management (delete + OAuth re-sign-in), IMAP IDLE, history backfill, parallel sync and the immediate flag push are implemented.** The next step is not chosen yet; candidates are verifying against real providers or M6. Ask the user before starting. The rules feature and the local trash were cancelled by the user: do not build them.
 4. Storage is split per account (see **Database** below). There are no EF migrations and no code that moves data out of an old single-file database: the local dev database `%LocalAppData%\Swiftlet\swiftlet.db` created by an earlier version must be deleted once and the accounts added again, otherwise the global store has the wrong schema. Inside an account database, `SqliteSchemaInitializer` still adds the column `Messages.IsFlagSyncPending` in place.
 

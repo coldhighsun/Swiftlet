@@ -1316,6 +1316,70 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies each unread badge sits right after its folder name, however wide the sidebar is.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_UnreadBadges_FollowFolderName()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var scenario = new MainWindowViewModelTests.Scenario();
+                await scenario.StartAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-unread-narrow");
+                var sidebar = (Grid)window.FindControl<Border>("Sidebar")!.Parent!;
+
+                foreach (var width in (double[])[220, 360])
+                {
+                    sidebar.ColumnDefinitions[0].Width = new GridLength(width);
+                    Snapshot(window, $"main-window-unread-{width}");
+
+                    var badges = VisibleBadges(window);
+                    badges.Should().HaveCount(2);
+                    foreach (var badge in badges)
+                    {
+                        var name = ((Panel)badge.Parent!).Children.OfType<TextBlock>().Single(t => t != badge);
+                        (badge.Bounds.Left - name.Bounds.Right).Should().BeApproximately(8, 1, $"the sidebar is {width} wide");
+                    }
+                }
+
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies a long folder name is trimmed so that its unread badge stays visible, left of the scroll bar.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_UnreadBadges_LongName_StayClearOfScrollBar()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var scenario = new MainWindowViewModelTests.Scenario();
+                var folder = TestData.Folder(scenario.Account, new string('W', 80), Swiftlet.Domain.Folders.FolderRole.Other);
+                scenario.Dispatcher.On<Swiftlet.Application.Queries.GetFoldersQuery>(
+                    _ => new List<Swiftlet.Domain.Folders.MailFolder> { folder });
+                scenario.Dispatcher.On<Swiftlet.Application.Queries.GetUnreadCountsQuery>(
+                    _ => new Dictionary<Guid, int> { [folder.Id] = 123 });
+                await scenario.StartAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-unread-long-name");
+
+                var tree = window.GetVisualDescendants().OfType<TreeView>().Single();
+                var badge = VisibleBadges(window).Single(b => b.DataContext is FolderNodeViewModel);
+                var right = badge.TranslatePoint(new Point(badge.Bounds.Width, 0), tree)!.Value.X;
+
+                badge.Bounds.Width.Should().BeGreaterThan(0);
+                right.Should().BeLessThanOrEqualTo(tree.Bounds.Width - 12);
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Verifies the unread counts are read away from the UI thread, which database calls would otherwise block.
     /// </summary>
     [Fact]
@@ -1338,6 +1402,17 @@ public class UiSmokeTests
                 scenario.ViewModel.UnifiedInbox.UnreadCount.Should().Be(7);
             },
             TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Finds the unread badges shown in a window.
+    /// </summary>
+    /// <param name="window">The window.</param>
+    /// <returns>The visible badges.</returns>
+    private static List<TextBlock> VisibleBadges(Window window)
+    {
+        return window.GetVisualDescendants().OfType<TextBlock>()
+            .Where(t => t.Classes.Contains("badge") && t.IsEffectivelyVisible).ToList();
     }
 
     /// <summary>

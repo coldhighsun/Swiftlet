@@ -94,8 +94,9 @@
             </Button>
           </Grid>
 
-          <TreeView ItemsSource="{Binding TreeRoots}" SelectedItem="{Binding SelectedNode}" Margin="4,0" Background="Transparent"
-                    ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+          <!-- The right padding keeps long rows clear of the scroll bar, which floats over the content. -->
+          <TreeView ItemsSource="{Binding TreeRoots}" SelectedItem="{Binding SelectedNode}" Margin="4,0" Padding="0,0,12,0"
+                    Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <TreeView.DataTemplates>
               <TreeDataTemplate DataType="main:AccountNodeViewModel" ItemsSource="{Binding Folders}">
                 <Grid Classes="node" ColumnDefinitions="Auto,*" Background="Transparent" ToolTip.Tip="{Binding DisplayName}">
@@ -118,11 +119,14 @@
                 </Grid>
               </TreeDataTemplate>
               <DataTemplate DataType="main:UnifiedInboxNodeViewModel">
-                <Grid Classes="node" ColumnDefinitions="Auto,*,Auto">
+                <Grid Classes="node" ColumnDefinitions="Auto,*">
                   <PathIcon Data="{StaticResource Icon.AllInboxes}" />
-                  <TextBlock Grid.Column="1" Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                  <TextBlock Grid.Column="2" Classes="caption badge" Text="{Binding UnreadText}" IsVisible="{Binding HasUnread}"
-                             VerticalAlignment="Center" />
+                  <!-- The badge is measured first, so it follows the name and stays visible when the name is trimmed. -->
+                  <DockPanel Grid.Column="1" HorizontalAlignment="Left">
+                    <TextBlock DockPanel.Dock="Right" Classes="caption badge" Text="{Binding UnreadText}" IsVisible="{Binding HasUnread}"
+                               Margin="8,0,0,0" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                  </DockPanel>
                 </Grid>
               </DataTemplate>
               <DataTemplate DataType="main:LabelNodeViewModel">
@@ -132,7 +136,7 @@
                 </Grid>
               </DataTemplate>
               <DataTemplate DataType="main:FolderNodeViewModel">
-                <Grid Classes="node" ColumnDefinitions="Auto,*,Auto" Background="Transparent">
+                <Grid Classes="node" ColumnDefinitions="Auto,*" Background="Transparent">
                   <Grid.ContextMenu>
                     <ContextMenu>
                       <MenuItem Header="{loc:Loc Menu_Folder_Empty}" IsEnabled="{Binding CanEmpty}"
@@ -141,9 +145,11 @@
                     </ContextMenu>
                   </Grid.ContextMenu>
                   <PathIcon Data="{Binding IconKey, Converter={x:Static conv:IconKeyConverter.Instance}}" />
-                  <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                  <TextBlock Grid.Column="2" Classes="caption badge" Text="{Binding UnreadText}" IsVisible="{Binding HasUnread}"
-                             VerticalAlignment="Center" />
+                  <DockPanel Grid.Column="1" HorizontalAlignment="Left">
+                    <TextBlock DockPanel.Dock="Right" Classes="caption badge" Text="{Binding UnreadText}" IsVisible="{Binding HasUnread}"
+                               Margin="8,0,0,0" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                  </DockPanel>
                 </Grid>
               </DataTemplate>
             </TreeView.DataTemplates>
