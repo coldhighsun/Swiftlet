@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <!-- The published program is Swiftlet(.exe); the installer, the packaging scripts and avares:// URIs use this name. -->
+    <AssemblyName>Swiftlet</AssemblyName>
     <NeutralLanguage>en</NeutralLanguage>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets/swiftlet.ico</ApplicationIcon>

@@ -3,7 +3,7 @@
         xmlns:vm="using:Swiftlet.Desktop.ViewModels"
         xmlns:loc="using:Swiftlet.Desktop.Localization"
         x:Class="Swiftlet.Desktop.Views.EditAccountWindow"
-        Icon="avares://Swiftlet.Desktop/Assets/swiftlet.ico"
+        Icon="avares://Swiftlet/Assets/swiftlet.ico"
         x:DataType="vm:EditAccountViewModel"
         Title="{loc:Loc EditAccount_Title}" Width="480" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterOwner">

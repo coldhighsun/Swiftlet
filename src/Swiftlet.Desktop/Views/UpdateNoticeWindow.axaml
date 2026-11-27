@@ -3,7 +3,7 @@
         xmlns:vm="using:Swiftlet.Desktop.ViewModels.Update"
         xmlns:loc="using:Swiftlet.Desktop.Localization"
         x:Class="Swiftlet.Desktop.Views.UpdateNoticeWindow"
-        Icon="avares://Swiftlet.Desktop/Assets/swiftlet.ico"
+        Icon="avares://Swiftlet/Assets/swiftlet.ico"
         x:DataType="vm:UpdateNoticeViewModel"
         Title="Swiftlet" Width="360" SizeToContent="Height" CanResize="False"
         WindowDecorations="None" ShowInTaskbar="False" ShowActivated="False" Topmost="True"

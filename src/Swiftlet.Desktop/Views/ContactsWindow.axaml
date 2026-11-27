@@ -4,7 +4,7 @@
         xmlns:views="using:Swiftlet.Desktop.Views"
         xmlns:loc="using:Swiftlet.Desktop.Localization"
         x:Class="Swiftlet.Desktop.Views.ContactsWindow"
-        Icon="avares://Swiftlet.Desktop/Assets/swiftlet.ico"
+        Icon="avares://Swiftlet/Assets/swiftlet.ico"
         x:DataType="vm:ContactsViewModel"
         Title="{loc:Loc Contacts_Title}" Width="820" Height="580" MinWidth="640" MinHeight="440"
         WindowStartupLocation="CenterOwner">

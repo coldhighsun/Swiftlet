@@ -6,7 +6,7 @@
         xmlns:ctl="using:Swiftlet.Desktop.Controls"
         xmlns:views="using:Swiftlet.Desktop.Views"
         x:Class="Swiftlet.Desktop.Views.ComposeWindow"
-        Icon="avares://Swiftlet.Desktop/Assets/swiftlet.ico"
+        Icon="avares://Swiftlet/Assets/swiftlet.ico"
         x:DataType="compose:ComposeViewModel"
         Title="{Binding Title}" Width="780" Height="660" MinWidth="520" MinHeight="420"
         WindowStartupLocation="CenterOwner">

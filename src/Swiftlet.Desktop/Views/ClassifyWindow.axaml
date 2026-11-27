@@ -3,7 +3,7 @@
         xmlns:ai="using:Swiftlet.Desktop.ViewModels.Ai"
         xmlns:loc="using:Swiftlet.Desktop.Localization"
         x:Class="Swiftlet.Desktop.Views.ClassifyWindow"
-        Icon="avares://Swiftlet.Desktop/Assets/swiftlet.ico"
+        Icon="avares://Swiftlet/Assets/swiftlet.ico"
         x:DataType="ai:ClassifyViewModel"
         Title="{loc:Loc Classify_Title}" Width="560" Height="520" MinWidth="440" MinHeight="320"
         WindowStartupLocation="CenterOwner">

@@ -17,7 +17,7 @@
 
 ; Must match InstallerMutex.Name in src/Swiftlet.Desktop/Hosting.
 #define AppMutexName "Swiftlet-Running-5D0E3B7A-2C64-4E0B-9C1F-8A6D7B3E4F21"
-#define AppExeName "Swiftlet.Desktop.exe"
+#define AppExeName "Swiftlet.exe"
 
 [Setup]
 ; Never change the AppId: it is how an update finds the installation it replaces.
@@ -49,6 +49,14 @@ Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.i
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+
+[InstallDelete]
+; The program was called Swiftlet.Desktop up to 0.1.0-alpha.1; an update would leave those files behind.
+Type: files; Name: "{app}\Swiftlet.Desktop.exe"
+Type: files; Name: "{app}\Swiftlet.Desktop.dll"
+Type: files; Name: "{app}\Swiftlet.Desktop.deps.json"
+Type: files; Name: "{app}\Swiftlet.Desktop.runtimeconfig.json"
+Type: files; Name: "{app}\zh-Hans\Swiftlet.Desktop.resources.dll"
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion

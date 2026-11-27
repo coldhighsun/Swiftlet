@@ -14,12 +14,12 @@ public sealed class AvaloniaTrayIcon : IDisposable
     /// <summary>
     /// The image shown in the tray.
     /// </summary>
-    private static readonly Uri IconUri = new("avares://Swiftlet.Desktop/Assets/swiftlet.ico");
+    private static readonly Uri IconUri = new("avares://Swiftlet/Assets/swiftlet.ico");
 
     /// <summary>
     /// The image with a red dot, shown while there is unread mail.
     /// </summary>
-    private static readonly Uri UnreadIconUri = new("avares://Swiftlet.Desktop/Assets/swiftlet-unread.ico");
+    private static readonly Uri UnreadIconUri = new("avares://Swiftlet/Assets/swiftlet-unread.ico");
 
     /// <summary>
     /// How long each of the two pictures stays while blinking.

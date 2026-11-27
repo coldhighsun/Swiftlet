@@ -178,7 +178,7 @@ public class ThemeTests
         await UiSmokeTests.Session.Dispatch(
             () =>
             {
-                using var stream = Avalonia.Platform.AssetLoader.Open(new Uri("avares://Swiftlet.Desktop/Assets/swiftlet.ico"));
+                using var stream = Avalonia.Platform.AssetLoader.Open(new Uri("avares://Swiftlet/Assets/swiftlet.ico"));
                 new WindowIcon(stream).Should().NotBeNull();
                 foreach (var window in (Window[])[new MainWindow(), new ComposeWindow(), new AddAccountWindow(), new SettingsWindow(), new LabelManagerWindow(), new StartupWindow()])
                 {

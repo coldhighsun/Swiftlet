@@ -6,7 +6,7 @@
         xmlns:ctl="using:Swiftlet.Desktop.Controls"
         xmlns:conv="using:Swiftlet.Desktop.Converters"
         x:Class="Swiftlet.Desktop.Views.MainWindow"
-        Icon="avares://Swiftlet.Desktop/Assets/swiftlet.ico"
+        Icon="avares://Swiftlet/Assets/swiftlet.ico"
         x:DataType="main:MainWindowViewModel"
         Title="Swiftlet" Width="1200" Height="760" MinWidth="800" MinHeight="480">
   <Window.Styles>
