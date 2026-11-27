@@ -323,6 +323,41 @@ public class BackfillWorkerTests
         (await h.CachedCountAsync("INBOX", ct)).Should().Be(20);
     }
 
+    [Fact]
+    public async Task ReconcileAsync_SettingsChangedDuringPause_StartsAgainAtOnce()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var h = await Harness.CreateAsync(250, ct);
+        await h.Worker.ReconcileAsync(ct);
+        await h.Worker.WhenPassesCompleteAsync();
+        var connectsBefore = h.Factory.ConnectCount;
+
+        // Act
+        h.Revisions.Bump(h.Account.Id);
+        await h.Worker.ReconcileAsync(ct);
+        await h.Worker.WhenPassesCompleteAsync();
+
+        // Assert
+        h.Factory.ConnectCount.Should().BeGreaterThan(connectsBefore);
+    }
+
+    [Fact]
+    public async Task BackfillAccountAsync_SettingsChangedBetweenBatches_EndsThePass()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var h = await Harness.CreateAsync(250, ct);
+        h.Events.AccountSynced += (_, e) => h.Revisions.Bump(e.AccountId);
+
+        // Act
+        var complete = await h.Worker.BackfillAccountAsync(h.Account, _ => { }, ct);
+
+        // Assert
+        complete.Should().BeFalse();
+        (await h.CachedCountAsync("INBOX", ct)).Should().Be(120, "no batch runs on the outdated connection");
+    }
+
     /// <summary>
     /// Verifies nothing starts while the setting is off.
     /// </summary>
@@ -393,6 +428,11 @@ public class BackfillWorkerTests
         public SyncEvents Events => _provider.GetRequiredService<SyncEvents>();
 
         /// <summary>
+        /// Gets the connection settings revisions.
+        /// </summary>
+        public AccountConnectionRevisions Revisions => _provider.GetRequiredService<AccountConnectionRevisions>();
+
+        /// <summary>
         /// Gets the per-account lock.
         /// </summary>
         public SyncCoordinator Coordinator => _provider.GetRequiredService<SyncCoordinator>();
@@ -446,6 +486,7 @@ public class BackfillWorkerTests
             services.AddScoped<IMessageRepository, MessageRepository>();
             services.AddScoped<MailSyncService>();
             services.AddScoped<MailBackfillService>();
+            services.AddSingleton<AccountConnectionRevisions>();
             services.AddSingleton<BackfillWorker>();
             var provider = services.BuildServiceProvider(validateScopes: true);
 

@@ -116,6 +116,50 @@ public class DeletionWorkerTests
         h.Progress[0].WillRetry.Should().BeTrue();
     }
 
+    [Fact]
+    public async Task Run_SettingsChangedWhileBlocked_TriesAgainAtOnce()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var h = await Harness.CreateAsync(1, ct);
+        h.Factory.Failure = new OAuthReauthenticationRequiredException("me@example.com");
+        await h.RunAsync(ct);
+
+        // Act
+        h.Factory.Failure = null;
+        h.Revisions.Bump(h.AccountId);
+        await h.RunAsync(ct);
+
+        // Assert
+        h.Factory.ConnectCount.Should().Be(2);
+        h.Factory.Session.Messages["INBOX"].Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Run_SettingsChangedBetweenBatches_ContinuesOnANewConnection()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var h = await Harness.CreateAsync(150, ct);
+        var batches = 0;
+        h.Events.DeletionProgressed += (_, _) =>
+        {
+            if (++batches == 1)
+            {
+                h.Revisions.Bump(h.AccountId);
+            }
+        };
+
+        // Act
+        await h.RunAsync(ct);
+
+        // Assert
+        h.Factory.ConnectCount.Should().Be(2);
+        h.Factory.Session.DeleteCalls.Should().HaveCount(2);
+        h.Factory.Session.Messages["INBOX"].Should().BeEmpty();
+        h.Progress[^1].Deleted.Should().Be(150);
+    }
+
     /// <summary>
     /// Verifies a refusal is reported again when the run ends, so the final report does not read as success.
     /// </summary>
@@ -267,6 +311,21 @@ public class DeletionWorkerTests
         public VirtualTimeProvider Time => (VirtualTimeProvider)_provider.GetRequiredService<TimeProvider>();
 
         /// <summary>
+        /// Gets the seeded account's identifier.
+        /// </summary>
+        public Guid AccountId => _account.Id;
+
+        /// <summary>
+        /// Gets the connection settings revisions.
+        /// </summary>
+        public AccountConnectionRevisions Revisions => _provider.GetRequiredService<AccountConnectionRevisions>();
+
+        /// <summary>
+        /// Gets the sync event hub.
+        /// </summary>
+        public SyncEvents Events => _provider.GetRequiredService<SyncEvents>();
+
+        /// <summary>
         /// Gets the wake-up signal.
         /// </summary>
         public DeletionSignal Signal => _provider.GetRequiredService<DeletionSignal>();
@@ -312,6 +371,7 @@ public class DeletionWorkerTests
             services.AddScoped<IFolderRepository, FolderRepository>();
             services.AddScoped<IMessageRepository, MessageRepository>();
             services.AddScoped<PendingDeletionService>();
+            services.AddSingleton<AccountConnectionRevisions>();
             services.AddSingleton<DeletionWorker>();
             var provider = services.BuildServiceProvider(validateScopes: true);
 

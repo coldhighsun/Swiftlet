@@ -17,10 +17,12 @@ namespace Swiftlet.Infrastructure.Sync;
 /// </summary>
 /// <param name="scopeFactory">The service scope factory.</param>
 /// <param name="timeProvider">The clock used for every delay.</param>
+/// <param name="revisions">Reports changed connection settings, which restart the loop of the account.</param>
 /// <param name="logger">The logger.</param>
 public sealed class InboxWatcher(
     IServiceScopeFactory scopeFactory,
     TimeProvider timeProvider,
+    AccountConnectionRevisions revisions,
     ILogger<InboxWatcher> logger) : BackgroundService
 {
     /// <summary>
@@ -74,7 +76,8 @@ public sealed class InboxWatcher(
     }
 
     /// <summary>
-    /// Starts a loop for every account that has none and stops the loops of accounts that no longer exist.
+    /// Starts a loop for every account that has none, restarts the loops of accounts whose connection settings changed and
+    /// stops the loops of accounts that no longer exist.
     /// </summary>
     /// <param name="stoppingToken">The token that ends every loop on shutdown.</param>
     /// <returns>A task that completes when the pass is done.</returns>
@@ -94,10 +97,12 @@ public sealed class InboxWatcher(
 
         foreach (var id in existing)
         {
+            var revision = revisions.Get(id);
             if (_loops.TryGetValue(id, out var current))
             {
-                // A loop that ended because the server has no IDLE stays registered (and is not restarted) until the account is removed.
-                if (!current.Task.IsCompleted || current.IdleUnsupported)
+                // A loop that ended because the server has no IDLE stays registered (and is not restarted) until the account is
+                // removed or its connection settings change.
+                if (current.Revision == revision && (!current.Task.IsCompleted || current.IdleUnsupported))
                 {
                     continue;
                 }
@@ -106,7 +111,7 @@ public sealed class InboxWatcher(
             }
 
             var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-            var state = new AccountLoop(cts);
+            var state = new AccountLoop(cts, revision);
             state.Task = Task.Run(() => RunAccountLoopAsync(id, state, cts.Token), CancellationToken.None);
             _loops[id] = state;
         }
@@ -312,7 +317,8 @@ public sealed class InboxWatcher(
     /// The bookkeeping of one running loop.
     /// </summary>
     /// <param name="Cancellation">The source that cancels the loop.</param>
-    private sealed record AccountLoop(CancellationTokenSource Cancellation)
+    /// <param name="Revision">The connection settings revision the loop was started with.</param>
+    private sealed record AccountLoop(CancellationTokenSource Cancellation, int Revision)
     {
         /// <summary>
         /// Gets or sets the loop task.

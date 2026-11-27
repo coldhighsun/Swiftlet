@@ -20,6 +20,7 @@ namespace Swiftlet.Infrastructure.Sync;
 /// <param name="settings">The user-configurable sync behavior, read before every batch.</param>
 /// <param name="options">The synchronization limits.</param>
 /// <param name="timeProvider">The clock.</param>
+/// <param name="revisions">Reports changed connection settings, which end the running pass and lift the pause of the account.</param>
 /// <param name="logger">The logger.</param>
 public sealed class BackfillWorker(
     IServiceScopeFactory scopeFactory,
@@ -29,6 +30,7 @@ public sealed class BackfillWorker(
     ISyncSettings settings,
     MailSyncOptions options,
     TimeProvider timeProvider,
+    AccountConnectionRevisions revisions,
     ILogger<BackfillWorker> logger) : BackgroundService
 {
     /// <summary>
@@ -65,6 +67,11 @@ public sealed class BackfillWorker(
     /// The earliest time each account may start another pass.
     /// </summary>
     private readonly Dictionary<Guid, DateTimeOffset> _notBefore = [];
+
+    /// <summary>
+    /// The connection settings revision each account's latest pass was started with.
+    /// </summary>
+    private readonly Dictionary<Guid, int> _passRevisions = [];
 
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -122,12 +129,20 @@ public sealed class BackfillWorker(
         var now = timeProvider.GetUtcNow();
         foreach (var account in accounts)
         {
-            if (_passes.ContainsKey(account.Id) || (_notBefore.TryGetValue(account.Id, out var due) && due > now))
+            var accountId = account.Id;
+            if (_passes.ContainsKey(accountId))
             {
                 continue;
             }
 
-            var accountId = account.Id;
+            // A pause earned with outdated connection settings says nothing about the new ones.
+            var revision = revisions.Get(accountId);
+            if (_notBefore.TryGetValue(accountId, out var due) && due > now && _passRevisions.GetValueOrDefault(accountId) == revision)
+            {
+                continue;
+            }
+
+            _passRevisions[accountId] = revision;
             _passes[accountId] = Task.Run(() => RunPassAsync(account, stoppingToken), CancellationToken.None);
         }
     }
@@ -194,9 +209,18 @@ public sealed class BackfillWorker(
     /// <returns><see langword="true"/> if every folder ended with nothing older left; <see langword="false"/> if some folder could not be finished yet.</returns>
     internal async Task<bool> BackfillAccountAsync(MailAccount account, Action<int> onProgress, CancellationToken cancellationToken)
     {
+        var revision = revisions.Get(account.Id);
         IReadOnlyList<Domain.Folders.MailFolder> targets;
         await using (var scope = scopeFactory.CreateAsyncScope())
         {
+            // Read again after the revision, so the connections never use settings older than the revision stands for.
+            var current = await scope.ServiceProvider.GetRequiredService<IAccountRepository>().GetAsync(account.Id, cancellationToken);
+            if (current is null)
+            {
+                return true;
+            }
+
+            account = current;
             targets = await scope.ServiceProvider.GetRequiredService<MailBackfillService>()
                 .GetFoldersToBackfillAsync(account.Id, cancellationToken);
         }
@@ -217,7 +241,7 @@ public sealed class BackfillWorker(
         var complete = true;
         foreach (var folder in targets)
         {
-            while (settings.DownloadFullHistory)
+            while (settings.DownloadFullHistory && revisions.Get(account.Id) == revision)
             {
                 var before = downloaded;
                 var result = await coordinator.RunExclusiveAsync(
@@ -262,6 +286,6 @@ public sealed class BackfillWorker(
         }
 
         logger.LogInformation("History backfill of {Account} finished a pass: {Count} messages, complete={Complete}.", account.EmailAddress, downloaded, complete);
-        return complete && settings.DownloadFullHistory;
+        return complete && settings.DownloadFullHistory && revisions.Get(account.Id) == revision;
     }
 }

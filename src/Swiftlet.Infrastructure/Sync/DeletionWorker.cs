@@ -21,6 +21,7 @@ namespace Swiftlet.Infrastructure.Sync;
 /// <param name="signal">Wakes the worker when messages were deleted.</param>
 /// <param name="events">Receives the progress notifications.</param>
 /// <param name="timeProvider">The clock.</param>
+/// <param name="revisions">Reports changed connection settings, which replace the connection and lift a block.</param>
 /// <param name="logger">The logger.</param>
 public sealed class DeletionWorker(
     IServiceScopeFactory scopeFactory,
@@ -29,6 +30,7 @@ public sealed class DeletionWorker(
     DeletionSignal signal,
     SyncEvents events,
     TimeProvider timeProvider,
+    AccountConnectionRevisions revisions,
     ILogger<DeletionWorker> logger) : BackgroundService
 {
     /// <summary>
@@ -62,9 +64,10 @@ public sealed class DeletionWorker(
     private readonly HashSet<Guid> _rerun = [];
 
     /// <summary>
-    /// The earliest time each blocked account may start another run; written by the runs and read by the reconcile pass.
+    /// The earliest time each blocked account may start another run, with the connection settings revision that was blocked;
+    /// written by the runs and read by the reconcile pass.
     /// </summary>
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, DateTimeOffset> _notBefore = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, (DateTimeOffset Until, int Revision)> _notBefore = new();
 
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -154,14 +157,16 @@ public sealed class DeletionWorker(
     }
 
     /// <summary>
-    /// Determines whether an account is still waiting out a failure.
+    /// Determines whether an account is still waiting out a failure of its current connection settings.
     /// </summary>
     /// <param name="accountId">The account identifier.</param>
     /// <param name="now">The current time.</param>
     /// <returns><see langword="true"/> if no pass may start yet.</returns>
     private bool IsBlocked(Guid accountId, DateTimeOffset now)
     {
-        return _notBefore.TryGetValue(accountId, out var due) && due > now;
+        return _notBefore.TryGetValue(accountId, out var block)
+            && block.Until > now
+            && block.Revision == revisions.Get(accountId);
     }
 
     /// <summary>
@@ -215,6 +220,7 @@ public sealed class DeletionWorker(
     {
         var deleted = 0;
         string? refusal = null;
+        var revision = revisions.Get(accountId);
         var streak = new FailureStreak();
         var pipeline = RetryPipelines.Endless(
             timeProvider,
@@ -230,6 +236,7 @@ public sealed class DeletionWorker(
             await pipeline.ExecuteAsync(
                 async resilience => await DrainAsync(
                     accountId,
+                    () => revision = revisions.Get(accountId),
                     result =>
                     {
                         // Progress proves the connection works again, so a later failure starts with the shortest delay.
@@ -255,7 +262,7 @@ public sealed class DeletionWorker(
         {
             // A rejected password, an expired sign-in or an unexpected error: the marks stay and a later run tries again.
             logger.LogWarning(ex, "Deleting messages of account {Account} is blocked; trying again later.", accountId);
-            _notBefore[accountId] = timeProvider.GetUtcNow() + BlockedInterval;
+            _notBefore[accountId] = (timeProvider.GetUtcNow() + BlockedInterval, revision);
             events.RaiseDeletionProgressed(new DeletionProgressEventArgs(accountId, deleted, 0, true, ex.Message, true));
         }
         finally
@@ -265,13 +272,39 @@ public sealed class DeletionWorker(
     }
 
     /// <summary>
-    /// Connects and processes batches until nothing is pending; does not connect when there is nothing to do.
+    /// Processes batches until nothing is pending, on a new connection whenever the connection settings changed.
     /// </summary>
     /// <param name="accountId">The account identifier.</param>
+    /// <param name="readRevision">Reads the connection settings revision; called before every connection.</param>
     /// <param name="onBatch">Told about every batch.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that completes when nothing is pending or the account is gone.</returns>
-    private async Task DrainAsync(Guid accountId, Action<DeletionBatchResult> onBatch, CancellationToken cancellationToken)
+    private async Task DrainAsync(
+        Guid accountId,
+        Func<int> readRevision,
+        Action<DeletionBatchResult> onBatch,
+        CancellationToken cancellationToken)
+    {
+        while (await DrainConnectionAsync(accountId, readRevision(), onBatch, cancellationToken))
+        {
+            logger.LogInformation("The connection settings of account {Account} changed; deleting continues on a new connection.", accountId);
+        }
+    }
+
+    /// <summary>
+    /// Connects and processes batches until nothing is pending or the connection is outdated; does not connect when there is
+    /// nothing to do.
+    /// </summary>
+    /// <param name="accountId">The account identifier.</param>
+    /// <param name="revision">The connection settings revision, read before the account.</param>
+    /// <param name="onBatch">Told about every batch.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns><see langword="true"/> if the connection settings changed and another connection is needed.</returns>
+    private async Task<bool> DrainConnectionAsync(
+        Guid accountId,
+        int revision,
+        Action<DeletionBatchResult> onBatch,
+        CancellationToken cancellationToken)
     {
         MailAccount? account;
         await using (var scope = scopeFactory.CreateAsyncScope())
@@ -280,17 +313,25 @@ public sealed class DeletionWorker(
             if (account is null
                 || !await scope.ServiceProvider.GetRequiredService<PendingDeletionService>().HasWorkAsync(accountId, cancellationToken))
             {
-                return;
+                return false;
             }
         }
 
         await using var session = await imapFactory.ConnectAsync(account, cancellationToken);
+        var outdated = false;
         while (true)
         {
             var result = await coordinator.RunExclusiveAsync(
                 accountId,
                 async () =>
                 {
+                    // Checked under the lock: nothing may be deleted on a server the account no longer uses.
+                    if (revisions.Get(accountId) != revision)
+                    {
+                        outdated = true;
+                        return null;
+                    }
+
                     await using var scope = scopeFactory.CreateAsyncScope();
 
                     // The account may have been removed while this run waited for the lock.
@@ -302,7 +343,7 @@ public sealed class DeletionWorker(
                 cancellationToken);
             if (result is null)
             {
-                return;
+                return outdated;
             }
 
             onBatch(result);

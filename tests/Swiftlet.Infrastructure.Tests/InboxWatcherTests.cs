@@ -58,6 +58,43 @@ public class InboxWatcherTests
         h.Session.Disposed.Should().BeTrue();
     }
 
+    [Fact]
+    public async Task Reconcile_ConnectionSettingsChanged_RestartsTheLoop()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var h = await WatcherHarness.CreateAsync(ct);
+        var account = await h.AddAccountAsync(withInbox: true, ct);
+        h.Session.OnWaitForChange = WatcherHarness.BlockUntilCancelled;
+        await h.Watcher.ReconcileAsync(ct);
+        await WatcherHarness.WaitUntilAsync(() => h.Session.WaitCount == 1, ct);
+
+        h.Revisions.Bump(account.Id);
+        await h.Watcher.ReconcileAsync(ct);
+        await WatcherHarness.WaitUntilAsync(() => h.Session.WaitCount == 2, ct);
+        await h.Watcher.ReconcileAsync(ct);
+
+        h.Factory.ConnectCount.Should().Be(2, "one change restarts the loop once");
+    }
+
+    [Fact]
+    public async Task Reconcile_ServerWithoutIdleThenSettingsChanged_ChecksTheServerAgain()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var h = await WatcherHarness.CreateAsync(ct);
+        var account = await h.AddAccountAsync(withInbox: true, ct);
+        h.Session.SupportsIdle = false;
+        await h.Watcher.ReconcileAsync(ct);
+        await WatcherHarness.WaitUntilAsync(() => h.Session.Disposed, ct);
+
+        h.Session.SupportsIdle = true;
+        h.Session.OnWaitForChange = WatcherHarness.BlockUntilCancelled;
+        h.Revisions.Bump(account.Id);
+        await h.Watcher.ReconcileAsync(ct);
+
+        await WatcherHarness.WaitUntilAsync(() => h.Session.WaitCount == 1, ct);
+        h.Factory.ConnectCount.Should().Be(2);
+    }
+
     /// <summary>
     /// Verifies a reported change (the first wait of a session) triggers a sync command and then another wait.
     /// </summary>
@@ -524,6 +561,11 @@ internal sealed class WatcherHarness : IAsyncDisposable
     public FakeImapSession Session => Factory.Session;
 
     /// <summary>
+    /// Gets the connection settings revisions.
+    /// </summary>
+    public AccountConnectionRevisions Revisions => _provider.GetRequiredService<AccountConnectionRevisions>();
+
+    /// <summary>
     /// Gets the virtual clock.
     /// </summary>
     public VirtualTimeProvider Time => (VirtualTimeProvider)_provider.GetRequiredService<TimeProvider>();
@@ -580,6 +622,7 @@ internal sealed class WatcherHarness : IAsyncDisposable
         services.AddScoped<AccountContextProvider>();
         services.AddScoped<IAccountRepository, AccountRepository>();
         services.AddScoped<IFolderRepository, FolderRepository>();
+        services.AddSingleton<AccountConnectionRevisions>();
         services.AddSingleton<InboxWatcher>();
         configure?.Invoke(services);
         var provider = services.BuildServiceProvider(validateScopes: true);

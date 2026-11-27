@@ -102,6 +102,27 @@ public class FlagPushTests
         (h.Factory.ConnectCount - setup).Should().Be(2);
     }
 
+    [Fact]
+    public async Task FlagPushWorker_ConnectionSettingsChanged_ReplacesTheKeptConnection()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var h = await Harness.CreateAsync(ct);
+        var setup = h.Factory.ConnectCount;
+        await h.Worker.StartAsync(ct);
+        await h.SetReadAsync(1, true, ct);
+        await WatcherHarness.WaitUntilAsync(() => h.CompletedPushes == 1, ct);
+
+        // Act
+        h.Revisions.Bump(h.AccountId);
+        await h.SetReadAsync(2, true, ct);
+        await WatcherHarness.WaitUntilAsync(() => h.CompletedPushes == 2, ct);
+        await h.Worker.StopAsync(ct);
+
+        // Assert
+        (h.Factory.ConnectCount - setup).Should().Be(2);
+    }
+
     /// <summary>
     /// Verifies a server that refuses the change leaves it pending for the next sync.
     /// </summary>
@@ -228,6 +249,16 @@ public class FlagPushTests
         public int CompletedPushes => _provider.GetRequiredService<CapturingLogger<PendingFlagService>>().Entries.Count;
 
         /// <summary>
+        /// Gets the seeded account's identifier.
+        /// </summary>
+        public Guid AccountId => _account.Id;
+
+        /// <summary>
+        /// Gets the connection settings revisions.
+        /// </summary>
+        public AccountConnectionRevisions Revisions => _provider.GetRequiredService<AccountConnectionRevisions>();
+
+        /// <summary>
         /// Gets the flag locks.
         /// </summary>
         public FlagCoordinator Flags => _provider.GetRequiredService<FlagCoordinator>();
@@ -265,6 +296,7 @@ public class FlagPushTests
             services.AddScoped<IMessageRepository, MessageRepository>();
             services.AddScoped<MailSyncService>();
             services.AddScoped<PendingFlagService>();
+            services.AddSingleton<AccountConnectionRevisions>();
             services.AddSingleton<FlagPushWorker>();
             var provider = services.BuildServiceProvider(validateScopes: true);
 
