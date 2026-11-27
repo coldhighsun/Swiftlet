@@ -7,7 +7,7 @@ Swiftlet is a desktop email client. It runs on your computer and connects direct
 ## Summary
 
 - Swiftlet has no server of its own. The project and its maintainers do not receive your mail, passwords, tokens or usage data.
-- AI features are off by default. When you switch them on, a message is sent to the AI service you chose only when you ask for an action on it.
+- AI features are off by default. When you switch them on, a message, or text you are writing, is sent to the AI service you chose only when you ask for an action on it.
 - The app contains no telemetry, analytics, advertising or crash reporting. It does ask GitHub whether a newer version exists, which you can switch off.
 - Your data stays on your computer, except for what the app exchanges with the services described under [Network connections](#network-connections).
 
@@ -45,7 +45,7 @@ Logs can contain your email addresses, mail folder names, remote image rules, se
 | Your mail servers (IMAP and SMTP) | Synchronizing, searching for new mail, sending and managing messages | Your sign-in data and mail |
 | Microsoft or Google sign-in services | When you sign in with them, and to renew the sign-in | Authorization codes and tokens |
 | Servers hosting images referenced in a message | Only when you load remote images, or a saved rule allows the sender | The image request, including your IP address |
-| The AI service you configure (the Claude API, another service, or a program on your computer) | Only when you use an AI action, or test the connection | For an action: the subject, sender, date and plain text of that message, up to the length limit in the settings. For a test: a fixed short text. Your API key, and your IP address. No attachments and no recipient fields |
+| The AI service you configure (the Claude API, another service, or a program on your computer) | Only when you use an AI action, or test the connection | For a summary or translation: the subject, sender, date and plain text of that message, up to the length limit in the settings. For a reply draft: the same of the message you are answering, and the notes you typed for the draft. For rewriting: the text you wrote above the quoted mail. For a test: a fixed short text. Your API key, and your IP address. No attachments and no recipient fields; nothing else of the message you are writing |
 | Web sites | When you open a link | Handled by your web browser |
 | GitHub (`api.github.com` and GitHub's download servers) | Release builds check for a new version after starting and then daily, and when you ask; the installer is downloaded only when you choose to update | The request, including your IP address, the name of the update library and the files requested. No mail, account or settings data |
 
