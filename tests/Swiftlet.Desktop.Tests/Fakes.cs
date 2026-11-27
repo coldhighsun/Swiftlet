@@ -321,6 +321,25 @@ internal sealed class FakeDialogService : IDialogService
     }
 
     /// <summary>
+    /// Gets the messages and labels the classification dialog was shown for.
+    /// </summary>
+    public List<(IReadOnlyList<MailMessage> Messages, IReadOnlyList<Swiftlet.Domain.Labels.Label> Labels)> ClassifyCalls { get; } = [];
+
+    /// <summary>
+    /// Gets or sets an action run when the classification dialog is shown; its result says whether something changed.
+    /// </summary>
+    public Func<bool>? OnClassify { get; set; }
+
+    /// <inheritdoc />
+    public Task<bool> ShowClassifyAsync(
+        IReadOnlyList<MailMessage> messages,
+        IReadOnlyList<Swiftlet.Domain.Labels.Label> labels)
+    {
+        ClassifyCalls.Add((messages, labels));
+        return Task.FromResult(OnClassify?.Invoke() ?? false);
+    }
+
+    /// <summary>
     /// Gets the texts put on the clipboard.
     /// </summary>
     public List<string> CopiedTexts { get; } = [];

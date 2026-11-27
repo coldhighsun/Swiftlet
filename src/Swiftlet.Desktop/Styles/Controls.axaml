@@ -252,4 +252,12 @@
     <Setter Property="Foreground" Value="{DynamicResource ButtonForegroundDisabled}" />
     <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorderBrushDisabled}" />
   </Style>
+  <!-- The mark of a message priority in the list; a high one stands out. -->
+  <Style Selector="Border.priority">
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+  </Style>
+  <Style Selector="Border.priority.high">
+    <Setter Property="Background" Value="{DynamicResource Brush.WarningBg}" />
+  </Style>
 </Styles>

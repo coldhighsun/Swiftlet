@@ -243,6 +243,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             DeleteSelectedCommand.NotifyCanExecuteChanged();
             ArchiveSelectedCommand.NotifyCanExecuteChanged();
+            ClassifySelectedCommand.NotifyCanExecuteChanged();
         };
     }
 
@@ -627,6 +628,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(OpenHtmlCommand))]
     [NotifyCanExecuteChangedFor(nameof(DeleteSelectedCommand))]
     [NotifyCanExecuteChangedFor(nameof(ArchiveSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ClassifySelectedCommand))]
     [NotifyPropertyChangedFor(nameof(IsNoMessageSelected))]
     public partial MessageItemViewModel? SelectedMessage { get; set; }
 
@@ -1122,6 +1124,61 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Gets or sets a value indicating whether a message the menu applies to carries a priority.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool CanClearPriority { get; set; }
+
+    /// <summary>
+    /// Brings the AI and priority entries of the message menu up to date; called when the menu opens.
+    /// </summary>
+    public void RefreshPriorityMenu()
+    {
+        CanClearPriority = ActionTargets().Any(t => t.Message.AiPriority is not null);
+        ClassifySelectedCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// Asks for labels and priorities for the selected messages and lets the user apply them.
+    /// </summary>
+    /// <returns>A task that completes when the dialog has closed and the list shows the changes.</returns>
+    [RelayCommand(CanExecute = nameof(CanClassify))]
+    private async Task ClassifySelectedAsync()
+    {
+        var targets = ActionTargets();
+        if (targets.Count == 0)
+        {
+            return;
+        }
+
+        var labels = TreeRoots.OfType<LabelNodeViewModel>().Select(n => n.Label).ToList();
+        if (await _dialogs.ShowClassifyAsync([.. targets.Select(t => t.Message)], labels))
+        {
+            await ReloadViewAsync();
+        }
+    }
+
+    /// <summary>
+    /// Removes the priority from the selected messages.
+    /// </summary>
+    /// <returns>A task that completes when the priorities are removed or the failure is reported.</returns>
+    [RelayCommand]
+    private async Task ClearPriorityAsync()
+    {
+        var targets = ActionTargets().Where(t => t.Message.AiPriority is not null).ToList();
+        await GuardedAsync("Error_Priority", async () =>
+        {
+            foreach (var target in targets)
+            {
+                await _dispatcher.SendAsync(
+                    new SetMessagePriorityCommand(target.Message.AccountId, target.Message.Id, null));
+                target.Message.SetAiPriority(null);
+                target.RefreshPriority();
+            }
+        });
+    }
+
+    /// <summary>
     /// Rebuilds the entries of the "move to" menu for the current selection. Called when the menu opens, and only then:
     /// entries removed while one of them is being clicked would keep the menu from closing.
     /// </summary>
@@ -1582,6 +1639,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// Gets a value indicating whether there is at least one message to delete.
     /// </summary>
     private bool HasSelection => SelectedMessage is not null || SelectedMessages.Count > 0;
+
+    /// <summary>
+    /// Gets a value indicating whether messages are selected and AI is set up.
+    /// </summary>
+    private bool CanClassify => AiAssist?.IsAvailable == true && HasSelection;
 
     /// <summary>
     /// Gets a value indicating whether at least one of the selected messages can be moved to an archive folder.

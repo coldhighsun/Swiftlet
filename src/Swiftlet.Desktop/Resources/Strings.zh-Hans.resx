@@ -428,7 +428,7 @@
   <data name="Ai_ModelRequired" xml:space="preserve"><value>请填写模型。</value></data>
   <data name="Ai_KeyRequired" xml:space="preserve"><value>请为该地址填写 API Key。</value></data>
   <data name="Ai_ConsentTitle" xml:space="preserve"><value>要把邮件内容发送到该服务吗？</value></data>
-  <data name="Ai_ConsentMessage" xml:space="preserve"><value>使用 AI 操作时，相关邮件的主题、发件人、时间和正文，或你撰写的文字，会发送到 {0}。该服务按其自身条款处理这些内容，并可能向你收费。</value></data>
+  <data name="Ai_ConsentMessage" xml:space="preserve"><value>使用 AI 操作时，相关邮件的主题、发件人、时间和正文，或你撰写的文字（分类时还包括你的标签名称），会发送到 {0}。该服务按其自身条款处理这些内容，并可能向你收费。</value></data>
   <data name="Ai_ConsentAllow" xml:space="preserve"><value>允许</value></data>
   <data name="Ai_ErrorUnauthorized" xml:space="preserve"><value>服务拒绝了该 API Key。</value></data>
   <data name="Ai_ErrorNotFound" xml:space="preserve"><value>找不到该地址或模型。</value></data>
@@ -472,4 +472,21 @@
   <data name="Ai_NothingToRewrite" xml:space="preserve"><value>请先写一些内容；引用的邮件不会被改写。</value></data>
   <data name="Ai_TextChanged" xml:space="preserve"><value>提问后你的内容有改动，因此没有替换。请改用插入，或重新提问。</value></data>
   <data name="Ai_ErrorTooLong" xml:space="preserve"><value>内容超过了 AI 设置中的字符上限，没有发送。</value></data>
+  <data name="Menu_Message_Classify" xml:space="preserve"><value>AI 分类…</value></data>
+  <data name="Menu_Message_ClearPriority" xml:space="preserve"><value>清除优先级</value></data>
+  <data name="Priority_High" xml:space="preserve"><value>高</value></data>
+  <data name="Priority_Low" xml:space="preserve"><value>低</value></data>
+  <data name="Priority_Normal" xml:space="preserve"><value>普通</value></data>
+  <data name="Error_Priority" xml:space="preserve"><value>无法更改优先级</value></data>
+  <data name="Classify_Title" xml:space="preserve"><value>邮件分类</value></data>
+  <data name="Classify_Hint" xml:space="preserve"><value>只有点击“应用”后，勾选的建议才会生效。标签和优先级仅保存在本机。</value></data>
+  <data name="Classify_Limit" xml:space="preserve"><value>只对选中的前 {0} 封邮件分类。</value></data>
+  <data name="Classify_Progress" xml:space="preserve"><value>已完成 {0} / {1}</value></data>
+  <data name="Classify_Waiting" xml:space="preserve"><value>等待中…</value></data>
+  <data name="Classify_NotAsked" xml:space="preserve"><value>未分类</value></data>
+  <data name="Classify_NoSuggestion" xml:space="preserve"><value>无建议</value></data>
+  <data name="Classify_Label" xml:space="preserve"><value>标签：{0}</value></data>
+  <data name="Classify_Priority" xml:space="preserve"><value>优先级：{0}</value></data>
+  <data name="Classify_Apply" xml:space="preserve"><value>应用</value></data>
+  <data name="Classify_ApplyFailed" xml:space="preserve"><value>无法应用建议：{0}</value></data>
 </root>

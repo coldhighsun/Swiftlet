@@ -1364,6 +1364,63 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies the classification dialog lists the suggestions and rows show the priority mark, in both themes.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    /// <param name="priority">The expected priority suggestion.</param>
+    /// <param name="mark">The expected mark of the list row.</param>
+    [Theory]
+    [InlineData("zh-Hans", "优先级：高", "高")]
+    [InlineData("en", "Priority: High", "High")]
+    public async Task ClassifyWindowAndRows_Suggestions_AreShown(string language, string priority, string mark)
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference(language);
+                var scenario = new MainWindowViewModelTests.Scenario(withAi: true);
+                scenario.Localizer.SetPreference(language);
+                scenario.Messages[0].SetAiPriority(Swiftlet.Domain.Messages.MessagePriority.High);
+                scenario.Messages[1].SetAiPriority(Swiftlet.Domain.Messages.MessagePriority.Low);
+                scenario.Dispatcher.OnStream<Swiftlet.Application.Ai.ClassifyMessagesQuery, Swiftlet.Application.Ai.MessageClassification>(
+                    (query, token) => ClassifyViewModelTests.Results(
+                        [
+                            new(
+                                query.Messages[0],
+                                Swiftlet.Application.Ai.ClassificationStatus.Suggested,
+                                [scenario.Work.Id],
+                                Swiftlet.Domain.Messages.MessagePriority.High),
+                            new(query.Messages[1], Swiftlet.Application.Ai.ClassificationStatus.NoSuggestion, []),
+                        ],
+                        token));
+                await scenario.StartAsync();
+                var main = new MainWindow { DataContext = scenario.ViewModel };
+                Render(main, $"main-window-priority-{language}", language);
+                main.GetVisualDescendants().OfType<Border>().Where(b => b.Classes.Contains("priority") && b.IsEffectivelyVisible)
+                    .SelectMany(b => b.GetVisualDescendants().OfType<TextBlock>()).Select(t => t.Text)
+                    .Should().HaveCount(2).And.Contain(mark);
+                main.Close();
+
+                var viewModel = new Swiftlet.Desktop.ViewModels.Ai.ClassifyViewModel(
+                    scenario.Dispatcher, LocalizationManager.Instance, scenario.Messages, [scenario.Work]);
+                var window = new ClassifyWindow { DataContext = viewModel };
+                Render(window, $"classify-{language}", language);
+                viewModel.Start();
+                await viewModel.Running;
+                Snapshot(window, $"classify-results-{language}");
+
+                window.GetVisualDescendants().OfType<CheckBox>()
+                    .Select(c => c.GetVisualDescendants().OfType<TextBlock>().First().Text)
+                    .Should().HaveCount(2).And.Contain(priority);
+                window.GetVisualDescendants().OfType<Button>()
+                    .Single(b => b.Command == viewModel.ApplyCommand).IsEffectivelyEnabled.Should().BeTrue();
+                window.Close();
+                viewModel.Dispose();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Verifies the toolbar label flyout lists the labels and ticking one sends the set-label command.
     /// </summary>
     [Fact]

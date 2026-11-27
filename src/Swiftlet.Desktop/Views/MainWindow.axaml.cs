@@ -104,6 +104,7 @@ public partial class MainWindow : Window
         var viewModel = DataContext as MainWindowViewModel;
         viewModel?.RefreshMoveTargets();
         viewModel?.RefreshContactTargets();
+        viewModel?.RefreshPriorityMenu();
     }
 
     /// <summary>

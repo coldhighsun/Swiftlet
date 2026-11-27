@@ -1,4 +1,6 @@
 using Swiftlet.Application.Accounts;
+using Swiftlet.Domain.Messages;
+using Swiftlet.Domain.Labels;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Folders;
 
@@ -103,6 +105,14 @@ public interface IDialogService
     /// </summary>
     /// <returns>A task that completes when the dialog has been closed.</returns>
     Task ShowLabelManagerAsync();
+
+    /// <summary>
+    /// Shows the dialog that suggests labels and priorities for messages and applies what the user keeps ticked.
+    /// </summary>
+    /// <param name="messages">The messages.</param>
+    /// <param name="labels">The existing labels.</param>
+    /// <returns>True if something was changed.</returns>
+    Task<bool> ShowClassifyAsync(IReadOnlyList<MailMessage> messages, IReadOnlyList<Label> labels);
 
     /// <summary>
     /// Shows the contacts dialog.

@@ -289,6 +289,11 @@
               </ListBox.KeyBindings>
               <ListBox.ContextMenu>
                 <ContextMenu Opening="OnMessageMenuOpening">
+                  <!-- Present only while AI is switched on and set up. -->
+                  <MenuItem Header="{loc:Loc Menu_Message_Classify}" Command="{Binding ClassifySelectedCommand}"
+                            IsVisible="{Binding AiAssist.IsAvailable, FallbackValue=False}" />
+                  <MenuItem Header="{loc:Loc Menu_Message_ClearPriority}" Command="{Binding ClearPriorityCommand}"
+                            IsVisible="{Binding CanClearPriority}" />
                   <MenuItem Header="{loc:Loc Toolbar_Archive}" Command="{Binding ArchiveSelectedCommand}" />
                   <MenuItem Header="{loc:Loc Toolbar_Delete}" Command="{Binding DeleteSelectedCommand}" />
                   <MenuItem Header="{loc:Loc Menu_Message_AddContact}" ItemsSource="{Binding ContactTargets}"
@@ -336,6 +341,10 @@
                                  TextTrimming="CharacterEllipsis" />
                       <StackPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0"
                                   HorizontalAlignment="Right">
+                        <Border Classes="priority" Classes.high="{Binding IsHighPriority}" CornerRadius="4" Padding="6,0"
+                                IsVisible="{Binding PriorityText, Converter={x:Static ObjectConverters.IsNotNull}}">
+                          <TextBlock Classes="caption" Text="{Binding PriorityText}" />
+                        </Border>
                         <PathIcon Data="{StaticResource Icon.Attach}" Width="14" Height="14" IsVisible="{Binding HasAttachments}"
                                   Foreground="{DynamicResource Brush.TextSecondary}" />
                         <PathIcon Data="{StaticResource Icon.StarFilled}" Width="14" Height="14" IsVisible="{Binding IsFlagged}"

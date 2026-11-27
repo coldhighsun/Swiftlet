@@ -156,6 +156,30 @@ public sealed partial class MessageItemViewModel : ObservableObject
     public bool HasLabels => Labels.Count > 0;
 
     /// <summary>
+    /// Gets the text marking a high or low priority, or <see langword="null"/>; a normal priority is not marked.
+    /// </summary>
+    public string? PriorityText => Message.AiPriority switch
+    {
+        MessagePriority.High => _localizer["Priority_High"],
+        MessagePriority.Low => _localizer["Priority_Low"],
+        _ => null,
+    };
+
+    /// <summary>
+    /// Gets a value indicating whether the priority is high.
+    /// </summary>
+    public bool IsHighPriority => Message.AiPriority == MessagePriority.High;
+
+    /// <summary>
+    /// Shows the priority again after it changed.
+    /// </summary>
+    public void RefreshPriority()
+    {
+        OnPropertyChanged(nameof(PriorityText));
+        OnPropertyChanged(nameof(IsHighPriority));
+    }
+
+    /// <summary>
     /// Rebuilds the label chips after the labels of the message changed.
     /// </summary>
     public void RefreshLabels()
@@ -178,9 +202,11 @@ public sealed partial class MessageItemViewModel : ObservableObject
         if (!ReferenceEquals(fresh, Message))
         {
             Message.SetLabels([.. fresh.Labels]);
+            Message.SetAiPriority(fresh.AiPriority);
         }
 
         RefreshLabels();
+        RefreshPriority();
 
         // The day may have changed since the item was shown.
         OnPropertyChanged(nameof(ListTimeText));
@@ -248,6 +274,7 @@ public sealed partial class MessageItemViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(Subject));
         OnPropertyChanged(nameof(ListTimeText));
+        RefreshPriority();
         RefreshContacts();
     }
 

@@ -5,6 +5,8 @@ using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Swiftlet.Domain.Messages;
+using Swiftlet.Desktop.ViewModels.Ai;
 using Swiftlet.Application.Ai;
 using Swiftlet.Application;
 using Swiftlet.Application.Accounts;
@@ -155,6 +157,30 @@ public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogSe
         viewModel.CloseRequested += (_, _) => window.Close();
         await viewModel.InitializeAsync();
         await window.ShowDialog(owner);
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> ShowClassifyAsync(IReadOnlyList<MailMessage> messages, IReadOnlyList<Swiftlet.Domain.Labels.Label> labels)
+    {
+        var owner = ActiveWindow;
+        if (owner is null)
+        {
+            return false;
+        }
+
+        using var viewModel = new ClassifyViewModel(
+            services.GetRequiredService<IRequestDispatcher>(),
+            services.GetRequiredService<ILocalizer>(),
+            messages,
+            labels,
+            services.GetService<ILogger<ClassifyViewModel>>());
+        var window = new ClassifyWindow { DataContext = viewModel };
+        viewModel.CloseRequested += (_, _) => window.Close();
+        window.Opened += (_, _) => viewModel.Start();
+        await window.ShowDialog(owner);
+
+        // Also true when the window was closed from the title bar after a partly failed apply.
+        return viewModel.HasChanges;
     }
 
     /// <inheritdoc />
