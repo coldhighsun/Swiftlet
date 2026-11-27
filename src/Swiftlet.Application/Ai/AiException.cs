@@ -44,6 +44,11 @@ public enum AiFailure
     /// No answer arrived in time.
     /// </summary>
     Timeout,
+
+    /// <summary>
+    /// AI is switched off or not set up, so nothing was sent.
+    /// </summary>
+    NotConfigured,
 }
 
 /// <summary>

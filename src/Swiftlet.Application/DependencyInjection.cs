@@ -27,6 +27,7 @@ public static class DependencyInjection
         {
             options.ServiceLifetime = ServiceLifetime.Scoped;
             options.PipelineBehaviors = [typeof(LoggingBehavior<,>)];
+            options.StreamPipelineBehaviors = [typeof(StreamLoggingBehavior<,>)];
         });
         services.AddSingleton<LogNames>();
         services.AddSingleton(TimeProvider.System);
@@ -48,6 +49,8 @@ public static class DependencyInjection
         services.AddScoped<PendingFlagService>();
         services.TryAddSingleton<IAiSettings, DisabledAiSettings>();
         services.AddScoped<AiKeyStore>();
+        services.AddScoped<AiMessageService>();
+        services.AddSingleton<AiResultCache>();
         return services;
     }
 }
