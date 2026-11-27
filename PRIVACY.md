@@ -17,16 +17,19 @@ Swiftlet is a desktop email client. It runs on your computer and connects direct
 | Account settings (email address, display name, server settings) | Connecting to your mail accounts |
 | Passwords, app passwords or OAuth tokens | Signing in |
 | Cached folders, messages and attachment information | Showing and searching your mail |
+| Contacts you add or import, addresses you send mail to, and addresses you removed from the suggestions | Address book and recipient suggestions |
 | Labels, remote image rules (sender addresses or domains) and app settings | Features you configure |
 | Log files (at most 7) | Troubleshooting |
 
 Attachment contents are downloaded when you ask for them and saved where you choose.
 
+The address book stays on your computer: it is not synchronized with your mail provider. Suggested addresses come from the mail in your Sent folders and from the messages you send with Swiftlet.
+
 ### Protection
 
 - Passwords and tokens are kept with the secret storage of your operating system (Windows DPAPI, macOS Keychain or the Linux secret service). If none is available, Swiftlet falls back to a file-based store whose key is kept beside the data, which offers much weaker protection.
-- The mail databases are encrypted when a system secret store is available. They are not encrypted without one, or if you choose to continue unencrypted after encryption fails.
-- Log files, the settings file, saved attachments and the temporary files created by "View in browser" are **not** encrypted. The temporary preview files are removed when the app exits, or at its next start.
+- The mail databases, including the one holding the address book, are encrypted when a system secret store is available. They are not encrypted without one, or if you choose to continue unencrypted after encryption fails.
+- Log files, the settings file, saved attachments, exported contact files and the temporary files created by "View in browser" are **not** encrypted. The temporary preview files are removed when the app exits, or at its next start.
 - Encryption protects database files that are copied off your computer or user account. It does not protect against other programs running as the same user.
 
 ### Logs
@@ -65,7 +68,8 @@ If a Google sign-in is configured, Swiftlet requests access to your Gmail mail (
 
 ## Removing your data
 
-- Removing an account in Swiftlet deletes its local mail, settings, passwords and tokens. The mailbox on the server is not changed.
+- Removing an account in Swiftlet deletes its local mail, settings, passwords, tokens and the recipients remembered from its sent messages. The mailbox on the server is not changed.
+- Contacts are shared by all accounts, so removing an account keeps them, as well as the list of addresses you removed from the suggestions. Delete contacts in the contacts window.
 - To remove everything, quit Swiftlet and delete its data directory (on Windows, `%LocalAppData%\Swiftlet`). Entries that Swiftlet created in the macOS Keychain or the Linux secret service must be deleted there. Uninstalling the app may leave this data behind.
 - Removing local data does not withdraw the permissions you granted to Microsoft or Google; see the sections above.
 
