@@ -1,0 +1,52 @@
+# Weekly update check for NuGet packages and GitHub Actions. Each ecosystem collects its updates
+# into two pull requests: one for major versions, one for minor and patch versions. Security
+# updates are not affected by the groups.
+version: 2
+
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: Asia/Shanghai
+    groups:
+      nuget-major:
+        patterns:
+          - '*'
+        update-types:
+          - major
+      nuget-minor-patch:
+        patterns:
+          - '*'
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: chore
+      include: scope
+
+  # "/" covers .github/workflows. Actions pinned to a commit SHA stay pinned.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: Asia/Shanghai
+    groups:
+      actions-major:
+        patterns:
+          - '*'
+        update-types:
+          - major
+      actions-minor-patch:
+        patterns:
+          - '*'
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: ci
+      include: scope
