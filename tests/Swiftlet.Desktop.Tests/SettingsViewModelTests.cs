@@ -303,6 +303,40 @@ public class SettingsViewModelTests
     }
 
     /// <summary>
+    /// Verifies choosing a name order saves it, and the option names follow the language.
+    /// </summary>
+    [Fact]
+    public void SelectedContactNameOrder_Changed_SavesAndFollowsLanguage()
+    {
+        var settings = new FakeAppSettings();
+        var localizer = TestLocalizer.English();
+        var viewModel = new SettingsViewModel(settings, localizer, new FakeRemoteImageRules());
+        viewModel.SelectedContactNameOrder.Code.Should().Be("auto");
+
+        viewModel.SelectedContactNameOrder = viewModel.ContactNameOrderOptions.Single(o => o.Code == "familyFirst");
+
+        settings.ContactNameOrder.Should().Be("familyFirst");
+        viewModel.SelectedContactNameOrder.DisplayName.Should().Be("Family name first");
+        localizer.SetPreference("zh-Hans");
+        viewModel.SelectedContactNameOrder.DisplayName.Should().Be("姓在前");
+    }
+
+    /// <summary>
+    /// Verifies a failed save of the name order is reported and the picker returns to the stored value.
+    /// </summary>
+    [Fact]
+    public void SelectedContactNameOrder_SaveFails_ShowsErrorAndRevertsValue()
+    {
+        var settings = new FakeAppSettings { Failure = new IOException("disk full") };
+        var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules());
+
+        viewModel.SelectedContactNameOrder = viewModel.ContactNameOrderOptions.Single(o => o.Code == "givenFirst");
+
+        viewModel.SelectedContactNameOrder.Code.Should().Be("auto");
+        viewModel.ErrorText.Should().Contain("disk full");
+    }
+
+    /// <summary>
     /// Verifies toggling the new mail notification saves the choice.
     /// </summary>
     [Fact]

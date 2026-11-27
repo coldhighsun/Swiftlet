@@ -133,7 +133,7 @@ public sealed class ContactTests
         var repository = db.CreateContactRepository();
         await repository.AddRangeAsync(
             [
-                Contact.Create("Ann", null, ["Ann@x.com", "ann@work.com"]),
+                Contact.Create("Ann", "Lee", ["Ann@x.com", "ann@work.com"]),
                 Contact.Create(string.Empty, null, ["nameless@x.com"], company: "Acme"),
             ],
             Token);
@@ -142,9 +142,9 @@ public sealed class ContactTests
         var names = await handler.Handle(new GetContactNamesQuery(), Token);
 
         names.Should().HaveCount(3);
-        names["ann@x.com"].Should().Be("Ann");
-        names["ANN@WORK.COM"].Should().Be("Ann");
-        names["nameless@x.com"].Should().BeEmpty();
+        names["ann@x.com"].Should().Be(new ContactName("Ann", "Lee"));
+        names["ANN@WORK.COM"].Should().Be(new ContactName("Ann", "Lee"));
+        names["nameless@x.com"].Should().Be(new ContactName(string.Empty, string.Empty));
     }
 
     /// <summary>

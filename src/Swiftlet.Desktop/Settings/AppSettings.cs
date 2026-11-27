@@ -71,6 +71,22 @@ public interface IAppSettings : ISyncSettings
     void SetTrayUnreadStyle(string value);
 
     /// <summary>
+    /// Gets the order in which contact names are shown, one of the <see cref="Settings.ContactNameOrder"/> values.
+    /// </summary>
+    string ContactNameOrder { get; }
+
+    /// <summary>
+    /// Raised after a changed <see cref="ContactNameOrder"/> was saved, so shown names can follow at once.
+    /// </summary>
+    event EventHandler? ContactNameOrderChanged;
+
+    /// <summary>
+    /// Changes the order of contact names, and saves the choice.
+    /// </summary>
+    /// <param name="value">One of the <see cref="Settings.ContactNameOrder"/> values.</param>
+    void SetContactNameOrder(string value);
+
+    /// <summary>
     /// Gets the saved theme preference, one of the <see cref="ThemePreference"/> values.
     /// </summary>
     string Theme { get; }
@@ -149,6 +165,11 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     private volatile string _trayUnreadStyle;
 
     /// <summary>
+    /// The in-memory contact name order.
+    /// </summary>
+    private volatile string _contactNameOrder;
+
+    /// <summary>
     /// The in-memory main window placement.
     /// </summary>
     private volatile WindowPlacement? _mainWindowPlacement;
@@ -171,6 +192,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
             file.Theme is { ValueKind: JsonValueKind.String } theme ? theme.GetString() : null);
         _trayUnreadStyle = Settings.TrayUnreadStyle.Normalize(
             file.TrayUnreadStyle is { ValueKind: JsonValueKind.String } style ? style.GetString() : null);
+        _contactNameOrder = Settings.ContactNameOrder.Normalize(
+            file.ContactNameOrder is { ValueKind: JsonValueKind.String } order ? order.GetString() : null);
         _mainWindowPlacement = ReadPlacement(file.MainWindowPlacement);
     }
 
@@ -186,6 +209,7 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     /// <param name="TrayUnreadStyle">How the tray icon points out unread mail; raw JSON for the same reason as the theme.</param>
     /// <param name="MainWindowPlacement">Where the main window was; raw JSON for the same reason as the theme.</param>
     /// <param name="StartMinimized">Whether the main window stays hidden when the application starts.</param>
+    /// <param name="ContactNameOrder">The order of contact names; raw JSON for the same reason as the theme.</param>
     private sealed record SettingsFile(
         string? Language,
         bool? SyncServerDeletions,
@@ -195,7 +219,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
         bool? ShowNewMailNotifications = null,
         JsonElement? TrayUnreadStyle = null,
         JsonElement? MainWindowPlacement = null,
-        bool? StartMinimized = null);
+        bool? StartMinimized = null,
+        JsonElement? ContactNameOrder = null);
 
     /// <inheritdoc />
     public bool RemoveServerDeletedMessages => _removeServerDeletedMessages;
@@ -220,6 +245,12 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
 
     /// <inheritdoc />
     public event EventHandler? TrayUnreadStyleChanged;
+
+    /// <inheritdoc />
+    public string ContactNameOrder => _contactNameOrder;
+
+    /// <inheritdoc />
+    public event EventHandler? ContactNameOrderChanged;
 
     /// <inheritdoc />
     public WindowPlacement? MainWindowPlacement => _mainWindowPlacement;
@@ -324,6 +355,20 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     }
 
     /// <inheritdoc />
+    public void SetContactNameOrder(string value)
+    {
+        var order = Settings.ContactNameOrder.Normalize(value);
+        lock (_gate)
+        {
+            Write(Snapshot() with { ContactNameOrder = JsonSerializer.SerializeToElement(order) });
+            _contactNameOrder = order;
+        }
+
+        // Outside the lock, so a listener may read the settings from any thread.
+        ContactNameOrderChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <inheritdoc />
     public void SetTheme(string value)
     {
         var theme = ThemePreference.Normalize(value);
@@ -349,7 +394,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
             _showNewMailNotifications,
             JsonSerializer.SerializeToElement(_trayUnreadStyle),
             _mainWindowPlacement is { } placement ? SerializePlacement(placement) : null,
-            _startMinimized);
+            _startMinimized,
+            JsonSerializer.SerializeToElement(_contactNameOrder));
     }
 
     /// <summary>

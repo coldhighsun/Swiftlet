@@ -84,6 +84,14 @@ public sealed partial class SettingsViewModel : ObservableObject
             new ChoiceOptionViewModel(TrayUnreadStyle.Blink, () => localizer["Settings_TrayUnreadBlink"]),
         ];
         SelectedTrayUnreadStyle = TrayUnreadStyleOptions.First(o => o.Code == settings.TrayUnreadStyle);
+        ContactNameOrderOptions =
+        [
+            new ChoiceOptionViewModel(ContactNameOrder.Auto, () => localizer["Settings_ContactNameOrderAuto"]),
+            new ChoiceOptionViewModel(
+                ContactNameOrder.FamilyFirst, () => localizer["Settings_ContactNameOrderFamilyFirst"]),
+            new ChoiceOptionViewModel(ContactNameOrder.GivenFirst, () => localizer["Settings_ContactNameOrderGivenFirst"]),
+        ];
+        SelectedContactNameOrder = ContactNameOrderOptions.First(o => o.Code == settings.ContactNameOrder);
         localizer.LanguageChanged += OnLanguageChanged;
     }
 
@@ -118,6 +126,17 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     public partial ChoiceOptionViewModel SelectedTrayUnreadStyle { get; set; }
+
+    /// <summary>
+    /// Gets the orders in which contact names can be shown.
+    /// </summary>
+    public IReadOnlyList<ChoiceOptionViewModel> ContactNameOrderOptions { get; }
+
+    /// <summary>
+    /// Gets or sets the selected contact name order.
+    /// </summary>
+    [ObservableProperty]
+    public partial ChoiceOptionViewModel SelectedContactNameOrder { get; set; }
 
     /// <summary>
     /// Gets the text saying whether the local data is encrypted, or <see langword="null"/> when unknown.
@@ -190,13 +209,37 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Saves a newly selected contact name order.
+    /// </summary>
+    /// <param name="value">The new selection.</param>
+    partial void OnSelectedContactNameOrderChanged(ChoiceOptionViewModel value)
+    {
+        if (value is null || value.Code == _settings.ContactNameOrder)
+        {
+            return;
+        }
+
+        ErrorText = null;
+        try
+        {
+            _settings.SetContactNameOrder(value.Code);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The file could not be written; show it and put the picker back so it matches what is stored.
+            ErrorText = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
+            SelectedContactNameOrder = ContactNameOrderOptions.First(o => o.Code == _settings.ContactNameOrder);
+        }
+    }
+
+    /// <summary>
     /// Re-reads the texts built by this view model after the language changed.
     /// </summary>
     /// <param name="sender">The event sender.</param>
     /// <param name="e">The event arguments.</param>
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
-        foreach (var option in ThemeOptions.Concat(TrayUnreadStyleOptions))
+        foreach (var option in ThemeOptions.Concat(TrayUnreadStyleOptions).Concat(ContactNameOrderOptions))
         {
             option.RefreshLanguage();
         }

@@ -325,6 +325,52 @@ public sealed class ContactsViewModelTests
     }
 
     /// <summary>
+    /// Verifies the chosen name order is used for the list, the form and the recipient, and either order can be searched.
+    /// </summary>
+    /// <param name="order">The stored order.</param>
+    /// <param name="title">The expected name.</param>
+    /// <param name="familyColumn">The expected column of the family name.</param>
+    [Theory]
+    [InlineData("familyFirst", "Walker Alice", 0)]
+    [InlineData("givenFirst", "Alice Walker", 1)]
+    public async Task NameOrder_Chosen_AppliesToListFormAndRecipient(string order, string title, int familyColumn)
+    {
+        _dispatcher.On<GetAddressBookQuery>(_ => new AddressBook(
+            [Contact.Create("Alice", "Walker", ["alice@x.com"])], []));
+        var viewModel = new ContactsViewModel(
+            _dispatcher,
+            _dialogs,
+            TestLocalizer.Chinese(),
+            settings: new FakeAppSettings { ContactNameOrder = order });
+        await viewModel.InitializeAsync();
+        string? recipient = null;
+        viewModel.CloseRequested += (_, value) => recipient = value;
+
+        viewModel.SearchText = "alice walker";
+        viewModel.Contacts.Should().ContainSingle().Which.Title.Should().Be(title);
+        viewModel.SearchText = "walker alice";
+        viewModel.Contacts.Should().ContainSingle().Which.GroupKey.Should().Be(title[..1]);
+        viewModel.SelectedContact = viewModel.Contacts[0];
+        viewModel.ShownContact!.Title.Should().Be(title);
+        viewModel.WriteCommand.Execute(null);
+
+        recipient.Should().Be($"{title} <alice@x.com>");
+        viewModel.LastNameColumn.Should().Be(familyColumn);
+    }
+
+    /// <summary>
+    /// Verifies suggestions show the chosen order and are found by a name typed in either order.
+    /// </summary>
+    [Fact]
+    public void Find_OtherNameOrder_StillMatches()
+    {
+        var all = RecipientSuggestions.From(new AddressBook([_contact], []), NameOrder.GivenFirst);
+
+        RecipientSuggestions.Find("张三", all).Should().ContainSingle().Which.Name.Should().Be("三张");
+        RecipientSuggestions.Find("三张", all).Should().ContainSingle();
+    }
+
+    /// <summary>
     /// Verifies deleting needs a confirmation.
     /// </summary>
     /// <param name="confirmed">Whether the user confirms.</param>

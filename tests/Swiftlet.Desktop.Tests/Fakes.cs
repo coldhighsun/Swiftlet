@@ -530,6 +530,24 @@ internal sealed class FakeAppSettings : IAppSettings
     }
 
     /// <inheritdoc />
+    public string ContactNameOrder { get; set; } = Swiftlet.Desktop.Settings.ContactNameOrder.Auto;
+
+    /// <inheritdoc />
+    public event EventHandler? ContactNameOrderChanged;
+
+    /// <inheritdoc />
+    public void SetContactNameOrder(string value)
+    {
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+
+        ContactNameOrder = value;
+        ContactNameOrderChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <inheritdoc />
     public void SetTheme(string value)
     {
         if (Failure is not null)

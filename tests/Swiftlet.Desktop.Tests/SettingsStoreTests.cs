@@ -194,6 +194,42 @@ public class SettingsStoreTests : IDisposable
     }
 
     /// <summary>
+    /// Verifies the contact name order defaults to automatic, is saved and announced.
+    /// </summary>
+    [Fact]
+    public void ContactNameOrder_DefaultsToAutoAndIsSavedAndAnnounced()
+    {
+        var store = new AppSettings(StorePath);
+        store.ContactNameOrder.Should().Be("auto");
+        var announced = 0;
+        store.ContactNameOrderChanged += (_, _) => announced++;
+
+        store.SetContactNameOrder("givenFirst");
+        store.Save("en");
+
+        announced.Should().Be(1);
+        new AppSettings(StorePath).ContactNameOrder.Should().Be("givenFirst");
+    }
+
+    /// <summary>
+    /// Verifies an unusable name order falls back to automatic without losing other settings.
+    /// </summary>
+    /// <param name="stored">The stored JSON value.</param>
+    [Theory]
+    [InlineData("\"backwards\"")]
+    [InlineData("5")]
+    public void ContactNameOrder_UnusableValue_FallsBackAndKeepsOtherSettings(string stored)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(StorePath)!);
+        File.WriteAllText(StorePath, $$"""{"language":"zh-Hans","contactNameOrder":{{stored}}}""");
+
+        var store = new AppSettings(StorePath);
+
+        store.ContactNameOrder.Should().Be("auto");
+        store.Load().Should().Be("zh-Hans");
+    }
+
+    /// <summary>
     /// Verifies the window placement is empty at first, and survives a restart and later saves.
     /// </summary>
     [Fact]

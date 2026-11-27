@@ -123,10 +123,10 @@ public class NewMailTests
     public async Task ViewModel_AddressesAreContacts_ShowsContactNamesAndAddresses()
     {
         var dispatcher = Dispatcher();
-        dispatcher.On<GetContactNamesQuery>(_ => (IReadOnlyDictionary<string, string>)new Dictionary<string, string>
+        dispatcher.On<GetContactNamesQuery>(_ => (IReadOnlyDictionary<string, ContactName>)new Dictionary<string, ContactName>
         {
-            ["alice@example.com"] = "Alice Smith",
-            ["me@example.com"] = "My Work Mail",
+            ["alice@example.com"] = new("Alice", "Smith"),
+            ["me@example.com"] = new("My Work Mail", string.Empty),
         });
 
         using var viewModel = new NewMailViewModel(

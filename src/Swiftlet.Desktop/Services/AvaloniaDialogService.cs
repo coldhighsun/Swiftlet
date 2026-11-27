@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Accounts;
 using Swiftlet.Desktop.Html;
 using Swiftlet.Desktop.Localization;
+using Swiftlet.Desktop.Settings;
 using Swiftlet.Desktop.ViewModels;
 using Swiftlet.Desktop.ViewModels.Compose;
 using Swiftlet.Desktop.ViewModels.Contacts;
@@ -202,7 +203,8 @@ public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogSe
             services.GetRequiredService<ILocalizer>(),
             accounts,
             request,
-            services.GetService<ILogger<ComposeViewModel>>());
+            services.GetService<ILogger<ComposeViewModel>>(),
+            ContactNameOrder.ToNameOrder(services.GetService<IAppSettings>()?.ContactNameOrder));
         var window = new ComposeWindow { DataContext = viewModel };
         viewModel.CloseRequested += (_, _) => window.Close();
         window.Show();

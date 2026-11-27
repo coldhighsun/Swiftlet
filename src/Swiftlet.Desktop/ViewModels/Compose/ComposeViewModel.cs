@@ -8,6 +8,7 @@ using Swiftlet.Application.Sending;
 using Swiftlet.Desktop.Formatting;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
+using Swiftlet.Domain.Contacts;
 using Swiftlet.Domain.Accounts;
 
 namespace Swiftlet.Desktop.ViewModels.Compose;
@@ -87,6 +88,11 @@ public sealed partial class ComposeViewModel : ObservableObject
     private readonly ILogger? _logger;
 
     /// <summary>
+    /// The order of contact names in the suggestions.
+    /// </summary>
+    private readonly NameOrder _nameOrder;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ComposeViewModel"/> class.
     /// </summary>
     /// <param name="dispatcher">The request dispatcher.</param>
@@ -95,13 +101,15 @@ public sealed partial class ComposeViewModel : ObservableObject
     /// <param name="accounts">The accounts that can send.</param>
     /// <param name="request">The initial values.</param>
     /// <param name="logger">The logger; optional.</param>
+    /// <param name="nameOrder">The order of contact names in the suggestions.</param>
     public ComposeViewModel(
         IRequestDispatcher dispatcher,
         IDialogService dialogs,
         ILocalizer localizer,
         IReadOnlyList<MailAccount> accounts,
         ComposeRequest request,
-        ILogger<ComposeViewModel>? logger = null)
+        ILogger<ComposeViewModel>? logger = null,
+        NameOrder nameOrder = NameOrder.Auto)
     {
         ArgumentNullException.ThrowIfNull(accounts);
         ArgumentNullException.ThrowIfNull(request);
@@ -110,6 +118,7 @@ public sealed partial class ComposeViewModel : ObservableObject
         _localizer = localizer;
         _inReplyTo = request.InReplyTo;
         _logger = logger;
+        _nameOrder = nameOrder;
         Suggestions = [];
         Accounts = accounts;
         Title = request.Mode switch
@@ -211,7 +220,8 @@ public sealed partial class ComposeViewModel : ObservableObject
     {
         try
         {
-            Suggestions = RecipientSuggestions.From(await _dispatcher.SendAsync(new GetAddressBookQuery()));
+            var book = await _dispatcher.SendAsync(new GetAddressBookQuery());
+            Suggestions = RecipientSuggestions.From(book, _nameOrder);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

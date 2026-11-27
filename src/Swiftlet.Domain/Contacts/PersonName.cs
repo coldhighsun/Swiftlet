@@ -1,6 +1,27 @@
 namespace Swiftlet.Domain.Contacts;
 
 /// <summary>
+/// The order in which the two parts of a name are shown.
+/// </summary>
+public enum NameOrder
+{
+    /// <summary>
+    /// Family name first for Chinese, Japanese and Korean names, otherwise given name first.
+    /// </summary>
+    Auto,
+
+    /// <summary>
+    /// Family name first for every name.
+    /// </summary>
+    FamilyFirst,
+
+    /// <summary>
+    /// Given name first for every name.
+    /// </summary>
+    GivenFirst,
+}
+
+/// <summary>
 /// Joins a given and a family name into a display name, and splits a display name back.
 /// </summary>
 public static class PersonName
@@ -15,13 +36,14 @@ public static class PersonName
     };
 
     /// <summary>
-    /// Joins the names: family name first and without a space for Chinese, Japanese and Korean names, otherwise
-    /// "given family".
+    /// Joins the names in the asked order. Chinese, Japanese and Korean names are joined without a space; by default they
+    /// put the family name first and all others the given name.
     /// </summary>
     /// <param name="firstName">The given name.</param>
     /// <param name="lastName">The family name.</param>
+    /// <param name="order">Which part comes first.</param>
     /// <returns>The display name; empty when both parts are.</returns>
-    public static string Compose(string firstName, string lastName)
+    public static string Compose(string firstName, string lastName, NameOrder order = NameOrder.Auto)
     {
         ArgumentNullException.ThrowIfNull(firstName);
         ArgumentNullException.ThrowIfNull(lastName);
@@ -31,7 +53,10 @@ public static class PersonName
             return string.Concat(firstName, lastName);
         }
 
-        return IsEastAsian(firstName) || IsEastAsian(lastName) ? lastName + firstName : $"{firstName} {lastName}";
+        var eastAsian = IsEastAsian(firstName) || IsEastAsian(lastName);
+        var familyFirst = order == NameOrder.FamilyFirst || (order == NameOrder.Auto && eastAsian);
+        var (first, second) = familyFirst ? (lastName, firstName) : (firstName, lastName);
+        return eastAsian ? first + second : $"{first} {second}";
     }
 
     /// <summary>

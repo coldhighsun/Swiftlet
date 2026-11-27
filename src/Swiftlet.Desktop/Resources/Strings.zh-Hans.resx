@@ -369,4 +369,9 @@
   <data name="Contacts_RemoveManyTitle" xml:space="preserve"><value>移除自动收集的地址</value></data>
   <data name="Contacts_RemoveManyMessage" xml:space="preserve"><value>确定移除这 {0} 个地址吗？它们不会再被自动收集。</value></data>
   <data name="Contacts_NoCollectedSelection" xml:space="preserve"><value>选择一个或多个地址</value></data>
+  <data name="Settings_ContactNameOrder" xml:space="preserve"><value>联系人姓名</value></data>
+  <data name="Settings_ContactNameOrderAuto" xml:space="preserve"><value>自动</value></data>
+  <data name="Settings_ContactNameOrderFamilyFirst" xml:space="preserve"><value>姓在前</value></data>
+  <data name="Settings_ContactNameOrderGivenFirst" xml:space="preserve"><value>名在前</value></data>
+  <data name="Settings_ContactNameOrderHint" xml:space="preserve"><value>用于通讯录中的联系人，也用于所发邮件的收件人姓名。“自动”时中日韩姓名姓在前，其他姓名名在前。</value></data>
 </root>

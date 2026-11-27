@@ -70,6 +70,26 @@ public sealed class ContactTests
     }
 
     /// <summary>
+    /// Verifies a chosen order applies to every script, and spacing still follows the script.
+    /// </summary>
+    /// <param name="first">The given name.</param>
+    /// <param name="last">The family name.</param>
+    /// <param name="order">The order.</param>
+    /// <param name="expected">The display name.</param>
+    [Theory]
+    [InlineData("Alice", "Walker", NameOrder.FamilyFirst, "Walker Alice")]
+    [InlineData("Alice", "Walker", NameOrder.GivenFirst, "Alice Walker")]
+    [InlineData("三", "张", NameOrder.FamilyFirst, "张三")]
+    [InlineData("三", "张", NameOrder.GivenFirst, "三张")]
+    [InlineData("", "张", NameOrder.GivenFirst, "张")]
+    [InlineData("Alice", "", NameOrder.FamilyFirst, "Alice")]
+    public void Compose_ChosenOrder_ReturnsDisplayName(string first, string last, NameOrder order, string expected)
+    {
+        PersonName.Compose(first, last, order).Should().Be(expected);
+        Contact.Create(first, last, ["a@x.com"]).FormatName(order).Should().Be(expected);
+    }
+
+    /// <summary>
     /// Verifies how a name given as one text is split.
     /// </summary>
     /// <param name="name">The display name.</param>

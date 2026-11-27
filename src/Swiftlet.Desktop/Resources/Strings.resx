@@ -369,4 +369,9 @@
   <data name="Contacts_RemoveManyTitle" xml:space="preserve"><value>Remove collected addresses</value></data>
   <data name="Contacts_RemoveManyMessage" xml:space="preserve"><value>Remove {0} collected addresses? They will not be collected again.</value></data>
   <data name="Contacts_NoCollectedSelection" xml:space="preserve"><value>Select one or more addresses</value></data>
+  <data name="Settings_ContactNameOrder" xml:space="preserve"><value>Contact names</value></data>
+  <data name="Settings_ContactNameOrderAuto" xml:space="preserve"><value>Automatic</value></data>
+  <data name="Settings_ContactNameOrderFamilyFirst" xml:space="preserve"><value>Family name first</value></data>
+  <data name="Settings_ContactNameOrderGivenFirst" xml:space="preserve"><value>Given name first</value></data>
+  <data name="Settings_ContactNameOrderHint" xml:space="preserve"><value>Applies to contacts, also in the recipient names of mail you send. Automatic puts the family name first for Chinese, Japanese and Korean names.</value></data>
 </root>

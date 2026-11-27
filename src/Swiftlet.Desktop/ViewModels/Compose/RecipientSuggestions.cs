@@ -1,4 +1,5 @@
 using Swiftlet.Application.Contacts;
+using Swiftlet.Domain.Contacts;
 
 namespace Swiftlet.Desktop.ViewModels.Compose;
 
@@ -8,7 +9,8 @@ namespace Swiftlet.Desktop.ViewModels.Compose;
 /// <param name="Name">The name; empty when unknown.</param>
 /// <param name="Address">The address.</param>
 /// <param name="Company">The company; empty when unknown.</param>
-public sealed record RecipientSuggestion(string Name, string Address, string Company = "")
+/// <param name="OtherNames">The name in the other orders, which can be typed to find it; empty without any.</param>
+public sealed record RecipientSuggestion(string Name, string Address, string Company = "", string OtherNames = "")
 {
     /// <summary>
     /// Gets the text of the first line of the suggestion.
@@ -38,13 +40,15 @@ public static class RecipientSuggestions
     /// Lists all suggestions of an address book: every address of every contact first, then the collected addresses.
     /// </summary>
     /// <param name="book">The address book.</param>
+    /// <param name="order">The order of contact names.</param>
     /// <returns>The suggestions in the order they are offered.</returns>
-    public static IReadOnlyList<RecipientSuggestion> From(AddressBook book)
+    public static IReadOnlyList<RecipientSuggestion> From(AddressBook book, NameOrder order = NameOrder.Auto)
     {
         ArgumentNullException.ThrowIfNull(book);
         return
         [
-            .. book.Contacts.SelectMany(c => c.Emails.Select(e => new RecipientSuggestion(c.DisplayName, e, c.Company))),
+            .. book.Contacts.SelectMany(c => c.Emails.Select(e => new RecipientSuggestion(
+                c.FormatName(order), e, c.Company, string.Join('\n', Enum.GetValues<NameOrder>().Select(c.FormatName))))),
             .. book.Collected.Select(a => new RecipientSuggestion(a.Name, a.Address)),
         ];
     }
@@ -73,7 +77,8 @@ public static class RecipientSuggestions
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         return all
             .Where(s => !used.Contains(s.Address)
-                && (Contains(s.Name, typed) || Contains(s.Address, typed) || Contains(s.Company, typed)))
+                && (Contains(s.Name, typed) || Contains(s.OtherNames, typed) || Contains(s.Address, typed)
+                    || Contains(s.Company, typed)))
             .Take(MaxShown)
             .ToList();
     }

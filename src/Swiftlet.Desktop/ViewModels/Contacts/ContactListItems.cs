@@ -18,7 +18,8 @@ public sealed record ContactDetailRow(string Value, bool IsPrimary);
 /// A contact of the contacts window: its row in the list and the card showing its details.
 /// </summary>
 /// <param name="contact">The contact.</param>
-public sealed class ContactItemViewModel(Contact contact)
+/// <param name="nameOrder">The order in which the name is shown.</param>
+public sealed class ContactItemViewModel(Contact contact, NameOrder nameOrder = NameOrder.Auto)
 {
     /// <summary>
     /// The group of the contacts whose title does not start with a Latin letter.
@@ -31,14 +32,19 @@ public sealed class ContactItemViewModel(Contact contact)
     public Contact Contact { get; } = contact;
 
     /// <summary>
+    /// Gets the name in the chosen order; empty when unknown.
+    /// </summary>
+    public string Name => Contact.FormatName(nameOrder);
+
+    /// <summary>
     /// Gets the first line of the row: the name, or the address of a contact without one.
     /// </summary>
-    public string Title => Contact.DisplayName.Length > 0 ? Contact.DisplayName : Contact.Emails[0];
+    public string Title => Name.Length > 0 ? Name : Contact.Emails[0];
 
     /// <summary>
     /// Gets the second line of the row.
     /// </summary>
-    public string Subtitle => Contact.DisplayName.Length > 0 ? Contact.Emails[0] : Contact.Company;
+    public string Subtitle => Name.Length > 0 ? Contact.Emails[0] : Contact.Company;
 
     /// <summary>
     /// Gets a value indicating whether the row has a second line.
@@ -58,7 +64,7 @@ public sealed class ContactItemViewModel(Contact contact)
     /// <summary>
     /// Gets the initial shown in the round avatar.
     /// </summary>
-    public string Initial => Avatar.Initial(Contact.DisplayName, Contact.Emails[0]);
+    public string Initial => Avatar.Initial(Name, Contact.Emails[0]);
 
     /// <summary>
     /// Gets the background of the avatar.

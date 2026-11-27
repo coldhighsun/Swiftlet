@@ -234,6 +234,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _syncEvents.MessageSent += OnMessageSent;
         _syncEvents.SyncStatusChanged += OnSyncStatusChanged;
         _syncEvents.NewMailArrived += OnNewMailArrived;
+        _contacts.NamesChanged += OnContactNamesChanged;
         SelectedMessages.CollectionChanged += (_, _) =>
         {
             DeleteSelectedCommand.NotifyCanExecuteChanged();
@@ -257,6 +258,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _syncEvents.MessageSent -= OnMessageSent;
         _syncEvents.SyncStatusChanged -= OnSyncStatusChanged;
         _syncEvents.NewMailArrived -= OnNewMailArrived;
+        _contacts.NamesChanged -= OnContactNamesChanged;
     }
 
     /// <summary>
@@ -1405,6 +1407,22 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private async Task ReloadContactNamesAsync()
     {
         await _contacts.ReloadAsync();
+        RefreshContactNames();
+    }
+
+    /// <summary>
+    /// Shows the names again when the directory formats them differently. The settings window raises this on the UI
+    /// thread.
+    /// </summary>
+    /// <param name="sender">The directory.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OnContactNamesChanged(object? sender, EventArgs e) => RefreshContactNames();
+
+    /// <summary>
+    /// Re-reads the address book names of the listed messages.
+    /// </summary>
+    private void RefreshContactNames()
+    {
         foreach (var message in Messages)
         {
             message.RefreshContacts();

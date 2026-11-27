@@ -42,6 +42,20 @@
               </ComboBox.ItemTemplate>
             </ComboBox>
           </Grid>
+          <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto" RowSpacing="4">
+            <TextBlock Text="{loc:Loc Settings_ContactNameOrder}" VerticalAlignment="Center" TextWrapping="Wrap" />
+            <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding ContactNameOrderOptions}"
+                      SelectedItem="{Binding SelectedContactNameOrder}"
+                      AutomationProperties.Name="{loc:Loc Settings_ContactNameOrder}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate DataType="settings:ChoiceOptionViewModel">
+                  <TextBlock Text="{Binding DisplayName}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock Grid.Row="1" Grid.Column="1" Classes="caption" Text="{loc:Loc Settings_ContactNameOrderHint}"
+                       TextWrapping="Wrap" />
+          </Grid>
           <StackPanel Spacing="8">
             <CheckBox Content="{loc:Loc Settings_CloseToTray}" IsChecked="{Binding CloseToTray}" />
             <TextBlock Classes="caption" Text="{loc:Loc Settings_CloseToTrayHint}" TextWrapping="Wrap" Margin="28,0,0,0" />

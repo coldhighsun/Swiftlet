@@ -42,8 +42,8 @@ public class MainWindowViewModelTests
             Messages = [TestData.Message(Account, Inbox, 1, "Hello 1"), TestData.Message(Account, Inbox, 2, "Hello 2")];
 
             Work = Label.Create("Work", "#E53935");
-            Dispatcher.On<GetContactNamesQuery>(_ => (IReadOnlyDictionary<string, string>)new Dictionary<string, string>(
-                ContactNames, StringComparer.OrdinalIgnoreCase));
+            Dispatcher.On<GetContactNamesQuery>(_ => (IReadOnlyDictionary<string, ContactName>)ContactNames.ToDictionary(
+                pair => pair.Key, pair => new ContactName(pair.Value, string.Empty), StringComparer.OrdinalIgnoreCase));
             Dispatcher.On<GetLabelsQuery>(_ => (IReadOnlyList<Label>)new List<Label> { Work });
             Dispatcher.On<GetUnifiedInboxQuery>(_ => HasAccount ? Messages.OrderByDescending(m => m.SentAt).ToList() : []);
             Dispatcher.On<GetMessagesByLabelQuery>(q => Messages.Where(m => m.Labels.Any(l => l.Id == q.LabelId)).ToList());
@@ -74,8 +74,14 @@ public class MainWindowViewModelTests
                 UiThread,
                 RemoteImageRules,
                 Logger,
-                Clock);
+                Clock,
+                new Swiftlet.Desktop.Services.ContactDirectory(Dispatcher, settings: Settings));
         }
+
+        /// <summary>
+        /// Gets the settings the contact names follow.
+        /// </summary>
+        public FakeAppSettings Settings { get; } = new();
 
         /// <summary>
         /// Gets the clock of the view model.
@@ -1164,6 +1170,25 @@ public class MainWindowViewModelTests
         await scenario.StartAsync();
         scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
         return scenario;
+    }
+
+    /// <summary>
+    /// Verifies listed messages announce their sender again when the name order changes.
+    /// </summary>
+    [Fact]
+    public async Task ContactNameOrder_Changed_RefreshesListedNames()
+    {
+        var scenario = await StartWithRecipientsAsync();
+        var changed = new List<string?>();
+        scenario.ViewModel.Messages[0].PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        scenario.Settings.SetContactNameOrder("familyFirst");
+
+        changed.Should().Contain("FromDisplay");
+        changed.Clear();
+        scenario.ViewModel.Dispose();
+        scenario.Settings.SetContactNameOrder("auto");
+        changed.Should().BeEmpty();
     }
 
     /// <summary>

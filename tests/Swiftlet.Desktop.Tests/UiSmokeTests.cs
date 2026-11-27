@@ -997,7 +997,11 @@ public class UiSmokeTests
 
                 window.Title.Should().Be(title);
                 window.GetVisualDescendants().OfType<ComboBox>().Where(c => c.IsEffectivelyVisible)
-                    .Select(c => c.SelectedItem).Should().Equal(selector.SelectedOption, viewModel.SelectedTheme, viewModel.SelectedTrayUnreadStyle);
+                    .Select(c => c.SelectedItem).Should().Equal(
+                        selector.SelectedOption,
+                        viewModel.SelectedTheme,
+                        viewModel.SelectedTrayUnreadStyle,
+                        viewModel.SelectedContactNameOrder);
                 var generalBoxes = window.GetVisualDescendants().OfType<CheckBox>().ToList();
                 generalBoxes.Should().HaveCount(3);
                 generalBoxes.Take(2).Should().OnlyContain(b => b.IsChecked == true, "the tray and notification settings are on by default");

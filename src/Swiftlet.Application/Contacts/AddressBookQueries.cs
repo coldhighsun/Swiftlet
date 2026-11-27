@@ -26,33 +26,40 @@ public sealed record AddressBook(IReadOnlyList<Contact> Contacts, IReadOnlyList<
 public sealed record GetAddressBookQuery : IQuery<AddressBook>;
 
 /// <summary>
-/// Gets every address that belongs to a contact with the name of that contact. The name is empty for a contact without
-/// one. Addresses are compared ignoring case. Unlike <see cref="GetAddressBookQuery"/> it reads the contacts only, so it
+/// The two parts of the name of a contact; the view decides in which order they are shown.
+/// </summary>
+/// <param name="FirstName">The given name; may be empty.</param>
+/// <param name="LastName">The family name; may be empty.</param>
+public sealed record ContactName(string FirstName, string LastName);
+
+/// <summary>
+/// Gets every address that belongs to a contact with the name of that contact. Both parts are empty for a contact without
+/// a name. Addresses are compared ignoring case. Unlike <see cref="GetAddressBookQuery"/> it reads the contacts only, so it
 /// is cheap enough to run whenever names are shown.
 /// </summary>
-public sealed record GetContactNamesQuery : IQuery<IReadOnlyDictionary<string, string>>;
+public sealed record GetContactNamesQuery : IQuery<IReadOnlyDictionary<string, ContactName>>;
 
 /// <summary>
 /// Handles <see cref="GetContactNamesQuery"/>.
 /// </summary>
 /// <param name="contacts">The contact repository.</param>
 public sealed class GetContactNamesQueryHandler(IContactRepository contacts)
-    : IQueryHandler<GetContactNamesQuery, IReadOnlyDictionary<string, string>>
+    : IQueryHandler<GetContactNamesQuery, IReadOnlyDictionary<string, ContactName>>
 {
     /// <inheritdoc />
-    public async ValueTask<IReadOnlyDictionary<string, string>> Handle(
+    public async ValueTask<IReadOnlyDictionary<string, ContactName>> Handle(
         GetContactNamesQuery query,
         CancellationToken cancellationToken)
     {
-        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var names = new Dictionary<string, ContactName>(StringComparer.OrdinalIgnoreCase);
         foreach (var contact in await contacts.GetAllAsync(cancellationToken))
         {
             foreach (var address in contact.Emails)
             {
                 // Should two contacts share an address, a name wins over none, and otherwise the first one.
-                if (!names.TryGetValue(address, out var known) || known.Length == 0)
+                if (!names.TryGetValue(address, out var known) || known is { FirstName: "", LastName: "" })
                 {
-                    names[address] = contact.DisplayName;
+                    names[address] = new ContactName(contact.FirstName, contact.LastName);
                 }
             }
         }

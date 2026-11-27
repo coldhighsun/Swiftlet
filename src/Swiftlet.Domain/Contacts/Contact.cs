@@ -38,6 +38,13 @@ public sealed class Contact
     public string DisplayName => PersonName.Compose(FirstName, LastName);
 
     /// <summary>
+    /// Composes the full name in a chosen order.
+    /// </summary>
+    /// <param name="order">Which part comes first.</param>
+    /// <returns>The name; empty when unknown.</returns>
+    public string FormatName(NameOrder order) => PersonName.Compose(FirstName, LastName, order);
+
+    /// <summary>
     /// Gets the company; empty when unknown.
     /// </summary>
     public string Company { get; private set; } = string.Empty;

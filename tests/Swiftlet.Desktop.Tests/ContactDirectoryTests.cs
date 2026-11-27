@@ -17,11 +17,12 @@ public class ContactDirectoryTests
     private static FakeDispatcher Dispatcher()
     {
         var dispatcher = new FakeDispatcher();
-        dispatcher.On<GetContactNamesQuery>(_ => (IReadOnlyDictionary<string, string>)new Dictionary<string, string>(
+        dispatcher.On<GetContactNamesQuery>(_ => (IReadOnlyDictionary<string, ContactName>)new Dictionary<string, ContactName>(
             StringComparer.OrdinalIgnoreCase)
         {
-            ["ann@x.com"] = "Ann",
-            ["nameless@x.com"] = string.Empty,
+            ["ann@x.com"] = new("Ann", string.Empty),
+            ["lee@x.com"] = new("Bo", "Lee"),
+            ["nameless@x.com"] = new(string.Empty, string.Empty),
         });
         return dispatcher;
     }
@@ -80,5 +81,27 @@ public class ContactDirectoryTests
 
         AddressText.Full(directory, name, address).Should().Be(full);
         AddressText.Compact(directory, name, address).Should().Be(compact);
+    }
+
+
+    /// <summary>
+    /// Verifies names follow the chosen order at once, without reading the address book again.
+    /// </summary>
+    [Fact]
+    public async Task NameOf_OrderChanged_FormatsAgainAndAnnounces()
+    {
+        var dispatcher = Dispatcher();
+        var settings = new FakeAppSettings();
+        var directory = new ContactDirectory(dispatcher, settings: settings);
+        await directory.ReloadAsync();
+        var announced = 0;
+        directory.NamesChanged += (_, _) => announced++;
+        directory.NameOf("lee@x.com").Should().Be("Bo Lee");
+
+        settings.SetContactNameOrder("familyFirst");
+
+        directory.NameOf("lee@x.com").Should().Be("Lee Bo");
+        announced.Should().Be(1);
+        dispatcher.Sent<GetContactNamesQuery>().Should().ContainSingle();
     }
 }

@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Contacts;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
+using Swiftlet.Desktop.Settings;
 using Swiftlet.Domain.Contacts;
 
 namespace Swiftlet.Desktop.ViewModels.Contacts;
@@ -47,6 +48,11 @@ public sealed partial class ContactsViewModel : ObservableObject
     private readonly ILogger? _logger;
 
     /// <summary>
+    /// The settings saying the name order, if any.
+    /// </summary>
+    private readonly IAppSettings? _settings;
+
+    /// <summary>
     /// The address book as loaded last.
     /// </summary>
     private AddressBook _book = new([], []);
@@ -68,16 +74,19 @@ public sealed partial class ContactsViewModel : ObservableObject
     /// <param name="dialogs">The dialog service.</param>
     /// <param name="localizer">The localizer.</param>
     /// <param name="logger">The logger; optional.</param>
+    /// <param name="settings">The settings saying the name order; optional.</param>
     public ContactsViewModel(
         IRequestDispatcher dispatcher,
         IDialogService dialogs,
         ILocalizer localizer,
-        ILogger<ContactsViewModel>? logger = null)
+        ILogger<ContactsViewModel>? logger = null,
+        IAppSettings? settings = null)
     {
         _dispatcher = dispatcher;
         _dialogs = dialogs;
         _localizer = localizer;
         _logger = logger;
+        _settings = settings;
         SearchText = string.Empty;
         Emails.CollectionChanged += OnEmailsChanged;
         SelectedCollected.CollectionChanged += OnSelectedCollectedChanged;
@@ -115,7 +124,8 @@ public sealed partial class ContactsViewModel : ObservableObject
     public ObservableCollection<ContactValueViewModel> Phones { get; } = [];
 
     /// <summary>
-    /// Gets the column of the given name: the languages that say the family name first show it second.
+    /// Gets the column of the given name: second when the family name comes first, which the name order setting decides,
+    /// and the UI language while that is automatic.
     /// </summary>
     public int FirstNameColumn => IsFamilyNameFirst ? 1 : 0;
 
@@ -397,7 +407,7 @@ public sealed partial class ContactsViewModel : ObservableObject
 
         var confirmed = await _dialogs.ConfirmAsync(
             _localizer["Contacts_DeleteTitle"],
-            _localizer.Format("Contacts_DeleteMessage", new ContactItemViewModel(contact).Title),
+            _localizer.Format("Contacts_DeleteMessage", CreateItem(contact).Title),
             _localizer["Contacts_Delete"]);
         if (!confirmed)
         {
@@ -422,7 +432,8 @@ public sealed partial class ContactsViewModel : ObservableObject
     {
         if (FindContact(_shownId) is { } contact)
         {
-            CloseRequested?.Invoke(this, RecipientList.Format(contact.DisplayName, address ?? contact.Emails[0]));
+            var name = contact.FormatName(Order);
+            CloseRequested?.Invoke(this, RecipientList.Format(name, address ?? contact.Emails[0]));
         }
     }
 
@@ -613,9 +624,39 @@ public sealed partial class ContactsViewModel : ObservableObject
     private bool IsContactsPage => SelectedPage == ContactsPage;
 
     /// <summary>
-    /// Gets a value indicating whether the UI language puts the family name before the given name.
+    /// Gets a value indicating whether the form puts the family name before the given name.
     /// </summary>
-    private bool IsFamilyNameFirst => bool.TryParse(_localizer["Contacts_FamilyNameFirst"], out var first) && first;
+    private bool IsFamilyNameFirst => Order switch
+    {
+        NameOrder.FamilyFirst => true,
+        NameOrder.GivenFirst => false,
+        _ => bool.TryParse(_localizer["Contacts_FamilyNameFirst"], out var first) && first,
+    };
+
+    /// <summary>
+    /// Gets the order in which names are shown.
+    /// </summary>
+    private NameOrder Order =>
+        _settings is null ? NameOrder.Auto : ContactNameOrder.ToNameOrder(_settings.ContactNameOrder);
+
+    /// <summary>
+    /// Creates the view of a contact in the chosen name order.
+    /// </summary>
+    /// <param name="contact">The contact.</param>
+    /// <returns>The view.</returns>
+    private ContactItemViewModel CreateItem(Contact contact) => new(contact, Order);
+
+    /// <summary>
+    /// Determines whether the name of a contact matches a search, in whichever order it was typed.
+    /// </summary>
+    /// <param name="contact">The contact.</param>
+    /// <param name="matches">Tests one text.</param>
+    /// <returns><see langword="true"/> if it does.</returns>
+    private static bool MatchesName(Contact contact, Func<string, bool> matches)
+    {
+        return Enum.GetValues<NameOrder>().Any(order => matches(contact.FormatName(order)))
+            || matches($"{contact.FirstName} {contact.LastName}");
+    }
 
     /// <summary>
     /// Adds an empty email address field.
@@ -789,7 +830,7 @@ public sealed partial class ContactsViewModel : ObservableObject
     {
         _shownId = contact.Id;
         IsEditing = false;
-        ShownContact = new ContactItemViewModel(contact);
+        ShownContact = CreateItem(contact);
         IsExisting = true;
     }
 
@@ -880,7 +921,7 @@ public sealed partial class ContactsViewModel : ObservableObject
         // An import may have changed the contact of the card.
         if (FindContact(_shownId) is { } shown)
         {
-            ShownContact = new ContactItemViewModel(shown);
+            ShownContact = CreateItem(shown);
         }
     }
 
@@ -894,9 +935,9 @@ public sealed partial class ContactsViewModel : ObservableObject
 
         var found = _book.Contacts
             .Where(c =>
-                Matches(c.DisplayName) || Matches($"{c.FirstName} {c.LastName}") || Matches(c.Company)
+                MatchesName(c, Matches) || Matches(c.Company)
                 || c.Emails.Any(Matches) || c.Phones.Any(Matches))
-            .Select(c => new ContactItemViewModel(c))
+            .Select(CreateItem)
             .OrderBy(c => c.GroupKey == ContactItemViewModel.OtherGroup)
             .ThenBy(c => c.GroupKey, StringComparer.Ordinal)
             .ThenBy(c => c.Title, StringComparer.CurrentCultureIgnoreCase)
@@ -906,7 +947,7 @@ public sealed partial class ContactsViewModel : ObservableObject
         string? group = null;
         foreach (var item in found)
         {
-            Contacts.Add(new ContactItemViewModel(item.Contact) { IsGroupStart = item.GroupKey != group });
+            Contacts.Add(new ContactItemViewModel(item.Contact, Order) { IsGroupStart = item.GroupKey != group });
             group = item.GroupKey;
         }
 
