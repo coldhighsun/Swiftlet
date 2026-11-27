@@ -71,6 +71,25 @@ public class OAuthTests
     }
 
     /// <summary>
+    /// Verifies the built-in Microsoft client id applies only when neither the environment nor the file sets one.
+    /// </summary>
+    [Fact]
+    public void Load_NothingConfigured_UsesBuiltInMicrosoftClientIdOnly()
+    {
+        var missing = Path.Combine(Path.GetTempPath(), $"swiftlet-test-{Guid.NewGuid():N}.json");
+
+        var defaults = OAuthClientConfiguration.Load(missing, _ => null);
+        var overridden = OAuthClientConfiguration.Load(
+            missing,
+            name => name == OAuthClientConfiguration.MicrosoftClientIdVariable ? "env-ms" : null);
+
+        defaults.ClientIdFor(OAuthProvider.Microsoft).Should().Be(OAuthClientConfiguration.BuiltInMicrosoftClientId);
+        defaults.ClientIdFor(OAuthProvider.Google).Should().BeNull();
+        defaults.ClientSecretFor(OAuthProvider.Google).Should().BeNull();
+        overridden.ClientIdFor(OAuthProvider.Microsoft).Should().Be("env-ms");
+    }
+
+    /// <summary>
     /// Verifies the code exchange sends the PKCE verifier and, for Google only, the client secret.
     /// </summary>
     [Fact]

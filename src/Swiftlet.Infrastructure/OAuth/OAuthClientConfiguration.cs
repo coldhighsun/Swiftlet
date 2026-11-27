@@ -4,8 +4,8 @@ using Swiftlet.Domain.Accounts;
 namespace Swiftlet.Infrastructure.OAuth;
 
 /// <summary>
-/// The OAuth 2.0 client registrations of the application. No credentials are built in; they come from a settings file or
-/// environment variables so each deployment uses its own registration.
+/// The OAuth 2.0 client registrations of the application. Values from environment variables or the settings file let a
+/// deployment use its own registration. Only the Microsoft client id has a built-in default; no secret is built in.
 /// </summary>
 /// <param name="GoogleClientId">The Google desktop client id.</param>
 /// <param name="GoogleClientSecret">The Google client secret (not confidential for desktop clients, but required by Google's token endpoint).</param>
@@ -26,6 +26,12 @@ public sealed record OAuthClientConfiguration(string? GoogleClientId, string? Go
     /// The environment variable holding the Microsoft client id.
     /// </summary>
     public const string MicrosoftClientIdVariable = "SWIFTLET_MICROSOFT_CLIENT_ID";
+
+    /// <summary>
+    /// The client id of the project's own Microsoft app registration, used when none is configured.
+    /// It identifies a public client and is not a secret.
+    /// </summary>
+    public const string BuiltInMicrosoftClientId = "7b13c49a-83a6-4bfb-b0da-6438622b8e3e";
 
     /// <summary>
     /// Gets the client id configured for a provider.
@@ -61,7 +67,8 @@ public sealed record OAuthClientConfiguration(string? GoogleClientId, string? Go
     }
 
     /// <summary>
-    /// Loads the configuration; environment variables take precedence over the settings file.
+    /// Loads the configuration; environment variables take precedence over the settings file, which takes precedence
+    /// over the built-in Microsoft client id.
     /// </summary>
     /// <param name="settingsPath">The path of the settings file; it need not exist.</param>
     /// <param name="getEnvironmentVariable">Reads an environment variable.</param>
@@ -73,7 +80,7 @@ public sealed record OAuthClientConfiguration(string? GoogleClientId, string? Go
         return new OAuthClientConfiguration(
             Pick(getEnvironmentVariable(GoogleClientIdVariable), fromFile.Google?.ClientId),
             Pick(getEnvironmentVariable(GoogleClientSecretVariable), fromFile.Google?.ClientSecret),
-            Pick(getEnvironmentVariable(MicrosoftClientIdVariable), fromFile.Microsoft?.ClientId));
+            Pick(getEnvironmentVariable(MicrosoftClientIdVariable), fromFile.Microsoft?.ClientId) ?? BuiltInMicrosoftClientId);
     }
 
     /// <summary>
