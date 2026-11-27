@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -103,10 +104,12 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
     }
 
     /// <summary>
-    /// Shows the current window when the macOS Dock icon is clicked.
+    /// Shows the current window when another instance was started, or when the macOS Dock icon is clicked.
     /// </summary>
     private void ShowWindowOnRequest()
     {
+        services.GetService<SingleInstance>()?.SetActivationHandler(
+            () => Dispatcher.UIThread.Post(() => _activator?.BringToFront()));
         if (TryGetFeature(typeof(IActivatableLifetime)) is IActivatableLifetime activatable)
         {
             activatable.Activated += (_, e) =>

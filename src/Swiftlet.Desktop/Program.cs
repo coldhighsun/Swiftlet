@@ -28,6 +28,11 @@ namespace Swiftlet.Desktop;
 internal static class Program
 {
     /// <summary>
+    /// How long a second instance waits for the first one to answer or to finish quitting.
+    /// </summary>
+    private static readonly TimeSpan InstanceTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>
     /// Starts the host (database, background sync) and then the desktop application.
     /// </summary>
     /// <param name="args">The command-line arguments.</param>
@@ -35,8 +40,18 @@ internal static class Program
     public static void Main(string[] args)
     {
         MailEncodings.Register();
-        var builder = Host.CreateApplicationBuilder(args);
         var dataDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Swiftlet");
+
+        // Only one instance may use the data, so this comes before anything else touches it.
+        var (outcome, instance) = SingleInstance.AcquireAsync(dataDirectory, InstanceTimeout).GetAwaiter().GetResult();
+        using var singleInstance = instance;
+        if (singleInstance is null)
+        {
+            ReportSecondInstance(dataDirectory, outcome);
+            return;
+        }
+
+        var builder = Host.CreateApplicationBuilder(args);
         var logger = LogSetup.Create(Path.Combine(dataDirectory, "logs"));
         builder.Services.AddSerilog(logger, dispose: true);
         LogProcessWideFailures(logger);
@@ -46,6 +61,8 @@ internal static class Program
             System.Runtime.InteropServices.RuntimeInformation.OSDescription,
             dataDirectory);
         ProtectDataDirectory(dataDirectory, logger);
+        singleInstance.Logger = new Serilog.Extensions.Logging.SerilogLoggerFactory(logger).CreateLogger(typeof(SingleInstance).FullName!);
+        builder.Services.AddSingleton(singleInstance);
         builder.Services.AddApplication();
         builder.Services.AddInfrastructure(dataDirectory);
         var settings = builder.Services.AddAppSettings(Path.Combine(dataDirectory, "settings.json"));
@@ -78,6 +95,8 @@ internal static class Program
         }
         finally
         {
+            // From here on a newly started instance waits for this one to be gone instead of asking it for its window.
+            singleInstance.StopListening();
             previews.Clear();
             if (startup.IsStarted)
             {
@@ -86,6 +105,22 @@ internal static class Program
 
             logger.Information("Swiftlet stopped");
         }
+    }
+
+    /// <summary>
+    /// Logs why this process ends without starting. The log of the running instance is left alone when all went well.
+    /// </summary>
+    /// <param name="dataDirectory">The application data directory.</param>
+    /// <param name="outcome">How the attempt to start ended.</param>
+    private static void ReportSecondInstance(string dataDirectory, SingleInstanceOutcome outcome)
+    {
+        if (outcome != SingleInstanceOutcome.Unavailable)
+        {
+            return;
+        }
+
+        using var logger = LogSetup.Create(Path.Combine(dataDirectory, "logs"));
+        logger.Warning("Swiftlet did not start: another instance holds the data directory but did not answer");
     }
 
     /// <summary>
