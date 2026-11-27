@@ -28,6 +28,8 @@
     <TextBox Text="{Binding Password}" PlaceholderText="{loc:Loc AddAccount_Password}" PasswordChar="●" />
     <TextBlock Classes="caption" Text="{Binding ProviderHint}" TextWrapping="Wrap"
                IsVisible="{Binding ProviderHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+    <HyperlinkButton Classes="link" Content="{Binding AppPasswordLinkText}" HorizontalAlignment="Left"
+                     NavigateUri="{Binding AppPasswordPage}" IsVisible="{Binding ShowAppPasswordLink}" />
 
     <Button Content="{loc:Loc AddAccount_ServerSettings}" Command="{Binding ToggleAdvancedCommand}" HorizontalAlignment="Left" />
     <Grid IsVisible="{Binding ShowAdvanced}" ColumnDefinitions="Auto,*,80,Auto" RowDefinitions="Auto,Auto" RowSpacing="8" ColumnSpacing="8">

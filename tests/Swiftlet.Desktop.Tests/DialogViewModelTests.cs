@@ -47,6 +47,53 @@ public class DialogViewModelTests
     }
 
     /// <summary>
+    /// Verifies a provider with a known app password page gets a link to it.
+    /// </summary>
+    /// <param name="email">The entered address.</param>
+    /// <param name="page">The expected page.</param>
+    /// <param name="text">A part of the expected link text.</param>
+    [Theory]
+    [InlineData("me@gmail.com", "https://myaccount.google.com/apppasswords", "Gmail")]
+    [InlineData("me@googlemail.com", "https://myaccount.google.com/apppasswords", "Gmail")]
+    [InlineData("me@icloud.com", "https://account.apple.com/", "iCloud")]
+    [InlineData("me@me.com", "https://account.apple.com/", "iCloud")]
+    public void AppPasswordLink_KnownProvider_PointsAtItsPage(string email, string page, string text)
+    {
+        var viewModel = new AddAccountViewModel(new FakeDispatcher(), TestLocalizer.Chinese());
+        var changes = new List<string?>();
+        viewModel.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+
+        viewModel.Email = email;
+
+        viewModel.ShowAppPasswordLink.Should().BeTrue();
+        viewModel.AppPasswordPage.Should().Be(new Uri(page));
+        viewModel.AppPasswordLinkText.Should().Contain(text);
+        changes.Should()
+            .Contain(nameof(AddAccountViewModel.ShowAppPasswordLink))
+            .And.Contain(nameof(AddAccountViewModel.AppPasswordPage))
+            .And.Contain(nameof(AddAccountViewModel.AppPasswordLinkText));
+    }
+
+    /// <summary>
+    /// Verifies there is no link for other servers and that a server typed by hand brings it back.
+    /// </summary>
+    [Fact]
+    public void AppPasswordLink_FollowsTypedImapHost()
+    {
+        var viewModel = new AddAccountViewModel(new FakeDispatcher(), TestLocalizer.Chinese());
+        viewModel.ShowAppPasswordLink.Should().BeFalse();
+
+        viewModel.Email = "me@qq.com";
+        viewModel.ShowAppPasswordLink.Should().BeFalse();
+        viewModel.AppPasswordPage.Should().BeNull();
+        viewModel.AppPasswordLinkText.Should().BeEmpty();
+
+        // A custom domain hosted by Google has no preset, so the user types the server by hand.
+        viewModel.ImapHost = " IMAP.Gmail.com ";
+        viewModel.ShowAppPasswordLink.Should().BeTrue();
+    }
+
+    /// <summary>
     /// Verifies the add command needs an email, a password and server hosts.
     /// </summary>
     [Fact]

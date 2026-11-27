@@ -428,6 +428,42 @@ public class UiSmokeTests
             TestContext.Current.CancellationToken);
     }
 
+    /// <summary>
+    /// Verifies the add-account dialog links an address to its provider's app password page, without an underline.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    /// <param name="provider">The mail domain without its suffix.</param>
+    /// <param name="caption">The expected link text.</param>
+    /// <param name="page">The expected page.</param>
+    [Theory]
+    [InlineData("en", "gmail", "Create a Gmail app password (requires 2-Step Verification)", "https://myaccount.google.com/apppasswords")]
+    [InlineData("zh-Hans", "gmail", "生成 Gmail 应用专用密码（需先开启两步验证）", "https://myaccount.google.com/apppasswords")]
+    [InlineData("en", "icloud", "Create an iCloud app-specific password (requires two-factor authentication)", "https://account.apple.com/")]
+    [InlineData("zh-Hans", "icloud", "生成 iCloud App 专用密码（需先开启双重认证）", "https://account.apple.com/")]
+    public async Task AddAccountWindow_AppPasswordProvider_ShowsLink(string language, string provider, string caption, string page)
+    {
+        await Session.Dispatch(
+            () =>
+            {
+                var localizer = language == "en" ? TestLocalizer.English() : TestLocalizer.Chinese();
+                var viewModel = new AddAccountViewModel(new FakeDispatcher(), localizer) { Email = $"me@{provider}.com" };
+                var window = new AddAccountWindow { DataContext = viewModel };
+                Render(window, $"add-account-{provider}-{language}", language);
+
+                var link = window.GetVisualDescendants().OfType<HyperlinkButton>().Single();
+                link.IsVisible.Should().BeTrue();
+                link.Content.Should().Be(caption);
+                link.NavigateUri.Should().Be(new Uri(page));
+                link.GetVisualDescendants().OfType<TextBlock>().Single().TextDecorations.Should().BeNullOrEmpty();
+
+                viewModel.Email = "me@qq.com";
+                Dispatcher.UIThread.RunJobs();
+                link.IsVisible.Should().BeFalse();
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
     [Theory]
     [InlineData("en", false, "Save")]
     [InlineData("zh-Hans", false, "保存")]

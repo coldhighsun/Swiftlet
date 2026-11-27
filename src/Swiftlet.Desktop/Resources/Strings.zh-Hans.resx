@@ -102,6 +102,8 @@
   <data name="AddAccount_Add" xml:space="preserve"><value>添加</value></data>
   <data name="AddAccount_PortMustBeNumber" xml:space="preserve"><value>端口必须是数字</value></data>
   <data name="AddAccount_HintAppPassword" xml:space="preserve"><value>{0}：请使用应用专用密码或授权码，而不是登录密码。</value></data>
+  <data name="AddAccount_CreateGmailAppPassword" xml:space="preserve"><value>生成 Gmail 应用专用密码（需先开启两步验证）</value></data>
+  <data name="AddAccount_CreateICloudAppPassword" xml:space="preserve"><value>生成 iCloud App 专用密码（需先开启双重认证）</value></data>
   <data name="AddAccount_SignInGoogle" xml:space="preserve"><value>使用 Google 登录</value></data>
   <data name="AddAccount_SignInMicrosoft" xml:space="preserve"><value>使用 Microsoft 登录</value></data>
   <data name="AddAccount_OrPassword" xml:space="preserve"><value>或使用密码</value></data>

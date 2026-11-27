@@ -49,6 +49,30 @@
     <Setter Property="Foreground" Value="{DynamicResource Brush.OnAccent}" />
   </Style>
 
+  <!-- Text links without an underline. The theme underlines the text block inside a link, and its template colors the
+       presenter per state, so both are overridden; the negative margin keeps the text aligned with its neighbours while
+       the hover background has some room. -->
+  <Style Selector="HyperlinkButton.link TextBlock">
+    <Setter Property="TextDecorations" Value="{x:Null}" />
+  </Style>
+  <Style Selector="HyperlinkButton.link">
+    <Setter Property="Foreground" Value="{DynamicResource Brush.AccentText}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Padding" Value="4" />
+    <Setter Property="Margin" Value="-4,0" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <ContentPresenter Content="{TemplateBinding Content}" Padding="{TemplateBinding Padding}"
+                          Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}"
+                          Foreground="{TemplateBinding Foreground}" />
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="HyperlinkButton.link:pointerover">
+    <Setter Property="Background" Value="{DynamicResource Brush.AccentSubtle}" />
+  </Style>
+
   <!-- The 8px control radius would turn the small check box into a circle. -->
   <Style Selector="CheckBox">
     <Setter Property="CornerRadius" Value="4" />

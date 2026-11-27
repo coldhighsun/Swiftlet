@@ -15,6 +15,26 @@ namespace Swiftlet.Desktop.ViewModels;
 public sealed partial class AddAccountViewModel : ObservableObject
 {
     /// <summary>
+    /// The IMAP host that identifies a Google mailbox, whether filled from the preset or typed for a custom domain.
+    /// </summary>
+    private const string GmailImapHost = "imap.gmail.com";
+
+    /// <summary>
+    /// The IMAP host that identifies an iCloud mailbox.
+    /// </summary>
+    private const string ICloudImapHost = "imap.mail.me.com";
+
+    /// <summary>
+    /// The Google page where the user creates an app password.
+    /// </summary>
+    private static readonly Uri GmailAppPasswordPage = new("https://myaccount.google.com/apppasswords");
+
+    /// <summary>
+    /// The Apple account page, whose sign-in and security section creates app-specific passwords.
+    /// </summary>
+    private static readonly Uri ICloudAppPasswordPage = new("https://account.apple.com/");
+
+    /// <summary>
     /// The request dispatcher.
     /// </summary>
     private readonly IRequestDispatcher _dispatcher;
@@ -83,7 +103,29 @@ public sealed partial class AddAccountViewModel : ObservableObject
     /// Gets or sets the IMAP host.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AppPasswordPage), nameof(AppPasswordLinkText), nameof(ShowAppPasswordLink))]
     public partial string ImapHost { get; set; }
+
+    /// <summary>
+    /// Gets the page where the provider of the IMAP server creates app passwords, or <see langword="null"/> if none is known.
+    /// </summary>
+    public Uri? AppPasswordPage =>
+        UsesImapHost(GmailImapHost) ? GmailAppPasswordPage
+        : UsesImapHost(ICloudImapHost) ? ICloudAppPasswordPage
+        : null;
+
+    /// <summary>
+    /// Gets the text of the app password link; empty when no link is shown.
+    /// </summary>
+    public string AppPasswordLinkText =>
+        UsesImapHost(GmailImapHost) ? _localizer["AddAccount_CreateGmailAppPassword"]
+        : UsesImapHost(ICloudImapHost) ? _localizer["AddAccount_CreateICloudAppPassword"]
+        : string.Empty;
+
+    /// <summary>
+    /// Gets a value indicating whether the app password link is shown.
+    /// </summary>
+    public bool ShowAppPasswordLink => AppPasswordPage is not null;
 
     /// <summary>
     /// Gets or sets the IMAP port as text.
@@ -271,6 +313,16 @@ public sealed partial class AddAccountViewModel : ObservableObject
         && !string.IsNullOrEmpty(Password)
         && !string.IsNullOrWhiteSpace(ImapHost)
         && !string.IsNullOrWhiteSpace(SmtpHost);
+
+    /// <summary>
+    /// Determines whether the entered IMAP server is the given host.
+    /// </summary>
+    /// <param name="host">The host name to compare with.</param>
+    /// <returns><see langword="true"/> if the entered server matches, ignoring case and surrounding spaces.</returns>
+    private bool UsesImapHost(string host)
+    {
+        return string.Equals(ImapHost.Trim(), host, StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// Re-evaluates the add command whenever an input changes and applies provider presets on email edits.
