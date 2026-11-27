@@ -854,6 +854,208 @@ public class MessageRepositoryTests
     }
 
     /// <summary>
+    /// Verifies the sender condition looks at the name and the address only, for indexed and short terms alike.
+    /// </summary>
+    /// <param name="from">The sender condition.</param>
+    [Theory]
+    [InlineData("carol")]
+    [InlineData("Walker")]
+    [InlineData("cw")]
+    [InlineData("carol walker")]
+    public async Task SearchAsync_From_MatchesSenderNameOrAddressOnly(string from)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var repository = db.CreateMessageRepository();
+        var now = DateTimeOffset.UtcNow;
+        await repository.AddAsync(MailMessage.Create(account.Id, folder.Id, 1, "hit", "Carol Walker cw", "carol@corp.com", "r", now, "text"), ct);
+        await repository.AddAsync(Build(account, folder, 2, "carol walker cw", "carol walker cw", now), ct);
+
+        var result = await repository.SearchAsync(new MessageSearchCriteria { From = from }, 0, 10, ct);
+
+        result.Should().ContainSingle().Which.Subject.Should().Be("hit");
+    }
+
+    /// <summary>
+    /// Verifies the recipient condition needs every term in the recipient addresses and treats wildcards literally.
+    /// </summary>
+    [Fact]
+    public async Task SearchAsync_To_MatchesRecipientAddresses()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var repository = db.CreateMessageRepository();
+        var now = DateTimeOffset.UtcNow;
+        await repository.AddAsync(MailMessage.Create(account.Id, folder.Id, 1, "both", "A", "a@x.com", "dev_team@corp.com, bob@corp.com", now, "t"), ct);
+        await repository.AddAsync(MailMessage.Create(account.Id, folder.Id, 2, "one", "A", "bob@corp.com", "devXteam@corp.com", now, "bob@corp.com"), ct);
+
+        var both = await repository.SearchAsync(new MessageSearchCriteria { To = "BOB dev" }, 0, 10, ct);
+        var literal = await repository.SearchAsync(new MessageSearchCriteria { To = "dev_team" }, 0, 10, ct);
+
+        both.Should().ContainSingle().Which.Subject.Should().Be("both");
+        literal.Should().ContainSingle().Which.Subject.Should().Be("both");
+    }
+
+    /// <summary>
+    /// Verifies the subject condition ignores the body, for indexed and short Chinese terms.
+    /// </summary>
+    /// <param name="subject">The subject condition.</param>
+    [Theory]
+    [InlineData("项目周报")]
+    [InlineData("周报")]
+    public async Task SearchAsync_Subject_IgnoresBodyMatches(string subject)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var repository = db.CreateMessageRepository();
+        await repository.AddAsync(Build(account, folder, 1, "项目周报", "正文", DateTimeOffset.UtcNow), ct);
+        await repository.AddAsync(Build(account, folder, 2, "其他", "项目周报", DateTimeOffset.UtcNow), ct);
+
+        var result = await repository.SearchAsync(new MessageSearchCriteria { Subject = subject }, 0, 10, ct);
+
+        result.Should().ContainSingle().Which.Uid.Should().Be(1u);
+    }
+
+    /// <summary>
+    /// Verifies quotes in a column condition are literal text instead of FTS syntax.
+    /// </summary>
+    [Fact]
+    public async Task SearchAsync_ColumnConditionsWithFtsSyntax_AreLiteral()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var repository = db.CreateMessageRepository();
+        await repository.AddAsync(Build(account, folder, 1, "the \"final\" draft", "text", DateTimeOffset.UtcNow), ct);
+
+        var found = await repository.SearchAsync(new MessageSearchCriteria { Subject = "\"final\"" }, 0, 10, ct);
+        var none = await repository.SearchAsync(new MessageSearchCriteria { From = "} OR Subject : \"draft" }, 0, 10, ct);
+
+        found.Should().ContainSingle();
+        none.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies the start of the sent range is included and its end is not.
+    /// </summary>
+    [Fact]
+    public async Task SearchAsync_SentRange_IncludesStartExcludesEnd()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var repository = db.CreateMessageRepository();
+        var start = new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.FromHours(8));
+        var end = start.AddDays(2);
+        await repository.AddAsync(Build(account, folder, 1, "before", "t", start.AddMilliseconds(-1)), ct);
+        await repository.AddAsync(Build(account, folder, 2, "first", "t", start), ct);
+        await repository.AddAsync(Build(account, folder, 3, "last", "t", end.AddMilliseconds(-1)), ct);
+        await repository.AddAsync(Build(account, folder, 4, "after", "t", end), ct);
+
+        var result = await repository.SearchAsync(new MessageSearchCriteria { SentFrom = start, SentBefore = end }, 0, 10, ct);
+
+        result.Select(m => m.Subject).Should().Equal("last", "first");
+    }
+
+    /// <summary>
+    /// Verifies the attachment, unread and starred conditions, alone and combined with a text term.
+    /// </summary>
+    [Fact]
+    public async Task SearchAsync_StateConditions_FilterMessages()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var repository = db.CreateMessageRepository();
+        var now = DateTimeOffset.UtcNow;
+        var attached = Build(account, folder, 1, "invoice attached", "t", now.AddMinutes(-3));
+        attached.AddAttachment("a.pdf", "application/pdf", 1);
+        attached.SetRead(true);
+        var starred = Build(account, folder, 2, "invoice starred", "t", now.AddMinutes(-2));
+        starred.SetRead(true);
+        starred.SetFlagged(true);
+        var unread = Build(account, folder, 3, "invoice unread", "t", now.AddMinutes(-1));
+        foreach (var message in (MailMessage[])[attached, starred, unread])
+        {
+            await repository.AddAsync(message, ct);
+        }
+
+        var withAttachments = await repository.SearchAsync(new MessageSearchCriteria { HasAttachments = true }, 0, 10, ct);
+        var flagged = await repository.SearchAsync(new MessageSearchCriteria { FlaggedOnly = true, Text = "invoice" }, 0, 10, ct);
+        var unreadOnly = await repository.SearchAsync(new MessageSearchCriteria { UnreadOnly = true }, 0, 10, ct);
+        var none = await repository.SearchAsync(new MessageSearchCriteria { UnreadOnly = true, HasAttachments = true }, 0, 10, ct);
+
+        withAttachments.Should().ContainSingle().Which.Attachments.Should().ContainSingle();
+        flagged.Should().ContainSingle().Which.Subject.Should().Be("invoice starred");
+        unreadOnly.Should().ContainSingle().Which.Subject.Should().Be("invoice unread");
+        none.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies conditions of different kinds all apply and are paged.
+    /// </summary>
+    [Fact]
+    public async Task SearchAsync_CombinedConditions_AllApplyAndPage()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var repository = db.CreateMessageRepository();
+        var now = DateTimeOffset.UtcNow;
+        await repository.AddAsync(Build(account, folder, 1, "report one", "revenue", now.AddMinutes(-3)), ct);
+        await repository.AddAsync(Build(account, folder, 2, "report two", "revenue", now.AddMinutes(-2)), ct);
+        await repository.AddAsync(Build(account, folder, 3, "report three", "revenue", now, "bob@example.com"), ct);
+        await repository.AddAsync(Build(account, folder, 4, "lunch", "revenue", now), ct);
+        var criteria = new MessageSearchCriteria { Text = "revenue", From = "alice@", To = "me", Subject = "report" };
+
+        var first = await repository.SearchAsync(criteria, 0, 1, ct);
+        var second = await repository.SearchAsync(criteria, 1, 5, ct);
+
+        first.Select(m => m.Subject).Should().Equal("report two");
+        second.Select(m => m.Subject).Should().Equal("report one");
+    }
+
+    /// <summary>
+    /// Verifies a folder search stays in the folder and lists All Mail rows that have a copy elsewhere.
+    /// </summary>
+    [Fact]
+    public async Task SearchAsync_FolderScope_ListsOnlyThatFolderDuplicatesIncluded()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, inbox) = await db.SeedAccountAsync(ct);
+        var allMail = MailFolder.Create(account.Id, "All Mail", "All Mail", FolderRole.AllMail);
+        await db.CreateFolderRepository().AddAsync(allMail, ct);
+        var repository = db.CreateMessageRepository();
+        await repository.AddRangeAsync([BuildWithId(account, inbox, 1, "budget", "s@x"), BuildWithId(account, allMail, 1, "budget", "s@x")], ct);
+
+        var result = await repository.SearchAsync(
+            new MessageSearchCriteria { Text = "budget", AccountId = account.Id, FolderId = allMail.Id }, 0, 10, ct);
+
+        result.Should().ContainSingle().Which.FolderId.Should().Be(allMail.Id);
+    }
+
+    /// <summary>
+    /// Verifies an account and folder without any condition find nothing.
+    /// </summary>
+    [Fact]
+    public async Task SearchAsync_ScopeWithoutConditions_ReturnsEmpty()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var repository = db.CreateMessageRepository();
+        await repository.AddAsync(Build(account, folder, 1, "s", "b", DateTimeOffset.UtcNow), ct);
+
+        var result = await repository.SearchAsync(new MessageSearchCriteria { AccountId = account.Id, FolderId = folder.Id }, 0, 10, ct);
+
+        result.Should().BeEmpty();
+    }
+
+    /// <summary>
     /// Verifies search hides the All Mail copy of a message that also lives elsewhere, but keeps archived-only mail.
     /// </summary>
     [Fact]

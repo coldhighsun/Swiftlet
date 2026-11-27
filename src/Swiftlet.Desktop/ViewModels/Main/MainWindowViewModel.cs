@@ -101,9 +101,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private Task _loadTask = Task.CompletedTask;
 
     /// <summary>
-    /// The trimmed search text of the results currently listed, or <see langword="null"/> when a folder, unified inbox or label view is shown.
+    /// The criteria of the search results currently listed, or <see langword="null"/> when a folder, unified inbox or label view is shown.
     /// </summary>
-    private string? _shownSearchText;
+    private MessageSearchCriteria? _shownSearch;
 
     /// <summary>
     /// Whether the local database may hold more messages for the current view than the ones listed.
@@ -544,6 +544,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public partial string SearchText { get; set; }
 
     /// <summary>
+    /// Gets the additional search conditions.
+    /// </summary>
+    public SearchFilterViewModel Filter { get; } = new();
+
+    /// <summary>
     /// Gets or sets the status line text.
     /// </summary>
     [ObservableProperty]
@@ -631,7 +636,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public async Task RefreshAsync()
     {
         await GuardedAsync("Error_Refresh", ReloadAccountsAsync);
-        if (string.IsNullOrWhiteSpace(SearchText))
+        if (EnteredCriteria().IsEmpty)
         {
             _loadTask = LoadMessagesAsync(SelectedNode, keepLoaded: true);
             await _loadTask;
@@ -639,37 +644,65 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Searches the cached messages within the selected account (or all accounts), or restores the folder view when blank.
+    /// Searches the cached messages with the search text and the additional conditions, or restores the folder view when
+    /// neither is entered.
     /// </summary>
     /// <returns>A task that completes when the search results are shown.</returns>
     [RelayCommand]
     private async Task SearchAsync()
     {
-        var text = SearchText.Trim();
-        if (text.Length == 0)
+        if (Filter.HasInvalidDateRange)
+        {
+            // The conditions say what is wrong, so they have to be visible.
+            Filter.IsExpanded = true;
+            return;
+        }
+
+        var criteria = EnteredCriteria();
+        if (criteria.IsEmpty)
         {
             _loadTask = LoadMessagesAsync(SelectedNode);
             await _loadTask;
             return;
         }
 
-        _logger.LogInformation("Searching ({Length} characters)", text.Length);
+        _logger.LogInformation("Searching ({Length} characters)", criteria.Text.Length);
         var version = ++_loadVersion;
         ListEmptyState = EmptyState.None;
         await GuardedAsync("Error_Search", async () =>
         {
-            var results = await FetchPageAsync(SelectedNode, text, 0, PageSize);
+            var results = await FetchPageAsync(SelectedNode, criteria, 0, PageSize);
             if (version != _loadVersion)
             {
                 return;
             }
 
-            _shownSearchText = text;
+            _shownSearch = criteria;
             _hasMore = results.Count >= PageSize;
             ReplaceMessages(results);
             ShowEmptyState();
             StatusText = _localizer.Format("Status_SearchResults", results.Count);
         });
+    }
+
+    /// <summary>
+    /// Removes the additional search conditions and searches again with what is left.
+    /// </summary>
+    /// <returns>A task that completes when the list shows the result.</returns>
+    [RelayCommand]
+    private async Task ClearSearchFiltersAsync()
+    {
+        Filter.Reset(SelectedNode);
+        await SearchAsync();
+    }
+
+    /// <summary>
+    /// Gets the search the entered text and conditions describe.
+    /// </summary>
+    /// <returns>The criteria.</returns>
+    private MessageSearchCriteria EnteredCriteria()
+    {
+        return Filter.BuildCriteria(SearchText, SelectedNode, _timeProvider.LocalTimeZone);
     }
 
     /// <summary>
@@ -1008,7 +1041,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <returns>A task that completes when the list has been replaced.</returns>
     private async Task ReloadViewAsync()
     {
-        if (_shownSearchText is not { } search)
+        if (_shownSearch is not { } search)
         {
             _loadTask = LoadMessagesAsync(SelectedNode, keepLoaded: true);
             await _loadTask;
@@ -1061,7 +1094,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (deleted || !Accounts.Contains(node))
         {
             // Cross-account views (unified inbox, labels, search results) may still list the removed account's messages.
-            await SearchAsync();
+            await ReloadViewAsync();
         }
 
         StatusText = deleted ? _localizer.Format("Status_AccountDeleted", address) : deleteError ?? StatusText;
@@ -1283,6 +1316,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         LogSelectedNode(value);
         SearchText = string.Empty;
+        Filter.Reset(value);
         _loadTask = LoadMessagesAsync(value);
         if (value is FolderNodeViewModel folder)
         {
@@ -1813,7 +1847,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private async Task LoadMessagesAsync(object? node, bool keepLoaded = false)
     {
         var version = ++_loadVersion;
-        _shownSearchText = null;
+        _shownSearch = null;
         if (node is not AccountNodeViewModel)
         {
             AccountPage = null;
@@ -1904,7 +1938,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
         else
         {
-            ListEmptyState = _shownSearchText is null ? EmptyState.EmptyView : EmptyState.NoSearchResults;
+            ListEmptyState = _shownSearch is null ? EmptyState.EmptyView : EmptyState.NoSearchResults;
         }
     }
 
@@ -1921,9 +1955,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         var node = SelectedNode;
-        var search = _shownSearchText;
+        var search = _shownSearch;
         var version = _loadVersion;
-        var skip = Messages.Count;
+        // A listed message that was read or unstarred since no longer matches such a search, so it must not be skipped over.
+        var skip = Messages.Count(m =>
+            (search is not { UnreadOnly: true } || m.IsUnread) && (search is not { FlaggedOnly: true } || m.IsFlagged));
         _isLoadingMore = true;
         try
         {
@@ -1955,15 +1991,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// Fetches one page of the messages of a view.
     /// </summary>
     /// <param name="node">The selected node.</param>
-    /// <param name="searchText">The search text, or <see langword="null"/> to list the node's messages.</param>
+    /// <param name="search">The search to page through, or <see langword="null"/> to list the node's messages.</param>
     /// <param name="skip">The number of messages to skip.</param>
     /// <param name="take">The maximum number of messages to return.</param>
     /// <returns>The messages, newest first.</returns>
-    private async Task<IReadOnlyList<MailMessage>> FetchPageAsync(object? node, string? searchText, int skip, int take)
+    private async Task<IReadOnlyList<MailMessage>> FetchPageAsync(object? node, MessageSearchCriteria? search, int skip, int take)
     {
-        if (searchText is not null)
+        if (search is not null)
         {
-            return await _dispatcher.SendAsync(new SearchMessagesQuery(searchText, ScopeAccountId(node), skip, take));
+            return await _dispatcher.SendAsync(new SearchMessagesQuery(search, skip, take));
         }
 
         return node switch

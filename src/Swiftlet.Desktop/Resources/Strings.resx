@@ -22,6 +22,24 @@
   <data name="Language_English" xml:space="preserve"><value>English</value></data>
 
   <data name="Search_Placeholder" xml:space="preserve"><value>Search mail (press Enter)</value></data>
+  <data name="Search_Filters" xml:space="preserve"><value>Search filters</value></data>
+  <data name="Search_From" xml:space="preserve"><value>From</value></data>
+  <data name="Search_FromPlaceholder" xml:space="preserve"><value>Name or address</value></data>
+  <data name="Search_To" xml:space="preserve"><value>To</value></data>
+  <data name="Search_ToPlaceholder" xml:space="preserve"><value>Address (To or Cc)</value></data>
+  <data name="Search_Subject" xml:space="preserve"><value>Subject</value></data>
+  <data name="Search_DateFrom" xml:space="preserve"><value>Start date</value></data>
+  <data name="Search_DateTo" xml:space="preserve"><value>End date</value></data>
+  <data name="Search_Scope" xml:space="preserve"><value>Search in</value></data>
+  <data name="Search_ScopeAccount" xml:space="preserve"><value>This account</value></data>
+  <data name="Search_ScopeFolder" xml:space="preserve"><value>This folder</value></data>
+  <data name="Search_ScopeAll" xml:space="preserve"><value>All accounts</value></data>
+  <data name="Search_InvalidDateRange" xml:space="preserve"><value>The start date is after the end date.</value></data>
+  <data name="Search_HasAttachments" xml:space="preserve"><value>Has attachments</value></data>
+  <data name="Search_UnreadOnly" xml:space="preserve"><value>Unread</value></data>
+  <data name="Search_FlaggedOnly" xml:space="preserve"><value>Starred</value></data>
+  <data name="Search_Clear" xml:space="preserve"><value>Clear</value></data>
+  <data name="Search_Run" xml:space="preserve"><value>Search</value></data>
   <data name="Reader_Placeholder" xml:space="preserve"><value>Select a message to read</value></data>
   <data name="Reader_From" xml:space="preserve"><value>From:</value></data>
   <data name="Reader_To" xml:space="preserve"><value>To:</value></data>

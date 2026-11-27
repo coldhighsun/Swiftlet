@@ -22,6 +22,24 @@
   <data name="Language_English" xml:space="preserve"><value>English</value></data>
 
   <data name="Search_Placeholder" xml:space="preserve"><value>搜索邮件（回车）</value></data>
+  <data name="Search_Filters" xml:space="preserve"><value>筛选条件</value></data>
+  <data name="Search_From" xml:space="preserve"><value>发件人</value></data>
+  <data name="Search_FromPlaceholder" xml:space="preserve"><value>姓名或邮箱地址</value></data>
+  <data name="Search_To" xml:space="preserve"><value>收件人</value></data>
+  <data name="Search_ToPlaceholder" xml:space="preserve"><value>邮箱地址（含抄送）</value></data>
+  <data name="Search_Subject" xml:space="preserve"><value>主题</value></data>
+  <data name="Search_DateFrom" xml:space="preserve"><value>起始日期</value></data>
+  <data name="Search_DateTo" xml:space="preserve"><value>结束日期</value></data>
+  <data name="Search_Scope" xml:space="preserve"><value>范围</value></data>
+  <data name="Search_ScopeAccount" xml:space="preserve"><value>当前账户</value></data>
+  <data name="Search_ScopeFolder" xml:space="preserve"><value>当前文件夹</value></data>
+  <data name="Search_ScopeAll" xml:space="preserve"><value>所有账户</value></data>
+  <data name="Search_InvalidDateRange" xml:space="preserve"><value>起始日期晚于结束日期。</value></data>
+  <data name="Search_HasAttachments" xml:space="preserve"><value>含附件</value></data>
+  <data name="Search_UnreadOnly" xml:space="preserve"><value>仅未读</value></data>
+  <data name="Search_FlaggedOnly" xml:space="preserve"><value>仅星标</value></data>
+  <data name="Search_Clear" xml:space="preserve"><value>清除</value></data>
+  <data name="Search_Run" xml:space="preserve"><value>搜索</value></data>
   <data name="Reader_Placeholder" xml:space="preserve"><value>选择一封邮件阅读</value></data>
   <data name="Reader_From" xml:space="preserve"><value>发件人：</value></data>
   <data name="Reader_To" xml:space="preserve"><value>收件人：</value></data>

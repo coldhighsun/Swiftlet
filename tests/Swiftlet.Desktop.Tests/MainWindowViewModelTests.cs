@@ -56,7 +56,7 @@ public class MainWindowViewModelTests
                 .ToList());
             Dispatcher.On<GetAccountSyncStatusQuery>(_ => SyncStatus);
             Dispatcher.On<GetMessagesQuery>(q => q.FolderId == Inbox.Id ? Messages.OrderByDescending(m => m.SentAt).ToList() : []);
-            Dispatcher.On<SearchMessagesQuery>(q => Messages.Where(m => m.Subject.Contains(q.Text, StringComparison.Ordinal)).ToList());
+            Dispatcher.On<SearchMessagesQuery>(q => Messages.Where(m => m.Subject.Contains(q.Criteria.Text, StringComparison.Ordinal)).ToList());
             Dispatcher.On<SetMessageReadCommand>(_ => Unit.Value);
             Dispatcher.On<SetMessageFlaggedCommand>(_ => Unit.Value);
             Dispatcher.On<SetMessageLabelCommand>(_ => Unit.Value);
@@ -703,8 +703,9 @@ public class MainWindowViewModelTests
         await scenario.ViewModel.SearchCommand.ExecuteAsync(null);
 
         var query = scenario.Dispatcher.Sent<SearchMessagesQuery>().Should().ContainSingle().Subject;
-        query.Text.Should().Be("Hello 2");
-        query.AccountId.Should().Be(scenario.Account.Id);
+        query.Criteria.Text.Should().Be("Hello 2");
+        query.Criteria.AccountId.Should().Be(scenario.Account.Id);
+        query.Criteria.FolderId.Should().BeNull();
         scenario.ViewModel.Messages.Select(m => m.Subject).Should().Equal("Hello 2");
         scenario.ViewModel.StatusText.Should().Contain("1");
     }
@@ -724,6 +725,198 @@ public class MainWindowViewModelTests
         await scenario.ViewModel.SearchCommand.ExecuteAsync(null);
 
         scenario.ViewModel.Messages.Should().HaveCount(2);
+    }
+
+    /// <summary>
+    /// Verifies the entered conditions are searched without any search text, with whole local days.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task SearchCommand_FiltersWithoutText_SearchesWithConditions()
+    {
+        var scenario = new Scenario();
+        await scenario.StartInInboxAsync();
+        var filter = scenario.ViewModel.Filter;
+        filter.From = " alice ";
+        filter.To = "bob@example.com";
+        filter.Subject = "Hello";
+        filter.DateFrom = new DateOnly(2026, 3, 1);
+        filter.DateTo = new DateOnly(2026, 3, 31);
+        filter.HasAttachments = true;
+        filter.UnreadOnly = true;
+        filter.FlaggedOnly = true;
+
+        await scenario.ViewModel.SearchCommand.ExecuteAsync(null);
+
+        scenario.Dispatcher.Sent<SearchMessagesQuery>().Should().ContainSingle().Which.Criteria.Should().Be(new MessageSearchCriteria
+        {
+            From = "alice",
+            To = "bob@example.com",
+            Subject = "Hello",
+            SentFrom = new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero),
+            SentBefore = new DateTimeOffset(2026, 4, 1, 0, 0, 0, TimeSpan.Zero),
+            HasAttachments = true,
+            UnreadOnly = true,
+            FlaggedOnly = true,
+            AccountId = scenario.Account.Id,
+        });
+    }
+
+    /// <summary>
+    /// Verifies the chosen scope limits the search to the folder or widens it to every account.
+    /// </summary>
+    /// <param name="scope">The chosen scope.</param>
+    /// <param name="hasAccount">Whether the search names the account.</param>
+    /// <param name="hasFolder">Whether the search names the folder.</param>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Theory]
+    [InlineData(SearchScope.CurrentAccount, true, false)]
+    [InlineData(SearchScope.CurrentFolder, true, true)]
+    [InlineData(SearchScope.AllAccounts, false, false)]
+    public async Task SearchCommand_Scope_LimitsAccountAndFolder(SearchScope scope, bool hasAccount, bool hasFolder)
+    {
+        var scenario = new Scenario();
+        await scenario.StartInInboxAsync();
+        scenario.ViewModel.SearchText = "Hello";
+        scenario.ViewModel.Filter.ScopeIndex = (int)scope;
+
+        await scenario.ViewModel.SearchCommand.ExecuteAsync(null);
+
+        var criteria = scenario.Dispatcher.Sent<SearchMessagesQuery>().Should().ContainSingle().Subject.Criteria;
+        criteria.AccountId.Should().Be(hasAccount ? scenario.Account.Id : null);
+        criteria.FolderId.Should().Be(hasFolder ? scenario.Inbox.Id : null);
+    }
+
+    /// <summary>
+    /// Verifies only the scopes that fit the tree selection are offered.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task SelectedNode_Changed_OffersMatchingScopes()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        var filter = scenario.ViewModel.Filter;
+
+        (filter.CanSearchAccount, filter.CanSearchFolder, filter.ScopeIndex).Should().Be((false, false, (int)SearchScope.AllAccounts));
+
+        scenario.ViewModel.SelectedNode = scenario.ViewModel.Accounts[0];
+        (filter.CanSearchAccount, filter.CanSearchFolder, filter.ScopeIndex).Should().Be((true, false, (int)SearchScope.CurrentAccount));
+
+        scenario.ViewModel.SelectedNode = scenario.ViewModel.Accounts[0].Folders[0];
+        (filter.CanSearchAccount, filter.CanSearchFolder, filter.ScopeIndex).Should().Be((true, true, (int)SearchScope.CurrentAccount));
+        filter.HasActiveFilters.Should().BeFalse();
+        await scenario.ViewModel.WhenIdleAsync();
+    }
+
+    /// <summary>
+    /// Verifies selecting another node removes the conditions but leaves them shown.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task SelectedNode_Changed_ResetsFiltersKeepingThemShown()
+    {
+        var scenario = new Scenario();
+        await scenario.StartInInboxAsync();
+        var filter = scenario.ViewModel.Filter;
+        filter.IsExpanded = true;
+        filter.From = "alice";
+        filter.HasAttachments = true;
+        filter.HasActiveFilters.Should().BeTrue();
+
+        scenario.ViewModel.SelectedNode = scenario.ViewModel.TreeRoots[0];
+        await scenario.ViewModel.WhenIdleAsync();
+
+        filter.From.Should().BeEmpty();
+        filter.HasAttachments.Should().BeFalse();
+        filter.HasActiveFilters.Should().BeFalse();
+        filter.IsExpanded.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies a start date after the end date shows the conditions and searches nothing.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task SearchCommand_InvalidDateRange_ShowsFiltersWithoutSearching()
+    {
+        var scenario = new Scenario();
+        await scenario.StartInInboxAsync();
+        scenario.ViewModel.Filter.DateFrom = new DateOnly(2026, 3, 2);
+        scenario.ViewModel.Filter.DateTo = new DateOnly(2026, 3, 1);
+
+        await scenario.ViewModel.SearchCommand.ExecuteAsync(null);
+
+        scenario.ViewModel.Filter.HasInvalidDateRange.Should().BeTrue();
+        scenario.ViewModel.Filter.IsExpanded.Should().BeTrue();
+        scenario.Dispatcher.Sent<SearchMessagesQuery>().Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies clearing the conditions searches again with the text alone, and restores the folder without text.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task ClearSearchFiltersCommand_WithAndWithoutText_SearchesOrRestoresFolder()
+    {
+        var scenario = new Scenario();
+        await scenario.StartInInboxAsync();
+        scenario.ViewModel.SearchText = "Hello 2";
+        scenario.ViewModel.Filter.UnreadOnly = true;
+        await scenario.ViewModel.SearchCommand.ExecuteAsync(null);
+
+        await scenario.ViewModel.ClearSearchFiltersCommand.ExecuteAsync(null);
+
+        scenario.Dispatcher.Sent<SearchMessagesQuery>().Last().Criteria.UnreadOnly.Should().BeFalse();
+        scenario.ViewModel.Messages.Should().ContainSingle();
+
+        scenario.ViewModel.SearchText = string.Empty;
+        await scenario.ViewModel.ClearSearchFiltersCommand.ExecuteAsync(null);
+
+        scenario.Dispatcher.Sent<SearchMessagesQuery>().Should().HaveCount(2);
+        scenario.ViewModel.Messages.Should().HaveCount(2);
+    }
+
+    /// <summary>
+    /// Verifies a search by conditions alone is neither replaced by a refresh nor lost when loading the next page.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task RefreshAndLoadMore_FilterOnlySearch_KeepsSearch()
+    {
+        var scenario = PagedScenario(120);
+        await scenario.StartInInboxAsync();
+        scenario.ViewModel.Filter.UnreadOnly = true;
+        await scenario.ViewModel.SearchCommand.ExecuteAsync(null);
+        var folderQueries = scenario.Dispatcher.Sent<GetMessagesQuery>().Count;
+
+        await scenario.ViewModel.RefreshAsync();
+        await scenario.ViewModel.LoadMoreAsync();
+
+        scenario.Dispatcher.Sent<GetMessagesQuery>().Should().HaveCount(folderQueries);
+        var last = scenario.Dispatcher.Sent<SearchMessagesQuery>().Last();
+        last.Criteria.UnreadOnly.Should().BeTrue();
+        last.Skip.Should().Be(50);
+        scenario.ViewModel.Messages.Should().HaveCount(100);
+    }
+
+    /// <summary>
+    /// Verifies the next page of an unread search skips only the listed messages that are still unread.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task LoadMoreAsync_UnreadSearchAfterReading_SkipsOnlyStillUnread()
+    {
+        var scenario = PagedScenario(120);
+        await scenario.StartInInboxAsync();
+        scenario.ViewModel.Filter.UnreadOnly = true;
+        await scenario.ViewModel.SearchCommand.ExecuteAsync(null);
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+        await scenario.ViewModel.WhenIdleAsync();
+
+        await scenario.ViewModel.LoadMoreAsync();
+
+        scenario.Dispatcher.Sent<SearchMessagesQuery>().Last().Skip.Should().Be(49);
     }
 
     /// <summary>
@@ -1487,7 +1680,7 @@ public class MainWindowViewModelTests
 
         await scenario.ViewModel.SearchCommand.ExecuteAsync(null);
 
-        scenario.Dispatcher.Sent<SearchMessagesQuery>().Should().ContainSingle().Which.AccountId.Should().BeNull();
+        scenario.Dispatcher.Sent<SearchMessagesQuery>().Should().ContainSingle().Which.Criteria.AccountId.Should().BeNull();
     }
 
     /// <summary>
@@ -2602,7 +2795,7 @@ public class MainWindowViewModelTests
             : []);
         scenario.Dispatcher.On<GetUnifiedInboxQuery>(q => scenario.Messages.OrderByDescending(m => m.SentAt).Skip(q.Skip).Take(q.Take).ToList());
         scenario.Dispatcher.On<SearchMessagesQuery>(q => scenario.Messages
-            .Where(m => m.Subject.Contains(q.Text, StringComparison.Ordinal))
+            .Where(m => m.Subject.Contains(q.Criteria.Text, StringComparison.Ordinal))
             .OrderByDescending(m => m.SentAt).Skip(q.Skip).Take(q.Take).ToList());
         return scenario;
     }
@@ -2682,7 +2875,7 @@ public class MainWindowViewModelTests
         await scenario.ViewModel.LoadMoreAsync();
 
         var last = scenario.Dispatcher.Sent<SearchMessagesQuery>().Last();
-        last.Text.Should().Be("Paged");
+        last.Criteria.Text.Should().Be("Paged");
         last.Skip.Should().Be(50);
         scenario.ViewModel.Messages.Should().HaveCount(100);
     }

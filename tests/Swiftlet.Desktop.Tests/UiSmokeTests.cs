@@ -2,6 +2,7 @@ using AwesomeAssertions;
 using Avalonia;
 using Avalonia.Input;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -1427,6 +1428,64 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies the search conditions are hidden until the filter button is pressed, stay inside the narrowest window and
+    /// are bound to the view model.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    [Theory]
+    [InlineData("zh-Hans")]
+    [InlineData("en")]
+    public async Task MainWindow_SearchFilters_ExpandOnDemandAndBind(string language)
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference(language);
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Localizer.SetPreference(language);
+                await scenario.StartInInboxAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel, Width = 800, Height = 600 };
+                Render(window, $"main-window-search-collapsed-{language}", language);
+                var panel = window.FindControl<Control>("SearchFilters")!;
+                var toggle = window.FindControl<ToggleButton>("FilterToggle")!;
+                panel.IsVisible.Should().BeFalse();
+
+                toggle.IsChecked = true;
+                var filter = scenario.ViewModel.Filter;
+                filter.From = "alice";
+                filter.DateFrom = new DateOnly(2026, 3, 2);
+                filter.DateTo = new DateOnly(2026, 3, 1);
+                Render(window, $"main-window-search-filters-{language}", language);
+
+                panel.IsVisible.Should().BeTrue();
+                window.FindControl<Control>("FilterIndicator")!.IsVisible.Should().BeTrue();
+                var pickers = panel.GetVisualDescendants().OfType<CalendarDatePicker>().ToList();
+                pickers.Select(p => p.SelectedDate).Should().Equal(new DateTime(2026, 3, 2), new DateTime(2026, 3, 1));
+                var pane = window.FindControl<Control>("MessagePane")!;
+                var inputs = panel.GetVisualDescendants().OfType<Control>()
+                    .Where(c => c is TextBox { TemplatedParent: null } or CalendarDatePicker or ComboBox or CheckBox or Button { TemplatedParent: null });
+                foreach (var input in inputs)
+                {
+                    input.TranslatePoint(new Point(input.Bounds.Width, 0), pane)!.Value.X.Should().BeLessThanOrEqualTo(pane.Bounds.Width);
+                }
+
+                pickers[1].SelectedDate = new DateTime(2026, 3, 5);
+                filter.DateTo.Should().Be(new DateOnly(2026, 3, 5));
+                var scope = panel.GetVisualDescendants().OfType<ComboBox>().Single();
+                scope.SelectedIndex.Should().Be((int)SearchScope.CurrentAccount);
+                scope.SelectedIndex = (int)SearchScope.CurrentFolder;
+                filter.ScopeIndex.Should().Be((int)SearchScope.CurrentFolder);
+
+                toggle.IsChecked = false;
+                Render(window, $"main-window-search-hidden-{language}", language);
+                panel.IsVisible.Should().BeFalse();
+                filter.From.Should().Be("alice");
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Verifies every button showing only an icon says what it does, both in a tooltip and to assistive technology.
     /// </summary>
     [Fact]
@@ -1720,6 +1779,7 @@ public class UiSmokeTests
                 await startup.RunCommand.ExecuteAsync(null);
                 var editAccount = new EditAccountViewModel(new FakeDispatcher(), localizer);
                 editAccount.Load(account, []);
+                scenario.ViewModel.Filter.IsExpanded = true;
                 var application = Avalonia.Application.Current!;
                 application.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark;
                 try

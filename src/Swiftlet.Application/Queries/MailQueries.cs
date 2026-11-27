@@ -182,17 +182,35 @@ public sealed class GetMessagesByLabelQueryHandler(IMessageRepository messages)
 /// <summary>
 /// Searches cached messages.
 /// </summary>
-/// <param name="Text">The search text.</param>
-/// <param name="AccountId">Restricts the search to one account, or <see langword="null"/> for all.</param>
+/// <param name="Criteria">The search conditions.</param>
 /// <param name="Skip">The number of results to skip.</param>
 /// <param name="Take">The maximum number of results.</param>
-public sealed record SearchMessagesQuery(string Text, Guid? AccountId, int Skip, int Take) : IQuery<IReadOnlyList<MailMessage>>, ILogDetails
+public sealed record SearchMessagesQuery(MessageSearchCriteria Criteria, int Skip, int Take) : IQuery<IReadOnlyList<MailMessage>>, ILogDetails
 {
     /// <inheritdoc />
     public string DescribeForLog(LogNames names)
     {
         ArgumentNullException.ThrowIfNull(names);
-        return $"{(AccountId is { } id ? names.Account(id) : "all accounts")}, {Text?.Length ?? 0} characters, skip {Skip}, take {Take}";
+        var scope = Criteria.AccountId is { } account ? names.Account(account) : "all accounts";
+        if (Criteria.FolderId is { } folder)
+        {
+            scope = $"{scope}, folder {names.Folder(folder)}";
+        }
+
+        // Only the names of the conditions: what the user searches for is never logged.
+        (bool IsSet, string Name)[] conditions =
+        [
+            (!string.IsNullOrWhiteSpace(Criteria.From), "from"),
+            (!string.IsNullOrWhiteSpace(Criteria.To), "to"),
+            (!string.IsNullOrWhiteSpace(Criteria.Subject), "subject"),
+            (Criteria.SentFrom is not null, "sent from"),
+            (Criteria.SentBefore is not null, "sent before"),
+            (Criteria.HasAttachments, "attachments"),
+            (Criteria.UnreadOnly, "unread"),
+            (Criteria.FlaggedOnly, "flagged"),
+        ];
+        var used = string.Join('/', conditions.Where(c => c.IsSet).Select(c => c.Name));
+        return $"{scope}, {Criteria.Text.Length} characters, conditions: {(used.Length == 0 ? "none" : used)}, skip {Skip}, take {Take}";
     }
 }
 
@@ -207,6 +225,6 @@ public sealed class SearchMessagesQueryHandler(IMessageRepository messages)
     public async ValueTask<IReadOnlyList<MailMessage>> Handle(SearchMessagesQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
-        return await messages.SearchAsync(query.Text, query.AccountId, query.Skip, query.Take, cancellationToken);
+        return await messages.SearchAsync(query.Criteria, query.Skip, query.Take, cancellationToken);
     }
 }

@@ -79,7 +79,7 @@ public class LoggingBehaviorTests
     }
 
     /// <summary>
-    /// Verifies a search logs the length of the search text but never the text.
+    /// Verifies a search logs the length of the search text and which conditions are set, but nothing that was entered.
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>
     [Fact]
@@ -88,9 +88,12 @@ public class LoggingBehaviorTests
         var logger = new ListLogger<LoggingBehavior<SearchMessagesQuery, int>>();
         var behavior = new LoggingBehavior<SearchMessagesQuery, int>(logger);
 
-        await behavior.Handle(new SearchMessagesQuery("hunter2", null, 0, 50), (_, _) => new ValueTask<int>(1), TestContext.Current.CancellationToken);
+        var criteria = new MessageSearchCriteria { Text = "hunter2", From = "secret@x.com", To = "boss", Subject = "salary", UnreadOnly = true };
 
-        logger.Entries.Single().Message.Should().Contain("all accounts, 7 characters").And.NotContain("hunter2");
+        await behavior.Handle(new SearchMessagesQuery(criteria, 0, 50), (_, _) => new ValueTask<int>(1), TestContext.Current.CancellationToken);
+
+        logger.Entries.Single().Message.Should().Contain("all accounts, 7 characters, conditions: from/to/subject/unread")
+            .And.NotContain("hunter2").And.NotContain("secret").And.NotContain("boss").And.NotContain("salary");
     }
 
     /// <summary>

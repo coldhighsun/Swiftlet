@@ -114,17 +114,15 @@ public interface IMessageRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Searches cached messages by subject, sender and body text, newest first.
+    /// Searches cached messages, newest first.
     /// </summary>
-    /// <param name="query">The user-entered search text; all terms must match.</param>
-    /// <param name="accountId">Restricts the search to one account, or <see langword="null"/> for all accounts.</param>
+    /// <param name="criteria">The conditions; all that are set must match. Empty criteria match nothing.</param>
     /// <param name="skip">The number of results to skip.</param>
     /// <param name="take">The maximum number of results.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The matching messages.</returns>
     Task<IReadOnlyList<MailMessage>> SearchAsync(
-        string query,
-        Guid? accountId,
+        MessageSearchCriteria criteria,
         int skip,
         int take,
         CancellationToken cancellationToken = default);

@@ -373,25 +373,24 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<MailMessage>> SearchAsync(
-        string query,
-        Guid? accountId,
+        MessageSearchCriteria criteria,
         int skip,
         int take,
         CancellationToken cancellationToken = default)
     {
-        var terms = (query ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (terms.Length == 0)
+        ArgumentNullException.ThrowIfNull(criteria);
+        if (criteria.IsEmpty)
         {
             return [];
         }
 
-        var accountIds = accountId is { } single ? [single] : await GetAccountIdsAsync(cancellationToken);
+        var accountIds = criteria.AccountId is { } single ? [single] : await GetAccountIdsAsync(cancellationToken);
         var results = new List<MailMessage>();
         foreach (var id in accountIds)
         {
             var context = await contexts.GetAsync(id, cancellationToken);
             // Every account returns its newest skip+take matches; the page is cut from the merged list.
-            results.AddRange(await SearchAccountAsync(context, terms, skip + take, cancellationToken));
+            results.AddRange(await SearchAccountAsync(context, criteria, skip + take, cancellationToken));
         }
 
         var page = results.OrderByDescending(m => m.SentAt).Skip(skip).Take(take).ToList();
@@ -590,49 +589,101 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
     /// Searches one account's database.
     /// </summary>
     /// <param name="context">The account's context.</param>
-    /// <param name="terms">The search terms; all must match.</param>
+    /// <param name="criteria">The search conditions; the account is the context's.</param>
     /// <param name="take">The maximum number of results.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The matching messages, newest first.</returns>
     private static async Task<List<MailMessage>> SearchAccountAsync(
         AccountDbContext context,
-        string[] terms,
+        MessageSearchCriteria criteria,
         int take,
         CancellationToken cancellationToken)
     {
-        IQueryable<MailMessage> source;
-        if (terms.All(t => t.Length >= MinTrigramLength))
-        {
-            var match = string.Join(' ', terms.Select(t => $"\"{t.Replace("\"", "\"\"", StringComparison.Ordinal)}\""));
-            source = context.Messages.FromSql(
+        var textTerms = SplitTerms(criteria.Text);
+        var fromTerms = SplitTerms(criteria.From);
+        var subjectTerms = SplitTerms(criteria.Subject);
+
+        // Every term long enough for the trigram index goes into one MATCH expression, limited to its columns.
+        var match = string.Join(
+            " AND ",
+            textTerms.Where(IsIndexable).Select(Quote)
+                .Concat(fromTerms.Where(IsIndexable).Select(t => $"{{FromName FromAddress}} : {Quote(t)}"))
+                .Concat(subjectTerms.Where(IsIndexable).Select(t => $"Subject : {Quote(t)}")));
+        var source = match.Length == 0
+            ? context.Messages
+            : context.Messages.FromSql(
                 $"""
                 SELECT m.* FROM Messages AS m
                 JOIN MessageSearch ON MessageSearch.rowid = m.rowid
                 WHERE MessageSearch MATCH {match}
                 """);
+
+        // Terms shorter than a trigram cannot use the FTS index; fall back to LIKE.
+        foreach (var pattern in textTerms.Where(t => !IsIndexable(t)).Select(ToLikePattern))
+        {
+            source = source.Where(m =>
+                EF.Functions.Like(m.Subject, pattern, "\\")
+                || EF.Functions.Like(m.FromName, pattern, "\\")
+                || EF.Functions.Like(m.FromAddress, pattern, "\\")
+                || EF.Functions.Like(m.BodyText, pattern, "\\"));
+        }
+
+        foreach (var pattern in fromTerms.Where(t => !IsIndexable(t)).Select(ToLikePattern))
+        {
+            source = source.Where(m =>
+                EF.Functions.Like(m.FromName, pattern, "\\") || EF.Functions.Like(m.FromAddress, pattern, "\\"));
+        }
+
+        foreach (var pattern in subjectTerms.Where(t => !IsIndexable(t)).Select(ToLikePattern))
+        {
+            source = source.Where(m => EF.Functions.Like(m.Subject, pattern, "\\"));
+        }
+
+        // Recipients are not part of the FTS index.
+        foreach (var pattern in SplitTerms(criteria.To).Select(ToLikePattern))
+        {
+            source = source.Where(m => EF.Functions.Like(m.Recipients, pattern, "\\"));
+        }
+
+        if (criteria.SentFrom is { } sentFrom)
+        {
+            source = source.Where(m => m.SentAt >= sentFrom);
+        }
+
+        if (criteria.SentBefore is { } sentBefore)
+        {
+            source = source.Where(m => m.SentAt < sentBefore);
+        }
+
+        if (criteria.HasAttachments)
+        {
+            source = source.Where(m => m.Attachments.Any());
+        }
+
+        if (criteria.UnreadOnly)
+        {
+            source = source.Where(m => !m.IsRead);
+        }
+
+        if (criteria.FlaggedOnly)
+        {
+            source = source.Where(m => m.IsFlagged);
+        }
+
+        source = source.Where(m => !m.IsDeletePending);
+        if (criteria.FolderId is { } folderId)
+        {
+            source = source.Where(m => m.FolderId == folderId);
         }
         else
         {
-            // Terms shorter than a trigram cannot use the FTS index; fall back to LIKE.
-            source = context.Messages;
-            foreach (var term in terms)
-            {
-                var pattern = $"%{EscapeLike(term)}%";
-                source = source.Where(m =>
-                    EF.Functions.Like(m.Subject, pattern, "\\")
-                    || EF.Functions.Like(m.FromName, pattern, "\\")
-                    || EF.Functions.Like(m.FromAddress, pattern, "\\")
-                    || EF.Functions.Like(m.BodyText, pattern, "\\"));
-            }
-        }
-
-        // The "All Mail" copy of a message that also lives in another folder would show up twice; keep only the other copy.
-        // Messages without a Message-ID cannot be matched and stay visible.
-        source = source.Where(m =>
-            !m.IsDeletePending
-            && (m.MessageIdHeader == null
+            // The "All Mail" copy of a message that also lives in another folder would show up twice; keep only the other
+            // copy. Messages without a Message-ID cannot be matched and stay visible.
+            source = source.Where(m =>
+                m.MessageIdHeader == null
                 || !context.Folders.Any(f => f.Id == m.FolderId && f.Role == FolderRole.AllMail)
-                || !context.Messages.Any(n => !n.IsDeletePending && n.FolderId != m.FolderId && n.MessageIdHeader == m.MessageIdHeader)));
+                || !context.Messages.Any(n => !n.IsDeletePending && n.FolderId != m.FolderId && n.MessageIdHeader == m.MessageIdHeader));
+        }
 
         return await source
             .Include(m => m.Attachments)
@@ -703,6 +754,46 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
         {
             await global.MessageLabels.Where(l => batch.Contains(l.MessageId)).ExecuteDeleteAsync(cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Splits entered search text into its terms.
+    /// </summary>
+    /// <param name="text">The entered text.</param>
+    /// <returns>The space-separated terms.</returns>
+    private static string[] SplitTerms(string text)
+    {
+        return text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    /// <summary>
+    /// Says whether a term can be looked up in the trigram index.
+    /// </summary>
+    /// <param name="term">The term.</param>
+    /// <returns><see langword="true"/> when the term is long enough.</returns>
+    private static bool IsIndexable(string term)
+    {
+        return term.Length >= MinTrigramLength;
+    }
+
+    /// <summary>
+    /// Escapes a term into an FTS5 string literal, so user input is never read as query syntax.
+    /// </summary>
+    /// <param name="term">The raw term.</param>
+    /// <returns>The quoted term.</returns>
+    private static string Quote(string term)
+    {
+        return $"\"{term.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
+    }
+
+    /// <summary>
+    /// Builds the LIKE pattern matching values that contain a term.
+    /// </summary>
+    /// <param name="term">The raw term.</param>
+    /// <returns>The pattern, using backslash as the escape character.</returns>
+    private static string ToLikePattern(string term)
+    {
+        return $"%{EscapeLike(term)}%";
     }
 
     /// <summary>

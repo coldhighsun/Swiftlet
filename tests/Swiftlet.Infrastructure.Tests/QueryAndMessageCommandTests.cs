@@ -86,7 +86,7 @@ public class QueryAndMessageCommandTests
         await repository.AddAsync(MailMessage.Create(account.Id, folder.Id, 2, "beta topic", "A", "a@example.com", "r", now, "b"), ct);
 
         var page = await new GetMessagesQueryHandler(repository).Handle(new GetMessagesQuery(account.Id, folder.Id, 0, 10), ct);
-        var found = await new SearchMessagesQueryHandler(repository).Handle(new SearchMessagesQuery("alpha", account.Id, 0, 10), ct);
+        var found = await new SearchMessagesQueryHandler(repository).Handle(new SearchMessagesQuery(new MessageSearchCriteria { Text = "alpha", AccountId = account.Id }, 0, 10), ct);
         var folders = await new GetFoldersQueryHandler(db.CreateFolderRepository()).Handle(new GetFoldersQuery(account.Id), ct);
         var accounts = await new GetAccountsQueryHandler(db.CreateAccountRepository()).Handle(new GetAccountsQuery(), ct);
 
