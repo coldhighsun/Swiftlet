@@ -349,7 +349,7 @@ public sealed class AiMessageRequestTests : IAsyncLifetime
         var act = () => ClassifyAsync([.. Enumerable.Repeat(Reference(_message), 10)]);
 
         (await act.Should().ThrowAsync<AiException>()).Which.Failure.Should().Be(AiFailure.Unauthorized);
-        _model.Prompts.Count.Should().BeLessThan(10);
+        _model.Prompts.Count.Should().BeLessThanOrEqualTo(2, "only the requests already running are sent");
     }
 
     /// <summary>

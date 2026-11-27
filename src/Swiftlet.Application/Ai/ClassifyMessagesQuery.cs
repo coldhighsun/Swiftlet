@@ -120,7 +120,7 @@ public sealed class ClassifyMessagesQueryHandler(
         }
 
         using var running = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        using var slots = new SemaphoreSlim(Concurrency);
+        using var slots = new RequestSlots(Concurrency);
         var tasks = loaded
             .Select(item => ClassifyAsync(target, item.Reference, item.Message, existing, slots, running.Token))
             .ToList();
@@ -147,7 +147,7 @@ public sealed class ClassifyMessagesQueryHandler(
     /// <param name="reference">The message identifiers.</param>
     /// <param name="message">The message, or <see langword="null"/> when it is gone.</param>
     /// <param name="existing">The existing labels.</param>
-    /// <param name="slots">Limits the requests running at once.</param>
+    /// <param name="slots">Limits the requests running at once and stops them after a general failure.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The result.</returns>
     /// <exception cref="AiException">The service cannot be used at all.</exception>
@@ -156,7 +156,7 @@ public sealed class ClassifyMessagesQueryHandler(
         MessageReference reference,
         MailMessage? message,
         IReadOnlyList<Label> existing,
-        SemaphoreSlim slots,
+        RequestSlots slots,
         CancellationToken cancellationToken)
     {
         if (message is null)
@@ -164,9 +164,16 @@ public sealed class ClassifyMessagesQueryHandler(
             return new MessageClassification(reference, ClassificationStatus.NoSuggestion, []);
         }
 
-        await slots.WaitAsync(cancellationToken);
+        await slots.Free.WaitAsync(cancellationToken);
         try
         {
+            // The caller may not have seen the failure yet, so cancellation alone does not stop the waiting requests.
+            // Whichever of the failed tasks it sees first, it gets the same reason.
+            if (slots.GeneralFailure is { } earlier)
+            {
+                throw new AiException(earlier.Failure, earlier.StatusCode);
+            }
+
             var content = AiContentBuilder.Build(
                 message, Math.Min(target.Configuration.MaxInputCharacters, MaxBodyCharacters));
             var instructions = AiPrompts.Classify([.. existing.Select(l => l.Name)], content.Tag);
@@ -198,9 +205,47 @@ public sealed class ClassifyMessagesQueryHandler(
             // May concern this message only, for example its size; the others are still tried.
             return new MessageClassification(reference, ClassificationStatus.Failed, [], Failure: ex.Failure);
         }
+        catch (AiException ex)
+        {
+            // Concerns every message; remembered before the slot is freed, so no further request is sent.
+            slots.GeneralFailure = ex;
+            throw;
+        }
         finally
         {
-            slots.Release();
+            slots.Free.Release();
+        }
+    }
+
+    /// <summary>
+    /// What the requests of one query share.
+    /// </summary>
+    /// <param name="count">How many requests may run at once.</param>
+    private sealed class RequestSlots(int count) : IDisposable
+    {
+        /// <summary>
+        /// The failure that concerns every message, once there is one.
+        /// </summary>
+        private volatile AiException? _generalFailure;
+
+        /// <summary>
+        /// Gets the free slots.
+        /// </summary>
+        public SemaphoreSlim Free { get; } = new(count);
+
+        /// <summary>
+        /// Gets or sets the failure that concerns every message.
+        /// </summary>
+        public AiException? GeneralFailure
+        {
+            get => _generalFailure;
+            set => _generalFailure = value;
+        }
+
+        /// <inheritdoc />
+        public void Dispose()
+        {
+            Free.Dispose();
         }
     }
 }
