@@ -370,6 +370,7 @@ public class DeletionWorkerTests
             services.AddScoped<IAccountRepository, AccountRepository>();
             services.AddScoped<IFolderRepository, FolderRepository>();
             services.AddScoped<IMessageRepository, MessageRepository>();
+            services.AddSingleton<FlagCoordinator>();
             services.AddScoped<PendingDeletionService>();
             services.AddSingleton<AccountConnectionRevisions>();
             services.AddSingleton<DeletionWorker>();

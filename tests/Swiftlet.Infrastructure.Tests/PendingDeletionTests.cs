@@ -655,6 +655,126 @@ public class PendingDeletionTests
     }
 
     /// <summary>
+    /// Verifies local flag changes reach the server before the messages leave their folder, so the moved copies keep them.
+    /// </summary>
+    [Fact]
+    public async Task ProcessBatch_MoveWithPendingFlags_WritesFlagsBeforeMoving()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var s = await Scenario.CreateAsync(ct);
+        await s.AddFolderAsync("Trash", FolderRole.Trash, ct);
+        var read = await s.AddAsync(s.Inbox, 5, ct);
+        var untouched = await s.AddAsync(s.Inbox, 6, ct);
+        await s.MarkReadAsync(read, ct);
+        await s.MarkAsync(ct, read, untouched);
+        var movedWhenFlagsWereWritten = -1;
+        s.Server.OnSetFlags = (_, _) => movedWhenFlagsWereWritten = s.Server.DeleteCalls.Count;
+
+        // Act
+        await s.ProcessAsync(ct);
+
+        // Assert
+        var call = s.Server.SetFlagsCalls.Should().ContainSingle().Which;
+        call.Folder.Should().Be("INBOX");
+        call.Updates.Should().Equal(new FlagUpdate(5, true, false));
+        movedWhenFlagsWereWritten.Should().Be(0);
+        s.Server.DeleteCalls.Should().ContainSingle();
+    }
+
+    /// <summary>
+    /// Verifies a re-homed message no longer waits for a flag push once its flags were written before the move.
+    /// </summary>
+    [Fact]
+    public async Task ProcessBatch_RehomedWithPendingFlags_ClearsTheMark()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var s = await Scenario.CreateAsync(ct);
+        await s.AddSyncedTrashAsync(ct);
+        var message = await s.AddAsync(s.Inbox, 5, ct);
+        await s.MarkReadAsync(message, ct);
+        await s.MarkAsync(ct, message);
+
+        // Act
+        await s.ProcessAsync(ct);
+
+        // Assert
+        var stored = (await s.FindAsync(message.Id, ct))!;
+        stored.IsRead.Should().BeTrue();
+        stored.IsFlagSyncPending.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies a server refusing flag changes does not stop the move, and the change stays pending.
+    /// </summary>
+    [Fact]
+    public async Task ProcessBatch_FlagsRefused_StillMovesAndKeepsTheMark()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var s = await Scenario.CreateAsync(ct);
+        await s.AddSyncedTrashAsync(ct);
+        var message = await s.AddAsync(s.Inbox, 5, ct);
+        await s.MarkReadAsync(message, ct);
+        await s.MarkAsync(ct, message);
+        s.Server.SetFlagsFailure = new MailOperationRejectedException("read only");
+
+        // Act
+        var result = await s.ProcessAsync(ct);
+
+        // Assert
+        result!.Error.Should().BeNull();
+        s.Server.DeleteCalls.Should().ContainSingle();
+        (await s.FindAsync(message.Id, ct))!.IsFlagSyncPending.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies a lost connection while writing flags moves nothing, so the whole step is repeated later.
+    /// </summary>
+    [Fact]
+    public async Task ProcessBatch_FlagWriteFails_MovesNothing()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var s = await Scenario.CreateAsync(ct);
+        await s.AddFolderAsync("Trash", FolderRole.Trash, ct);
+        var message = await s.AddAsync(s.Inbox, 5, ct);
+        await s.MarkReadAsync(message, ct);
+        await s.MarkAsync(ct, message);
+        s.Server.SetFlagsFailure = new IOException("connection lost");
+
+        // Act
+        var process = () => s.ProcessAsync(ct);
+
+        // Assert
+        await process.Should().ThrowAsync<IOException>();
+        s.Server.DeleteCalls.Should().BeEmpty();
+        (await s.FindAsync(message.Id, ct))!.IsDeletePending.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies a permanent delete does not bother writing flags.
+    /// </summary>
+    [Fact]
+    public async Task ProcessBatch_PermanentDeleteWithPendingFlags_WritesNoFlags()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var s = await Scenario.CreateAsync(ct);
+        var message = await s.AddAsync(s.Inbox, 5, ct);
+        await s.MarkReadAsync(message, ct);
+        await s.MarkAsync(ct, message);
+
+        // Act
+        await s.ProcessAsync(ct);
+
+        // Assert
+        s.Server.SetFlagsCalls.Should().BeEmpty();
+        s.Server.DeleteCalls.Should().ContainSingle();
+    }
+
+    /// <summary>
     /// An account with an INBOX, its repositories and a scripted server.
     /// </summary>
     private sealed class Scenario : IAsyncDisposable
@@ -672,7 +792,7 @@ public class PendingDeletionTests
             Inbox = inbox;
             Messages = db.CreateMessageRepository();
             Folders = db.CreateFolderRepository();
-            Service = new PendingDeletionService(Folders, Messages, NullLogger<PendingDeletionService>.Instance);
+            Service = new PendingDeletionService(Folders, Messages, new FlagCoordinator(), NullLogger<PendingDeletionService>.Instance);
         }
 
         /// <summary>
@@ -784,6 +904,18 @@ public class PendingDeletionTests
 
             await Messages.AddAsync(message, cancellationToken);
             return message;
+        }
+
+        /// <summary>
+        /// Marks a cached message as read, which leaves a flag change waiting for the server.
+        /// </summary>
+        /// <param name="message">The message.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>A task that completes when the change is stored.</returns>
+        public async Task MarkReadAsync(MailMessage message, CancellationToken cancellationToken)
+        {
+            message.SetRead(true);
+            await Messages.SaveChangesAsync(cancellationToken);
         }
 
         /// <summary>

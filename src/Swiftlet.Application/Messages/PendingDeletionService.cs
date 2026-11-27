@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Application.Logging;
+using Swiftlet.Application.Sync;
 using Swiftlet.Domain.Folders;
 using Swiftlet.Domain.Messages;
 
@@ -22,11 +23,13 @@ public sealed record DeletionBatchResult(string FolderName, int Deleted, int Rem
 /// </summary>
 /// <param name="folders">The folder repository.</param>
 /// <param name="messages">The message repository.</param>
+/// <param name="flags">Keeps a flag push away from a folder while messages leave it.</param>
 /// <param name="logger">The logger.</param>
 /// <param name="names">Resolves the names shown in the log; optional.</param>
 public sealed class PendingDeletionService(
     IFolderRepository folders,
     IMessageRepository messages,
+    FlagCoordinator flags,
     ILogger<PendingDeletionService> logger,
     LogNames? names = null)
 {
@@ -55,7 +58,7 @@ public sealed class PendingDeletionService(
     /// <summary>
     /// Deletes or moves the next batch of one folder on the server and updates the cache once the server confirmed.
     /// All messages of a batch share one destination.
-    /// The caller must hold the account's <see cref="Sync.SyncCoordinator"/> lock so no sync changes the folders meanwhile.
+    /// The caller must hold the account's <see cref="SyncCoordinator"/> lock so no sync changes the folders meanwhile.
     /// A failure that may pass (such as a lost connection) is thrown and leaves everything pending.
     /// </summary>
     /// <param name="session">The IMAP session.</param>
@@ -144,12 +147,86 @@ public sealed class PendingDeletionService(
         IReadOnlyList<PendingDeletion> batch,
         CancellationToken cancellationToken)
     {
+        if (destination is null)
+        {
+            await RemoveAsync(session, folder, destination, batch, cancellationToken);
+        }
+        else
+        {
+            // A moved message takes the server's flags with it, so local changes must get there first. The flag lock keeps
+            // an immediate push from writing to the old UID after the message has left.
+            await flags.RunExclusiveAsync(
+                folder.Id,
+                async () =>
+                {
+                    await PushFlagsAsync(session, folder, batch, cancellationToken);
+                    await RemoveAsync(session, folder, destination, batch, cancellationToken);
+                    return batch.Count;
+                },
+                cancellationToken);
+        }
+
+        var remaining = await messages.CountPendingDeletionsAsync(folder.AccountId, cancellationToken);
+        return new DeletionBatchResult(folder.FullName, batch.Count, remaining);
+    }
+
+    /// <summary>
+    /// Deletes or moves messages on the server and then updates the cache.
+    /// </summary>
+    /// <param name="session">The IMAP session.</param>
+    /// <param name="folder">The folder.</param>
+    /// <param name="destination">The folder to move the messages to, or <see langword="null"/> to delete permanently.</param>
+    /// <param name="batch">The messages.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the cache is up to date.</returns>
+    private async Task RemoveAsync(
+        IImapSession session,
+        MailFolder folder,
+        MailFolder? destination,
+        IReadOnlyList<PendingDeletion> batch,
+        CancellationToken cancellationToken)
+    {
         var moved = await session.DeleteMessagesAsync(folder.FullName, [.. batch.Select(p => p.Uid)], destination?.FullName, cancellationToken);
 
         // Only after the server confirmed: a failure above leaves the local rows pending.
         await RemoveCachedAsync(session, folder.AccountId, destination, batch, moved, cancellationToken);
-        var remaining = await messages.CountPendingDeletionsAsync(folder.AccountId, cancellationToken);
-        return new DeletionBatchResult(folder.FullName, batch.Count, remaining);
+    }
+
+    /// <summary>
+    /// Writes the local flag changes of messages that are about to be moved to the server.
+    /// </summary>
+    /// <param name="session">The IMAP session.</param>
+    /// <param name="folder">The folder still holding the messages.</param>
+    /// <param name="batch">The messages.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the flags are written or the server refused them.</returns>
+    private async Task PushFlagsAsync(
+        IImapSession session,
+        MailFolder folder,
+        IReadOnlyList<PendingDeletion> batch,
+        CancellationToken cancellationToken)
+    {
+        var ids = batch.Select(p => p.Id).ToHashSet();
+        var pending = (await messages.GetPendingFlagStatesAsync(folder.AccountId, folder.Id, cancellationToken))
+            .Where(s => ids.Contains(s.Id))
+            .ToList();
+        if (pending.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await session.SetFlagsAsync(folder.FullName, [.. pending.Select(s => new FlagUpdate(s.Uid, s.IsRead, s.IsFlagged))], cancellationToken);
+        }
+        catch (MailOperationRejectedException ex)
+        {
+            // A folder that refuses flag changes may still let messages leave; the rows stay marked for a later push.
+            logger.LogWarning(ex, "Could not write flags in {Folder} before moving messages out of it.", folder.FullName);
+            return;
+        }
+
+        await messages.ClearFlagSyncPendingAsync(folder.AccountId, pending, cancellationToken);
     }
 
     /// <summary>

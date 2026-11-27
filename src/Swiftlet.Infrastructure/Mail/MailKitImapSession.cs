@@ -429,16 +429,23 @@ internal sealed class MailKitImapSession(ImapClient client, ILogger<MailKitImapS
         }
 
         logger.LogDebug("Setting flags of {Count} messages in {Folder}", updates.Count, folderFullName);
-        var folder = await client.GetFolderAsync(folderFullName, cancellationToken);
-        await folder.OpenAsync(FolderAccess.ReadWrite, cancellationToken);
+        try
+        {
+            var folder = await client.GetFolderAsync(folderFullName, cancellationToken);
+            await folder.OpenAsync(FolderAccess.ReadWrite, cancellationToken);
 
-        // Group by target value so at most four STORE commands are issued. Only \Seen and \Flagged are touched, so
-        // other flags such as \Answered survive. A UID that no longer exists is simply ignored by servers on STORE,
-        // and errors are deliberately not swallowed. Not unit-testable without a real IMAP server.
-        await StoreAsync(folder, updates.Where(u => u.IsRead), MessageFlags.Seen, true, cancellationToken);
-        await StoreAsync(folder, updates.Where(u => !u.IsRead), MessageFlags.Seen, false, cancellationToken);
-        await StoreAsync(folder, updates.Where(u => u.IsFlagged), MessageFlags.Flagged, true, cancellationToken);
-        await StoreAsync(folder, updates.Where(u => !u.IsFlagged), MessageFlags.Flagged, false, cancellationToken);
+            // Group by target value so at most four STORE commands are issued. Only \Seen and \Flagged are touched, so
+            // other flags such as \Answered survive. A UID that no longer exists is simply ignored by servers on STORE,
+            // and errors are deliberately not swallowed. Not unit-testable without a real IMAP server.
+            await StoreAsync(folder, updates.Where(u => u.IsRead), MessageFlags.Seen, true, cancellationToken);
+            await StoreAsync(folder, updates.Where(u => !u.IsRead), MessageFlags.Seen, false, cancellationToken);
+            await StoreAsync(folder, updates.Where(u => u.IsFlagged), MessageFlags.Flagged, true, cancellationToken);
+            await StoreAsync(folder, updates.Where(u => !u.IsFlagged), MessageFlags.Flagged, false, cancellationToken);
+        }
+        catch (Exception ex) when (ex is ImapCommandException or FolderNotFoundException)
+        {
+            throw Rejected(folderFullName, ex);
+        }
     }
 
     /// <summary>
