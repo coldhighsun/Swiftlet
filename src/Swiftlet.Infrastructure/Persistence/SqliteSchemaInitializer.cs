@@ -233,6 +233,7 @@ public static class SqliteSchemaInitializer
         await context.Database.EnsureCreatedAsync(cancellationToken);
         await EnsureFlagSyncColumnAsync(context, cancellationToken);
         await EnsureDeletionColumnsAsync(context, cancellationToken);
+        await EnsurePriorityColumnAsync(context, cancellationToken);
 
         // Same name EF gives the index, so a new database (created by EnsureCreated above) is unaffected.
         await context.Database.ExecuteSqlRawAsync(
@@ -322,6 +323,21 @@ public static class SqliteSchemaInitializer
         // Covers the unread count of the folder tree, which would otherwise read every row and its message body.
         await context.Database.ExecuteSqlRawAsync(
             "CREATE INDEX IF NOT EXISTS IX_Messages_Unread ON Messages (FolderId, IsRead, IsDeletePending);",
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Adds the <c>AiPriority</c> column to a Messages table created by an earlier version; does nothing when it exists.
+    /// </summary>
+    /// <param name="context">The database context.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the column exists.</returns>
+    internal static async Task EnsurePriorityColumnAsync(AccountDbContext context, CancellationToken cancellationToken = default)
+    {
+        await EnsureColumnAsync(
+            context,
+            "SELECT COUNT(*) AS Value FROM pragma_table_info('Messages') WHERE name = 'AiPriority'",
+            "ALTER TABLE Messages ADD COLUMN AiPriority INTEGER NULL;",
             cancellationToken);
     }
 

@@ -39,6 +39,16 @@ public interface IMessageRepository
     Task SaveLabelsAsync(MailMessage message, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Sets or clears the priority of a message; does nothing when the message is gone.
+    /// </summary>
+    /// <param name="accountId">The account that owns the message.</param>
+    /// <param name="messageId">The message identifier.</param>
+    /// <param name="priority">The priority, or <see langword="null"/> to clear it.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the priority is saved.</returns>
+    Task SetPriorityAsync(Guid accountId, Guid messageId, MessagePriority? priority, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Adds several messages in one transaction per account.
     /// </summary>
     /// <param name="messages">The messages to add.</param>

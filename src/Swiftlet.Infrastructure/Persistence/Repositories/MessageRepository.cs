@@ -73,6 +73,25 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
     }
 
     /// <inheritdoc />
+    public async Task SetPriorityAsync(
+        Guid accountId,
+        Guid messageId,
+        MessagePriority? priority,
+        CancellationToken cancellationToken = default)
+    {
+        var context = await contexts.GetAsync(accountId, cancellationToken);
+        await context.Messages
+            .Where(m => m.Id == messageId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(m => m.AiPriority, priority), cancellationToken);
+
+        // A message this context already tracks would otherwise keep showing the old value to later reads.
+        if (context.Messages.Local.FirstOrDefault(m => m.Id == messageId) is { } tracked)
+        {
+            await context.Entry(tracked).ReloadAsync(cancellationToken);
+        }
+    }
+
+    /// <inheritdoc />
     public async Task AddRangeAsync(IReadOnlyCollection<MailMessage> messages, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(messages);

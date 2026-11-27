@@ -115,6 +115,12 @@ public sealed class MailMessage
     public Guid? PendingMoveFolderId { get; private set; }
 
     /// <summary>
+    /// Gets the priority the user accepted from a classification, or <see langword="null"/> when there is none.
+    /// The state is local.
+    /// </summary>
+    public MessagePriority? AiPriority { get; private set; }
+
+    /// <summary>
     /// Gets the attachments.
     /// </summary>
     public IReadOnlyList<MailAttachment> Attachments => _attachments;
@@ -281,6 +287,15 @@ public sealed class MailMessage
         IsRead = isRead;
         IsFlagged = isFlagged;
         return true;
+    }
+
+    /// <summary>
+    /// Sets or clears the priority.
+    /// </summary>
+    /// <param name="priority">The priority, or <see langword="null"/> to clear it.</param>
+    public void SetAiPriority(MessagePriority? priority)
+    {
+        AiPriority = priority;
     }
 
     /// <summary>
