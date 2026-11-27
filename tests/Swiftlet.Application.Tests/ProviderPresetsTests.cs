@@ -74,4 +74,30 @@ public class ProviderPresetsTests
     {
         ProviderPresets.For(provider, isOrganizationAccount).Smtp.Host.Should().Be(smtpHost);
     }
+
+    /// <summary>
+    /// Verifies an organization's own domain is recognized by its SMTP server when deciding about Sent copies.
+    /// </summary>
+    /// <param name="email">The account address.</param>
+    /// <param name="smtpHost">The account's SMTP host.</param>
+    /// <param name="expected">Whether the provider stores the copy itself.</param>
+    [Theory]
+    [InlineData("me@contoso.example", "smtp.office365.com", true)]
+    [InlineData("me@contoso.example", "SMTP.Office365.com", true)]
+    [InlineData("me@contoso.example", "smtp.gmail.com", true)]
+    [InlineData("me@gmail.com", "smtp.relay.example", true)]
+    [InlineData("me@contoso.example", "smtp.qq.com", false)]
+    [InlineData("me@contoso.example", "smtp.contoso.example", false)]
+    public void SavesSentCopyAutomatically_Account_ChecksDomainAndSmtpHost(string email, string smtpHost, bool expected)
+    {
+        var account = MailAccount.Create(
+            "Me",
+            email,
+            AuthMethod.Password,
+            new ServerEndpoint("imap.contoso.example", 993, true),
+            new ServerEndpoint(smtpHost, 587, false),
+            new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+
+        ProviderPresets.SavesSentCopyAutomatically(account).Should().Be(expected);
+    }
 }

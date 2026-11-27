@@ -83,6 +83,20 @@ public static class ProviderPresets
     }
 
     /// <summary>
+    /// Tells whether the account's provider stores a copy of sent mail itself. Besides the email domain, the SMTP
+    /// server is checked, because an organization's own domain says nothing about its provider.
+    /// </summary>
+    /// <param name="account">The sending account.</param>
+    /// <returns><see langword="true"/> if the client must not append a copy to Sent.</returns>
+    public static bool SavesSentCopyAutomatically(MailAccount account)
+    {
+        ArgumentNullException.ThrowIfNull(account);
+        return (TryGet(account.EmailAddress, out var preset) && preset.SavesSentCopyAutomatically)
+            || ByDomain.Values.Append(Microsoft365).Any(p => p.SavesSentCopyAutomatically
+                && string.Equals(p.Smtp.Host, account.Smtp.Host, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Builds the domain lookup table.
     /// </summary>
     /// <returns>The lookup table.</returns>

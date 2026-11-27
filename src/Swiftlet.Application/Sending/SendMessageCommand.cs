@@ -33,8 +33,7 @@ public sealed class SendMessageCommandHandler(IAccountRepository accounts, IMail
         var account = await accounts.GetAsync(command.AccountId, cancellationToken)
             ?? throw new InvalidOperationException($"Account {command.AccountId} was not found.");
 
-        var saveToSent = command.SaveToSent
-            ?? !(ProviderPresets.TryGet(account.EmailAddress, out var preset) && preset.SavesSentCopyAutomatically);
+        var saveToSent = command.SaveToSent ?? !ProviderPresets.SavesSentCopyAutomatically(account);
 
         await sender.SendAsync(account, command.Message, saveToSent, cancellationToken);
         events.RaiseMessageSent(account.Id);
