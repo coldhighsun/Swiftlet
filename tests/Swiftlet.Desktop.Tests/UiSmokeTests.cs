@@ -1031,8 +1031,8 @@ public class UiSmokeTests
     /// <param name="pages">The expected names of the pages, separated by '|'.</param>
     /// <param name="openLogs">The expected caption of the log folder button.</param>
     [Theory]
-    [InlineData("zh-Hans", "通用|同步|隐私与安全|关于", "打开日志目录")]
-    [InlineData("en", "General|Sync|Privacy & security|About", "Open log folder")]
+    [InlineData("zh-Hans", "通用|同步|隐私与安全|AI|关于", "打开日志目录")]
+    [InlineData("en", "General|Sync|Privacy & security|AI|About", "Open log folder")]
     public async Task SettingsWindow_AboutPage_ShowsVersionLinksAndFolders(string language, string pages, string openLogs)
     {
         await Session.Dispatch(
@@ -1042,7 +1042,11 @@ public class UiSmokeTests
                 var about = new AboutViewModel(
                     new FakeDialogService(), LocalizationManager.Instance, new Swiftlet.Desktop.Hosting.AppPaths("data"));
                 var viewModel = new SettingsViewModel(
-                    new FakeAppSettings(), LocalizationManager.Instance, new FakeRemoteImageRules(), about: about);
+                    new FakeAppSettings(),
+                    LocalizationManager.Instance,
+                    new FakeRemoteImageRules(),
+                    about: about,
+                    ai: CreateAiPage());
                 var window = new SettingsWindow { DataContext = viewModel };
                 window.Width = window.MinWidth;
                 window.Height = window.MinHeight;
@@ -1052,7 +1056,14 @@ public class UiSmokeTests
                 items.Select(Avalonia.Automation.AutomationProperties.GetName).Should().Equal(pages.Split('|'));
                 items.Should().OnlyContain(i => i.IsEffectivelyVisible && i.Bounds.Width > 0);
 
-                SelectSettingsPage(window, 3, $"settings-about-{language}");
+                SelectSettingsPage(window, 3, $"settings-ai-{language}");
+
+                window.GetVisualDescendants().OfType<ComboBox>().Where(c => c.IsEffectivelyVisible)
+                    .Select(c => c.IsEditable).Should().Equal(false, true);
+                window.GetVisualDescendants().OfType<ComboBox>().Single(c => c.IsEditable && c.IsEffectivelyVisible)
+                    .Text.Should().Be("claude-opus-5-5");
+
+                SelectSettingsPage(window, 4, $"settings-about-{language}");
 
                 window.GetVisualDescendants().OfType<SelectableTextBlock>().Select(t => t.Text).Should().Contain(about.VersionText);
                 window.GetVisualDescendants().OfType<HyperlinkButton>().Select(l => l.NavigateUri).Should().Equal(
@@ -1089,7 +1100,7 @@ public class UiSmokeTests
                 var window = new SettingsWindow { DataContext = viewModel };
                 Render(window, $"settings-update-window-{language}", language);
 
-                SelectSettingsPage(window, 3, $"settings-about-update-{language}");
+                SelectSettingsPage(window, 4, $"settings-about-update-{language}");
 
                 window.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == show)
                     .IsEffectivelyVisible.Should().BeTrue();
@@ -1167,7 +1178,19 @@ public class UiSmokeTests
     }
 
     /// <summary>
-    /// Verifies the sidebar has no "About" entry when there is nothing to show on it.
+    /// Builds an AI page over fakes.
+    /// </summary>
+    /// <returns>The view model.</returns>
+    private static AiSettingsViewModel CreateAiPage()
+    {
+        var dispatcher = new FakeDispatcher();
+        dispatcher.On<Swiftlet.Application.Ai.HasAiKeyQuery>(_ => false);
+        return new AiSettingsViewModel(
+            new Swiftlet.Application.Ai.DisabledAiSettings(), dispatcher, new FakeDialogService(), LocalizationManager.Instance);
+    }
+
+    /// <summary>
+    /// Verifies the sidebar has no "AI" and "About" entries when there is nothing to show on them.
     /// </summary>
     [Fact]
     public async Task SettingsWindow_NoAboutPage_HidesItsEntry()
@@ -1180,7 +1203,7 @@ public class UiSmokeTests
                 Render(window, "settings-no-about", "en");
 
                 window.GetVisualDescendants().OfType<TabItem>().Select(i => i.IsEffectivelyVisible)
-                    .Should().Equal(true, true, true, false);
+                    .Should().Equal(true, true, true, false, false);
                 window.Close();
                 return Task.CompletedTask;
             },

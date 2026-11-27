@@ -43,6 +43,16 @@
         </TabItem.Header>
         <pages:PrivacyPage />
       </TabItem>
+      <TabItem AutomationProperties.Name="{loc:Loc Settings_PageAi}"
+               IsVisible="{Binding Ai, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <TabItem.Header>
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <PathIcon Data="{StaticResource Icon.Sparkle}" />
+            <TextBlock Text="{loc:Loc Settings_PageAi}" VerticalAlignment="Center" />
+          </StackPanel>
+        </TabItem.Header>
+        <pages:AiPage DataContext="{Binding Ai}" />
+      </TabItem>
       <TabItem AutomationProperties.Name="{loc:Loc Settings_PageAbout}"
                IsVisible="{Binding About, Converter={x:Static ObjectConverters.IsNotNull}}">
         <TabItem.Header>

@@ -13,6 +13,7 @@ Versions match `Directory.Packages.props` and the restored dependency graph of
 Icon path data in `src/Swiftlet.Desktop/Styles/Icons.axaml` comes from
 <https://github.com/microsoft/fluentui-system-icons>.
 License: [MIT](#mit-license), Copyright (c) 2020 Microsoft Corporation.
+`Icon.Logo` and `Icon.Sparkle` are the project's own drawings.
 
 ## NuGet packages
 

@@ -94,6 +94,7 @@ internal static class Program
             () => sp.GetRequiredService<IDialogService>().HasUnsavedWorkWindows,
             sp.GetRequiredService<ILocalizer>(),
             sp.GetService<ILogger<GitHubUpdateService>>()));
+        builder.Services.AddTransient<AiSettingsViewModel>();
         builder.Services.ConfigureHostShutdown();
 
         using var host = builder.Build();

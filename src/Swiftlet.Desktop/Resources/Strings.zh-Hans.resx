@@ -402,4 +402,40 @@
   <data name="About_UpdateAvailable" xml:space="preserve"><value>发现新版本 {0}。</value></data>
   <data name="About_Downloading" xml:space="preserve"><value>正在下载版本 {0}…</value></data>
   <data name="About_CheckFailed" xml:space="preserve"><value>检查更新失败：{0}</value></data>
+  <data name="Settings_PageAi" xml:space="preserve"><value>AI</value></data>
+  <data name="Ai_Enable" xml:space="preserve"><value>启用 AI 功能</value></data>
+  <data name="Ai_Hint" xml:space="preserve"><value>默认关闭。只有在你使用某个 AI 操作时，邮件内容才会发送到下面的服务；附件不会发送。</value></data>
+  <data name="Ai_Service" xml:space="preserve"><value>服务</value></data>
+  <data name="Ai_Provider" xml:space="preserve"><value>提供方</value></data>
+  <data name="Ai_ProviderClaude" xml:space="preserve"><value>Claude</value></data>
+  <data name="Ai_ProviderOpenAi" xml:space="preserve"><value>OpenAI 兼容（含本地服务）</value></data>
+  <data name="Ai_Endpoint" xml:space="preserve"><value>服务地址</value></data>
+  <data name="Ai_EndpointHint" xml:space="preserve"><value>必须使用 https；只有本机地址（localhost）可以使用 http。</value></data>
+  <data name="Ai_Model" xml:space="preserve"><value>模型</value></data>
+  <data name="Ai_ApiKey" xml:space="preserve"><value>API Key</value></data>
+  <data name="Ai_KeySaved" xml:space="preserve"><value>已保存密钥，留空则继续使用</value></data>
+  <data name="Ai_KeyEmpty" xml:space="preserve"><value>输入 API Key</value></data>
+  <data name="Ai_KeyOptional" xml:space="preserve"><value>本地服务可不填</value></data>
+  <data name="Ai_RemoveKey" xml:space="preserve"><value>删除已保存的密钥</value></data>
+  <data name="Ai_MaxInput" xml:space="preserve"><value>单次最多发送的正文字符数</value></data>
+  <data name="Ai_Save" xml:space="preserve"><value>保存</value></data>
+  <data name="Ai_Test" xml:space="preserve"><value>测试连接</value></data>
+  <data name="Ai_Testing" xml:space="preserve"><value>正在测试连接…</value></data>
+  <data name="Ai_TestSucceeded" xml:space="preserve"><value>连接成功。</value></data>
+  <data name="Ai_Saved" xml:space="preserve"><value>已保存。</value></data>
+  <data name="Ai_KeyRemoved" xml:space="preserve"><value>已删除保存的密钥。</value></data>
+  <data name="Ai_InvalidEndpoint" xml:space="preserve"><value>请输入 https 地址，或本机的 http 地址。</value></data>
+  <data name="Ai_ModelRequired" xml:space="preserve"><value>请填写模型。</value></data>
+  <data name="Ai_KeyRequired" xml:space="preserve"><value>请为该地址填写 API Key。</value></data>
+  <data name="Ai_ConsentTitle" xml:space="preserve"><value>要把邮件内容发送到该服务吗？</value></data>
+  <data name="Ai_ConsentMessage" xml:space="preserve"><value>使用 AI 操作时，邮件的主题、发件人、时间和正文会发送到 {0}。该服务按其自身条款处理这些内容，并可能向你收费。</value></data>
+  <data name="Ai_ConsentAllow" xml:space="preserve"><value>允许</value></data>
+  <data name="Ai_ErrorUnauthorized" xml:space="preserve"><value>服务拒绝了该 API Key。</value></data>
+  <data name="Ai_ErrorNotFound" xml:space="preserve"><value>找不到该地址或模型。</value></data>
+  <data name="Ai_ErrorRateLimited" xml:space="preserve"><value>请求过于频繁，或账户额度不足。</value></data>
+  <data name="Ai_ErrorRejected" xml:space="preserve"><value>服务拒绝了该请求。</value></data>
+  <data name="Ai_ErrorUnavailable" xml:space="preserve"><value>服务暂时不可用，请稍后再试。</value></data>
+  <data name="Ai_ErrorNetwork" xml:space="preserve"><value>无法连接到该服务。</value></data>
+  <data name="Ai_ErrorTimeout" xml:space="preserve"><value>服务响应超时。</value></data>
+  <data name="Ai_ErrorUnknown" xml:space="preserve"><value>请求失败，详情见日志。</value></data>
 </root>

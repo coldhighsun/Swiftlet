@@ -1,0 +1,57 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:settings="using:Swiftlet.Desktop.ViewModels.Settings"
+             xmlns:loc="using:Swiftlet.Desktop.Localization"
+             x:Class="Swiftlet.Desktop.Views.SettingsPages.AiPage"
+             x:DataType="settings:AiSettingsViewModel">
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="16" Spacing="12">
+      <TextBlock Classes="title" Text="{loc:Loc Settings_PageAi}" />
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <CheckBox Content="{loc:Loc Ai_Enable}" IsChecked="{Binding IsEnabled}" />
+          <TextBlock Classes="caption" Text="{loc:Loc Ai_Hint}" TextWrapping="Wrap" Margin="28,0,0,0" />
+        </StackPanel>
+      </Border>
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="section" Text="{loc:Loc Ai_Service}" />
+          <TextBlock Classes="secondary" Text="{loc:Loc Ai_Provider}" />
+          <ComboBox ItemsSource="{Binding ProviderOptions}" SelectedItem="{Binding SelectedProvider}"
+                    HorizontalAlignment="Stretch" AutomationProperties.Name="{loc:Loc Ai_Provider}">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="settings:ChoiceOptionViewModel">
+                <TextBlock Text="{Binding DisplayName}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <TextBlock Classes="secondary" Text="{loc:Loc Ai_Endpoint}" />
+          <TextBox Text="{Binding Endpoint}" AutomationProperties.Name="{loc:Loc Ai_Endpoint}" />
+          <TextBlock Classes="caption" Text="{loc:Loc Ai_EndpointHint}" TextWrapping="Wrap" />
+          <TextBlock Classes="secondary" Text="{loc:Loc Ai_Model}" />
+          <ComboBox IsEditable="True" Text="{Binding Model}" ItemsSource="{Binding ModelSuggestions}"
+                    HorizontalAlignment="Stretch" AutomationProperties.Name="{loc:Loc Ai_Model}" />
+          <TextBlock Classes="secondary" Text="{loc:Loc Ai_ApiKey}" />
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBox Text="{Binding ApiKey}" PasswordChar="●" PlaceholderText="{Binding KeyPlaceholder}"
+                     AutomationProperties.Name="{loc:Loc Ai_ApiKey}" />
+            <Button Grid.Column="1" Margin="8,0,0,0" Content="{loc:Loc Ai_RemoveKey}"
+                    Command="{Binding RemoveKeyCommand}" IsVisible="{Binding HasStoredKey}" />
+          </Grid>
+          <TextBlock Classes="secondary" Text="{loc:Loc Ai_MaxInput}" Margin="0,8,0,0" />
+          <NumericUpDown Value="{Binding MaxInputCharacters}" Minimum="1000" Maximum="500000" Increment="1000"
+                         FormatString="0" Width="180" HorizontalAlignment="Left"
+                         AutomationProperties.Name="{loc:Loc Ai_MaxInput}" />
+        </StackPanel>
+      </Border>
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button Classes="accent" Content="{loc:Loc Ai_Save}" Command="{Binding SaveCommand}" />
+        <Button Content="{loc:Loc Ai_Test}" Command="{Binding TestCommand}" />
+      </StackPanel>
+      <TextBlock Classes="secondary" Text="{Binding StatusText}" TextWrapping="Wrap"
+                 IsVisible="{Binding StatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <TextBlock Classes="error" Text="{Binding ErrorText}" TextWrapping="Wrap"
+                 IsVisible="{Binding ErrorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

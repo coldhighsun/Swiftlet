@@ -402,4 +402,40 @@
   <data name="About_UpdateAvailable" xml:space="preserve"><value>Version {0} is available.</value></data>
   <data name="About_Downloading" xml:space="preserve"><value>Downloading version {0}…</value></data>
   <data name="About_CheckFailed" xml:space="preserve"><value>Could not check for updates: {0}</value></data>
+  <data name="Settings_PageAi" xml:space="preserve"><value>AI</value></data>
+  <data name="Ai_Enable" xml:space="preserve"><value>Enable AI features</value></data>
+  <data name="Ai_Hint" xml:space="preserve"><value>Off by default. Message content is sent to the service below only when you ask for an AI action. Attachments are not sent.</value></data>
+  <data name="Ai_Service" xml:space="preserve"><value>Service</value></data>
+  <data name="Ai_Provider" xml:space="preserve"><value>Provider</value></data>
+  <data name="Ai_ProviderClaude" xml:space="preserve"><value>Claude</value></data>
+  <data name="Ai_ProviderOpenAi" xml:space="preserve"><value>OpenAI compatible (including local)</value></data>
+  <data name="Ai_Endpoint" xml:space="preserve"><value>Address</value></data>
+  <data name="Ai_EndpointHint" xml:space="preserve"><value>Must use https; plain http is allowed only for this computer (localhost).</value></data>
+  <data name="Ai_Model" xml:space="preserve"><value>Model</value></data>
+  <data name="Ai_ApiKey" xml:space="preserve"><value>API key</value></data>
+  <data name="Ai_KeySaved" xml:space="preserve"><value>A key is saved; leave empty to keep it</value></data>
+  <data name="Ai_KeyEmpty" xml:space="preserve"><value>Enter the API key</value></data>
+  <data name="Ai_KeyOptional" xml:space="preserve"><value>Optional for local services</value></data>
+  <data name="Ai_RemoveKey" xml:space="preserve"><value>Remove saved key</value></data>
+  <data name="Ai_MaxInput" xml:space="preserve"><value>Characters of message text sent at most</value></data>
+  <data name="Ai_Save" xml:space="preserve"><value>Save</value></data>
+  <data name="Ai_Test" xml:space="preserve"><value>Test connection</value></data>
+  <data name="Ai_Testing" xml:space="preserve"><value>Testing the connection…</value></data>
+  <data name="Ai_TestSucceeded" xml:space="preserve"><value>The service answered.</value></data>
+  <data name="Ai_Saved" xml:space="preserve"><value>Saved.</value></data>
+  <data name="Ai_KeyRemoved" xml:space="preserve"><value>The saved key was removed.</value></data>
+  <data name="Ai_InvalidEndpoint" xml:space="preserve"><value>Enter an https address, or an http address on this computer.</value></data>
+  <data name="Ai_ModelRequired" xml:space="preserve"><value>Enter a model.</value></data>
+  <data name="Ai_KeyRequired" xml:space="preserve"><value>Enter the API key for this address.</value></data>
+  <data name="Ai_ConsentTitle" xml:space="preserve"><value>Send mail content to this service?</value></data>
+  <data name="Ai_ConsentMessage" xml:space="preserve"><value>When you use an AI action, the subject, sender, date and text of the message are sent to {0}. The service handles them under its own terms and may charge you.</value></data>
+  <data name="Ai_ConsentAllow" xml:space="preserve"><value>Allow</value></data>
+  <data name="Ai_ErrorUnauthorized" xml:space="preserve"><value>The service rejected the API key.</value></data>
+  <data name="Ai_ErrorNotFound" xml:space="preserve"><value>The address or the model was not found.</value></data>
+  <data name="Ai_ErrorRateLimited" xml:space="preserve"><value>Too many requests, or the account has no credit left.</value></data>
+  <data name="Ai_ErrorRejected" xml:space="preserve"><value>The service rejected the request.</value></data>
+  <data name="Ai_ErrorUnavailable" xml:space="preserve"><value>The service is unavailable. Try again later.</value></data>
+  <data name="Ai_ErrorNetwork" xml:space="preserve"><value>The service could not be reached.</value></data>
+  <data name="Ai_ErrorTimeout" xml:space="preserve"><value>The service did not answer in time.</value></data>
+  <data name="Ai_ErrorUnknown" xml:space="preserve"><value>The request failed. See the log for details.</value></data>
 </root>

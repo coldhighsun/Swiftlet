@@ -49,6 +49,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <param name="themeApplier">Applies a newly chosen theme; optional.</param>
     /// <param name="languageSelector">The language picker shown in the window; optional.</param>
     /// <param name="about">The "About" page; optional.</param>
+    /// <param name="ai">The AI page; optional.</param>
     public SettingsViewModel(
         IAppSettings settings,
         ILocalizer localizer,
@@ -56,7 +57,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         IDatabaseProtection? protection = null,
         IThemeApplier? themeApplier = null,
         LanguageSelectorViewModel? languageSelector = null,
-        AboutViewModel? about = null)
+        AboutViewModel? about = null,
+        AiSettingsViewModel? ai = null)
     {
         _settings = settings;
         _localizer = localizer;
@@ -71,6 +73,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _themeApplier = themeApplier;
         LanguageSelector = languageSelector;
         About = about;
+        Ai = ai;
         about?.Attach();
         ThemeOptions =
         [
@@ -105,6 +108,11 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// Gets the "About" page, or <see langword="null"/> when the window has none.
     /// </summary>
     public AboutViewModel? About { get; }
+
+    /// <summary>
+    /// Gets the AI page, or <see langword="null"/> when the window has none.
+    /// </summary>
+    public AiSettingsViewModel? Ai { get; }
 
     /// <summary>
     /// Gets the available themes.
@@ -157,6 +165,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         _localizer.LanguageChanged -= OnLanguageChanged;
         About?.Detach();
+        Ai?.Detach();
     }
 
     /// <summary>
@@ -247,6 +256,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
 
         About?.RefreshLanguage();
+        Ai?.RefreshLanguage();
         OnPropertyChanged(nameof(DatabaseStatusText));
         UpdateRemoteImageRuleCount();
     }

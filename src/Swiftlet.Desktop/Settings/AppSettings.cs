@@ -1,5 +1,7 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Ai;
 using Swiftlet.Desktop.Localization;
 
 namespace Swiftlet.Desktop.Settings;
@@ -134,8 +136,16 @@ public interface IAppSettings : ISyncSettings
 /// <summary>
 /// Stores the language preference and the user settings in one small JSON file.
 /// </summary>
-public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
+public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSettings
 {
+    /// <summary>
+    /// How the AI settings are stored: the provider by name, so the file stays readable and reordering is harmless.
+    /// </summary>
+    private static readonly JsonSerializerOptions AiOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() },
+    };
+
     /// <summary>
     /// The settings file path.
     /// </summary>
@@ -207,6 +217,11 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     private volatile UpdateCheckState _updateCheckState;
 
     /// <summary>
+    /// The in-memory AI settings.
+    /// </summary>
+    private volatile AiConfiguration _ai;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="AppSettings"/> class and reads the file once.
     /// </summary>
     /// <param name="path">The settings file path.</param>
@@ -229,6 +244,7 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
         _mainWindowPlacement = ReadPlacement(file.MainWindowPlacement);
         _checkForUpdates = file.CheckForUpdates ?? true;
         _updateCheckState = ReadUpdateCheckState(file.UpdateCheck);
+        _ai = ReadAi(file.Ai);
     }
 
     /// <summary>
@@ -246,6 +262,7 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     /// <param name="ContactNameOrder">The order of contact names; raw JSON for the same reason as the theme.</param>
     /// <param name="CheckForUpdates">Whether new versions are looked for automatically.</param>
     /// <param name="UpdateCheck">What is remembered about update checks; raw JSON for the same reason as the theme.</param>
+    /// <param name="Ai">The AI settings, without the API key; raw JSON for the same reason as the theme.</param>
     private sealed record SettingsFile(
         string? Language,
         bool? SyncServerDeletions,
@@ -258,7 +275,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
         bool? StartMinimized = null,
         JsonElement? ContactNameOrder = null,
         bool? CheckForUpdates = null,
-        JsonElement? UpdateCheck = null);
+        JsonElement? UpdateCheck = null,
+        JsonElement? Ai = null);
 
     /// <inheritdoc />
     public bool RemoveServerDeletedMessages => _removeServerDeletedMessages;
@@ -292,6 +310,26 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
 
     /// <inheritdoc />
     public WindowPlacement? MainWindowPlacement => _mainWindowPlacement;
+
+    /// <inheritdoc />
+    public AiConfiguration Ai => _ai;
+
+    /// <inheritdoc />
+    public event EventHandler? AiChanged;
+
+    /// <inheritdoc />
+    public void SetAi(AiConfiguration value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        lock (_gate)
+        {
+            Write(Snapshot() with { Ai = JsonSerializer.SerializeToElement(value, AiOptions) });
+            _ai = value;
+        }
+
+        // Outside the lock, so a listener may read the settings from any thread.
+        AiChanged?.Invoke(this, EventArgs.Empty);
+    }
 
     /// <inheritdoc />
     public void SetMainWindowPlacement(WindowPlacement value)
@@ -468,7 +506,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
             _startMinimized,
             JsonSerializer.SerializeToElement(_contactNameOrder),
             _checkForUpdates,
-            SerializeUpdateCheckState(_updateCheckState));
+            SerializeUpdateCheckState(_updateCheckState),
+            JsonSerializer.SerializeToElement(_ai, AiOptions));
     }
 
     /// <summary>
@@ -536,6 +575,43 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
         {
             // A damaged placement only means the window opens at its default place.
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Reads the stored AI settings.
+    /// </summary>
+    /// <param name="stored">The JSON value, if any.</param>
+    /// <returns>The settings; the switched off defaults when they are missing or unusable.</returns>
+    private static AiConfiguration ReadAi(JsonElement? stored)
+    {
+        if (stored is not { ValueKind: JsonValueKind.Object } element)
+        {
+            return AiConfiguration.Default;
+        }
+
+        try
+        {
+            var value = element.Deserialize<AiConfiguration>(AiOptions);
+            if (value is not { Endpoint: not null, Model: not null } || !Enum.IsDefined(value.Provider))
+            {
+                return AiConfiguration.Default;
+            }
+
+            return value with
+            {
+                MaxInputCharacters = value.MaxInputCharacters <= 0
+                    ? AiConfiguration.DefaultMaxInputCharacters
+                    : Math.Clamp(
+                        value.MaxInputCharacters,
+                        AiConfiguration.MinInputCharacters,
+                        AiConfiguration.MaxAllowedInputCharacters),
+            };
+        }
+        catch (JsonException)
+        {
+            // Damaged AI settings only leave AI switched off.
+            return AiConfiguration.Default;
         }
     }
 
