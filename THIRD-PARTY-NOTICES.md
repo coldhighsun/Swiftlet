@@ -26,6 +26,7 @@ copyright notice shown.
 | [Avalonia](https://avaloniaui.net/): `Avalonia`, `Avalonia.Desktop`, `Avalonia.FreeDesktop`, `Avalonia.FreeDesktop.AtSpi`, `Avalonia.HarfBuzz`, `Avalonia.Native`, `Avalonia.Remote.Protocol`, `Avalonia.Skia`, `Avalonia.Themes.Fluent`, `Avalonia.Win32`, `Avalonia.X11`, `Avalonia.Fonts.Inter` | 12.2.0 | Copyright 2013-2026 © The AvaloniaUI Project |
 | `Avalonia.Controls.WebView` | 12.1.2 | Copyright 2019-2026 © AvaloniaUI OÜ |
 | [CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet) | 8.4.2 | (c) .NET Foundation and Contributors. All rights reserved. |
+| [GitHubReleaseUpdater](https://github.com/coldhighsun/GitHubReleaseUpdater) | 0.7.1 | Copyright (c) 2026 coldhighsun |
 | [MailKit](http://www.mimekit.net/), `MimeKit.Core` | 5.0.0 | .NET Foundation and Contributors |
 | [Mediator](https://github.com/martinothamar/Mediator): `Mediator.Abstractions` | 3.0.2 | Copyright (c) 2022 Martin Othamar |
 | `MicroCom.Runtime` | 0.11.7 | Copyright 2021 © Nikita Tsukanov |

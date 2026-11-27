@@ -374,4 +374,32 @@
   <data name="Settings_ContactNameOrderFamilyFirst" xml:space="preserve"><value>姓在前</value></data>
   <data name="Settings_ContactNameOrderGivenFirst" xml:space="preserve"><value>名在前</value></data>
   <data name="Settings_ContactNameOrderHint" xml:space="preserve"><value>用于通讯录中的联系人，也用于所发邮件的收件人姓名。“自动”时中日韩姓名姓在前，其他姓名名在前。</value></data>
+  <data name="Update_Title" xml:space="preserve"><value>软件更新</value></data>
+  <data name="Update_Header" xml:space="preserve"><value>Swiftlet {0} 已发布</value></data>
+  <data name="Update_CurrentVersion" xml:space="preserve"><value>当前版本：{0}</value></data>
+  <data name="Update_WhatsNew" xml:space="preserve"><value>更新内容</value></data>
+  <data name="Update_InstallNote" xml:space="preserve"><value>Swiftlet 将关闭，安装更新后重新启动。</value></data>
+  <data name="Update_ManualNote" xml:space="preserve"><value>此副本无法自动更新，请从发布页下载新版本。</value></data>
+  <data name="Update_Starting" xml:space="preserve"><value>正在开始下载…</value></data>
+  <data name="Update_Progress" xml:space="preserve"><value>{0} / {1}（{2}/秒）</value></data>
+  <data name="Update_ProgressUnknownTotal" xml:space="preserve"><value>已下载 {0}（{1}/秒）</value></data>
+  <data name="Update_Now" xml:space="preserve"><value>立即更新</value></data>
+  <data name="Update_Retry" xml:space="preserve"><value>重试</value></data>
+  <data name="Update_Skip" xml:space="preserve"><value>跳过此版本</value></data>
+  <data name="Update_Later" xml:space="preserve"><value>稍后提醒</value></data>
+  <data name="Update_ViewRelease" xml:space="preserve"><value>打开发布页</value></data>
+  <data name="Update_CancelDownload" xml:space="preserve"><value>取消下载</value></data>
+  <data name="Update_Failed" xml:space="preserve"><value>更新失败：{0}</value></data>
+  <data name="Update_NotStarted" xml:space="preserve"><value>无法开始更新，请重试。</value></data>
+  <data name="Update_CloseWindowsFirst" xml:space="preserve"><value>请先关闭所有写信窗口和联系人窗口，然后重试。</value></data>
+  <data name="Update_NoticeText" xml:space="preserve"><value>新版本 {0} 已发布，点击查看。</value></data>
+  <data name="About_Updates" xml:space="preserve"><value>更新</value></data>
+  <data name="About_AutoCheck" xml:space="preserve"><value>自动检查更新</value></data>
+  <data name="About_CheckNow" xml:space="preserve"><value>检查更新</value></data>
+  <data name="About_ShowUpdate" xml:space="preserve"><value>查看新版本</value></data>
+  <data name="About_Checking" xml:space="preserve"><value>正在检查更新…</value></data>
+  <data name="About_UpToDate" xml:space="preserve"><value>已是最新版本。</value></data>
+  <data name="About_UpdateAvailable" xml:space="preserve"><value>发现新版本 {0}。</value></data>
+  <data name="About_Downloading" xml:space="preserve"><value>正在下载版本 {0}…</value></data>
+  <data name="About_CheckFailed" xml:space="preserve"><value>检查更新失败：{0}</value></data>
 </root>

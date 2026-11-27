@@ -70,6 +70,7 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
                 AdoptMain(desktop, main);
                 KeepInTray(desktop, main);
                 AnnounceNewMail(desktop, main);
+                WatchForUpdates(desktop, main);
             }
             else
             {
@@ -213,6 +214,31 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
     }
 
     /// <summary>
+    /// Looks for new versions while the application runs and offers them to the user.
+    /// </summary>
+    /// <param name="desktop">The desktop lifetime.</param>
+    /// <param name="window">The main window.</param>
+    private void WatchForUpdates(IClassicDesktopStyleApplicationLifetime desktop, MainWindow window)
+    {
+        if (services.GetService<IUpdateService>() is not { IsSupported: true } updates)
+        {
+            return;
+        }
+
+        var notifier = new UpdateNotifier(
+            updates,
+            services.GetRequiredService<ILocalizer>(),
+            services.GetRequiredService<IDialogService>(),
+            new AvaloniaUpdateNoticePresenter(),
+            () => window is { IsVisible: true, WindowState: not WindowState.Minimized },
+            // Posted: the request comes from inside the update flow, which finishes before the windows close.
+            () => Dispatcher.UIThread.Post(() => desktop.Shutdown()),
+            services.GetService<ILogger<UpdateNotifier>>());
+        desktop.Exit += (_, _) => notifier.Dispose();
+        _ = notifier.RunAsync();
+    }
+
+    /// <summary>
     /// Creates the window that prepares the databases and then hands over to the main window.
     /// </summary>
     /// <param name="desktop">The desktop lifetime.</param>
@@ -240,6 +266,7 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
                 var hidden = AdoptMain(desktop, main);
                 KeepInTray(desktop, main);
                 AnnounceNewMail(desktop, main);
+                WatchForUpdates(desktop, main);
                 if (!hidden)
                 {
                     main.Show();

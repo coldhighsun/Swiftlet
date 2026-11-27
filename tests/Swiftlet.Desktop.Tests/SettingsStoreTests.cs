@@ -46,6 +46,41 @@ public class SettingsStoreTests : IDisposable
     }
 
     /// <summary>
+    /// Verifies update checks are on at first and the choice and their memory are kept.
+    /// </summary>
+    [Fact]
+    public void UpdateSettings_Changed_ArePersisted()
+    {
+        var store = new AppSettings(StorePath);
+        store.CheckForUpdates.Should().BeTrue();
+        store.UpdateCheckState.Should().Be(new UpdateCheckState());
+        var state = new UpdateCheckState(new DateTimeOffset(2026, 5, 1, 8, 0, 0, TimeSpan.Zero), "2.0.0", true);
+
+        store.SetCheckForUpdates(false);
+        store.ChangeUpdateCheckState(_ => state);
+        store.Save("zh-Hans");
+
+        var reloaded = new AppSettings(StorePath);
+        reloaded.CheckForUpdates.Should().BeFalse();
+        reloaded.UpdateCheckState.Should().Be(state);
+    }
+
+    /// <summary>
+    /// Verifies a damaged update memory is dropped without losing the other settings.
+    /// </summary>
+    [Fact]
+    public void UpdateCheckState_DamagedValue_KeepsOtherSettings()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(StorePath)!);
+        File.WriteAllText(StorePath, """{ "Language": "en", "UpdateCheck": { "lastCheckedAt": "soon" } }""");
+
+        var store = new AppSettings(StorePath);
+
+        store.Load().Should().Be("en");
+        store.UpdateCheckState.Should().Be(new UpdateCheckState());
+    }
+
+    /// <summary>
     /// Verifies a corrupt file yields the defaults without throwing.
     /// </summary>
     [Fact]

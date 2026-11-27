@@ -71,6 +71,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _themeApplier = themeApplier;
         LanguageSelector = languageSelector;
         About = about;
+        about?.Attach();
         ThemeOptions =
         [
             new ChoiceOptionViewModel(ThemePreference.System, () => localizer["Settings_ThemeSystem"]),
@@ -155,6 +156,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public void Detach()
     {
         _localizer.LanguageChanged -= OnLanguageChanged;
+        About?.Detach();
     }
 
     /// <summary>

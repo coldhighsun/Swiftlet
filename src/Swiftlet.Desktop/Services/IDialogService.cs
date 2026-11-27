@@ -84,6 +84,17 @@ public interface IDialogService
     Task ShowSettingsAsync();
 
     /// <summary>
+    /// Gets a value indicating whether a window is open whose content would be lost if the application quit (writing mail, contacts).
+    /// </summary>
+    bool HasUnsavedWorkWindows { get; }
+
+    /// <summary>
+    /// Shows the window offering the newer version that was found, or brings the open one to the front.
+    /// </summary>
+    /// <returns>A task that completes when the window has closed.</returns>
+    Task ShowUpdateAsync();
+
+    /// <summary>
     /// Shows the label manager dialog.
     /// </summary>
     /// <returns>A task that completes when the dialog has been closed.</returns>

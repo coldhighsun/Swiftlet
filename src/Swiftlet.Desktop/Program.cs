@@ -52,6 +52,8 @@ internal static class Program
             return;
         }
 
+        InstallerMutex.Hold();
+
         var builder = Host.CreateApplicationBuilder(args);
         var paths = new AppPaths(dataDirectory);
         var logger = LogSetup.Create(paths.LogDirectory);
@@ -85,6 +87,13 @@ internal static class Program
         builder.Services.AddTransient<ContactsViewModel>();
         builder.Services.AddTransient<SettingsViewModel>();
         builder.Services.AddTransient<AboutViewModel>();
+        builder.Services.AddSingleton<IUpdateService>(sp => GitHubUpdateService.Create(
+            AppVersion.Display,
+            dataDirectory,
+            sp.GetRequiredService<IAppSettings>(),
+            () => sp.GetRequiredService<IDialogService>().HasUnsavedWorkWindows,
+            sp.GetRequiredService<ILocalizer>(),
+            sp.GetService<ILogger<GitHubUpdateService>>()));
         builder.Services.ConfigureHostShutdown();
 
         using var host = builder.Build();

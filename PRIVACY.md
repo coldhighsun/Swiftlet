@@ -7,7 +7,7 @@ Swiftlet is a desktop email client. It runs on your computer and connects direct
 ## Summary
 
 - Swiftlet has no server of its own. The project and its maintainers do not receive your mail, passwords, tokens or usage data.
-- The app contains no telemetry, analytics, advertising or crash reporting.
+- The app contains no telemetry, analytics, advertising or crash reporting. It does ask GitHub whether a newer version exists, which you can switch off.
 - Your data stays on your computer, except for what the app exchanges with the services described under [Network connections](#network-connections).
 
 ## Data stored on your computer
@@ -44,6 +44,9 @@ Logs can contain your email addresses, mail folder names, remote image rules, se
 | Microsoft or Google sign-in services | When you sign in with them, and to renew the sign-in | Authorization codes and tokens |
 | Servers hosting images referenced in a message | Only when you load remote images, or a saved rule allows the sender | The image request, including your IP address |
 | Web sites | When you open a link | Handled by your web browser |
+| GitHub (`api.github.com` and GitHub's download servers) | Release builds check for a new version after starting and then daily, and when you ask; the installer is downloaded only when you choose to update | The request, including your IP address, the name of the update library and the files requested. No mail, account or settings data |
+
+The automatic update check can be switched off on the "About" page of the settings. The installer is run only after its SHA-256 checksum matches the one published with the release.
 
 Remote images are blocked by default. Loading them can tell the sender that you opened the message.
 

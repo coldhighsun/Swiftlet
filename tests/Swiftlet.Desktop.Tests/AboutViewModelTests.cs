@@ -119,4 +119,111 @@ public class AboutViewModelTests
 
         viewModel.ErrorText.Should().BeNull();
     }
+
+    /// <summary>
+    /// Verifies the page offers no updates without a service, or in a development build.
+    /// </summary>
+    [Fact]
+    public void HasUpdates_NoServiceOrUnsupported_IsFalse()
+    {
+        var none = new AboutViewModel(new FakeDialogService(), TestLocalizer.English(), Paths);
+        var development = new AboutViewModel(
+            new FakeDialogService(), TestLocalizer.English(), Paths,
+            updates: new FakeUpdateService { IsSupported = false }, settings: new FakeAppSettings());
+
+        none.HasUpdates.Should().BeFalse();
+        development.HasUpdates.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies the status line follows the update service while attached.
+    /// </summary>
+    [Fact]
+    public void Attach_ServiceChanges_UpdatesStatus()
+    {
+        var updates = new FakeUpdateService();
+        var viewModel = Updating(updates, new FakeAppSettings());
+        var changed = new List<string?>();
+        viewModel.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+        viewModel.Attach();
+
+        updates.Status = Services.UpdateStatus.Available;
+        updates.Available = FakeUpdateService.Newer;
+        updates.RaiseChanged();
+
+        viewModel.UpdateStatusText.Should().Be("Version 2.0.0 is available.");
+        viewModel.HasAvailableUpdate.Should().BeTrue();
+        changed.Should().Contain(nameof(AboutViewModel.UpdateStatusText));
+
+        changed.Clear();
+        viewModel.Detach();
+        updates.RaiseChanged();
+
+        changed.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies a failed check is explained.
+    /// </summary>
+    [Fact]
+    public void UpdateStatusText_CheckFailed_ShowsReason()
+    {
+        var updates = new FakeUpdateService { CheckError = new HttpRequestException("offline") };
+
+        var viewModel = Updating(updates, new FakeAppSettings());
+
+        viewModel.UpdateStatusText.Should().Be("Could not check for updates: offline");
+    }
+
+    /// <summary>
+    /// Verifies the buttons check for and open updates, and no check starts while one runs.
+    /// </summary>
+    [Fact]
+    public async Task UpdateCommands_Executed_CheckAndShow()
+    {
+        var updates = new FakeUpdateService();
+        var dialogs = new FakeDialogService();
+        var viewModel = new AboutViewModel(
+            dialogs, TestLocalizer.English(), Paths, updates: updates, settings: new FakeAppSettings());
+
+        await viewModel.CheckNowCommand.ExecuteAsync(null);
+        await viewModel.ShowUpdateCommand.ExecuteAsync(null);
+        updates.Status = Services.UpdateStatus.Checking;
+
+        updates.Checks.Should().Be(1);
+        dialogs.UpdateCalls.Should().Be(1);
+        viewModel.CheckNowCommand.CanExecute(null).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies the checkbox saves at once and falls back when saving fails.
+    /// </summary>
+    [Fact]
+    public void CheckForUpdates_Changed_SavesOrRestores()
+    {
+        var settings = new FakeAppSettings();
+        var viewModel = Updating(new FakeUpdateService(), settings);
+
+        viewModel.CheckForUpdates = false;
+
+        settings.CheckForUpdates.Should().BeFalse();
+
+        settings.Failure = new IOException("read only");
+        viewModel.CheckForUpdates = true;
+
+        viewModel.CheckForUpdates.Should().BeFalse();
+        viewModel.ErrorText.Should().Contain("read only");
+    }
+
+    /// <summary>
+    /// Creates the page with updates.
+    /// </summary>
+    /// <param name="updates">The update service.</param>
+    /// <param name="settings">The settings.</param>
+    /// <returns>The view model.</returns>
+    private static AboutViewModel Updating(FakeUpdateService updates, FakeAppSettings settings)
+    {
+        return new AboutViewModel(
+            new FakeDialogService(), TestLocalizer.English(), Paths, updates: updates, settings: settings);
+    }
 }

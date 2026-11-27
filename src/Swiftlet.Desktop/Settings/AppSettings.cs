@@ -107,6 +107,28 @@ public interface IAppSettings : ISyncSettings
     /// </summary>
     /// <param name="value">The placement.</param>
     void SetMainWindowPlacement(WindowPlacement value);
+
+    /// <summary>
+    /// Gets a value indicating whether new versions are looked for automatically.
+    /// </summary>
+    bool CheckForUpdates { get; }
+
+    /// <summary>
+    /// Changes whether new versions are looked for automatically, and saves the choice.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    void SetCheckForUpdates(bool value);
+
+    /// <summary>
+    /// Gets what is remembered about earlier update checks.
+    /// </summary>
+    UpdateCheckState UpdateCheckState { get; }
+
+    /// <summary>
+    /// Changes what is remembered about update checks and saves it, as one step.
+    /// </summary>
+    /// <param name="change">Builds the new state from the current one.</param>
+    void ChangeUpdateCheckState(Func<UpdateCheckState, UpdateCheckState> change);
 }
 
 /// <summary>
@@ -175,6 +197,16 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     private volatile WindowPlacement? _mainWindowPlacement;
 
     /// <summary>
+    /// The in-memory value, read before every automatic update check.
+    /// </summary>
+    private volatile bool _checkForUpdates;
+
+    /// <summary>
+    /// The in-memory state of the update checks, read from any thread.
+    /// </summary>
+    private volatile UpdateCheckState _updateCheckState;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="AppSettings"/> class and reads the file once.
     /// </summary>
     /// <param name="path">The settings file path.</param>
@@ -195,6 +227,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
         _contactNameOrder = Settings.ContactNameOrder.Normalize(
             file.ContactNameOrder is { ValueKind: JsonValueKind.String } order ? order.GetString() : null);
         _mainWindowPlacement = ReadPlacement(file.MainWindowPlacement);
+        _checkForUpdates = file.CheckForUpdates ?? true;
+        _updateCheckState = ReadUpdateCheckState(file.UpdateCheck);
     }
 
     /// <summary>
@@ -210,6 +244,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     /// <param name="MainWindowPlacement">Where the main window was; raw JSON for the same reason as the theme.</param>
     /// <param name="StartMinimized">Whether the main window stays hidden when the application starts.</param>
     /// <param name="ContactNameOrder">The order of contact names; raw JSON for the same reason as the theme.</param>
+    /// <param name="CheckForUpdates">Whether new versions are looked for automatically.</param>
+    /// <param name="UpdateCheck">What is remembered about update checks; raw JSON for the same reason as the theme.</param>
     private sealed record SettingsFile(
         string? Language,
         bool? SyncServerDeletions,
@@ -220,7 +256,9 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
         JsonElement? TrayUnreadStyle = null,
         JsonElement? MainWindowPlacement = null,
         bool? StartMinimized = null,
-        JsonElement? ContactNameOrder = null);
+        JsonElement? ContactNameOrder = null,
+        bool? CheckForUpdates = null,
+        JsonElement? UpdateCheck = null);
 
     /// <inheritdoc />
     public bool RemoveServerDeletedMessages => _removeServerDeletedMessages;
@@ -268,6 +306,39 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
 
             Write(Snapshot() with { MainWindowPlacement = SerializePlacement(value) });
             _mainWindowPlacement = value;
+        }
+    }
+
+    /// <inheritdoc />
+    public bool CheckForUpdates => _checkForUpdates;
+
+    /// <inheritdoc />
+    public UpdateCheckState UpdateCheckState => _updateCheckState;
+
+    /// <inheritdoc />
+    public void SetCheckForUpdates(bool value)
+    {
+        lock (_gate)
+        {
+            Write(Snapshot() with { CheckForUpdates = value });
+            _checkForUpdates = value;
+        }
+    }
+
+    /// <inheritdoc />
+    public void ChangeUpdateCheckState(Func<UpdateCheckState, UpdateCheckState> change)
+    {
+        ArgumentNullException.ThrowIfNull(change);
+        lock (_gate)
+        {
+            var state = change(_updateCheckState);
+            if (state == _updateCheckState)
+            {
+                return;
+            }
+
+            Write(Snapshot() with { UpdateCheck = SerializeUpdateCheckState(state) });
+            _updateCheckState = state;
         }
     }
 
@@ -395,7 +466,42 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
             JsonSerializer.SerializeToElement(_trayUnreadStyle),
             _mainWindowPlacement is { } placement ? SerializePlacement(placement) : null,
             _startMinimized,
-            JsonSerializer.SerializeToElement(_contactNameOrder));
+            JsonSerializer.SerializeToElement(_contactNameOrder),
+            _checkForUpdates,
+            SerializeUpdateCheckState(_updateCheckState));
+    }
+
+    /// <summary>
+    /// Converts the state of the update checks to its stored form.
+    /// </summary>
+    /// <param name="state">The state.</param>
+    /// <returns>The JSON value.</returns>
+    private static JsonElement SerializeUpdateCheckState(UpdateCheckState state)
+    {
+        return JsonSerializer.SerializeToElement(state, JsonSerializerOptions.Web);
+    }
+
+    /// <summary>
+    /// Reads the stored state of the update checks.
+    /// </summary>
+    /// <param name="stored">The JSON value, if any.</param>
+    /// <returns>The state, or an empty one when it is missing or unusable.</returns>
+    private static UpdateCheckState ReadUpdateCheckState(JsonElement? stored)
+    {
+        if (stored is not { ValueKind: JsonValueKind.Object } element)
+        {
+            return new UpdateCheckState();
+        }
+
+        try
+        {
+            return element.Deserialize<UpdateCheckState>(JsonSerializerOptions.Web) ?? new UpdateCheckState();
+        }
+        catch (JsonException)
+        {
+            // A damaged value only means the next check is made as if there had been none.
+            return new UpdateCheckState();
+        }
     }
 
     /// <summary>

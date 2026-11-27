@@ -1,0 +1,49 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Swiftlet.Desktop.ViewModels.Update"
+        xmlns:loc="using:Swiftlet.Desktop.Localization"
+        x:Class="Swiftlet.Desktop.Views.UpdateWindow"
+        Icon="avares://Swiftlet.Desktop/Assets/swiftlet.ico"
+        x:DataType="vm:UpdateViewModel"
+        Title="{loc:Loc Update_Title}" Width="480" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner">
+  <StackPanel Margin="24" Spacing="16">
+    <StackPanel Spacing="4">
+      <TextBlock Classes="title" Text="{Binding Header}" TextWrapping="Wrap" />
+      <TextBlock Classes="caption" Text="{Binding CurrentVersionText}" TextWrapping="Wrap" />
+    </StackPanel>
+
+    <Border Classes="card" Padding="12" IsVisible="{Binding HasNotes}">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="section" Text="{loc:Loc Update_WhatsNew}" />
+        <ScrollViewer MaxHeight="180" HorizontalScrollBarVisibility="Disabled">
+          <SelectableTextBlock Text="{Binding Notes}" TextWrapping="Wrap" />
+        </ScrollViewer>
+      </StackPanel>
+    </Border>
+
+    <TextBlock Text="{Binding InfoText}" TextWrapping="Wrap" IsVisible="{Binding ShowInfo}" />
+
+    <StackPanel Spacing="8" IsVisible="{Binding IsDownloading}">
+      <ProgressBar Minimum="0" Maximum="100" Value="{Binding ProgressValue}"
+                   IsIndeterminate="{Binding IsProgressIndeterminate}" />
+      <TextBlock Classes="caption" Text="{Binding ProgressText}" TextWrapping="Wrap" />
+    </StackPanel>
+
+    <TextBlock Classes="error" Text="{Binding ErrorText}" TextWrapping="Wrap" IsVisible="{Binding IsFailed}" />
+
+    <HyperlinkButton Classes="link" Content="{loc:Loc Update_ViewRelease}" NavigateUri="{Binding ReleasePage}"
+                     IsVisible="{Binding ShowReleaseLink}" />
+
+    <WrapPanel HorizontalAlignment="Right" ItemSpacing="8" LineSpacing="8">
+      <Button x:Name="SkipButton" Content="{loc:Loc Update_Skip}" Command="{Binding SkipCommand}"
+              IsVisible="{Binding ShowSkipButton}" />
+      <Button x:Name="LaterButton" Content="{Binding LaterButtonText}" Command="{Binding CloseCommand}"
+              IsCancel="True" IsVisible="{Binding ShowLaterButton}" />
+      <Button x:Name="CancelDownloadButton" Content="{loc:Loc Update_CancelDownload}"
+              Command="{Binding CancelDownloadCommand}" IsVisible="{Binding IsDownloading}" />
+      <Button x:Name="UpdateButton" Classes="accent" Content="{Binding UpdateButtonText}"
+              Command="{Binding UpdateCommand}" IsVisible="{Binding ShowUpdateButton}" />
+    </WrapPanel>
+  </StackPanel>
+</Window>

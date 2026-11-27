@@ -213,6 +213,21 @@ internal sealed class FakeDialogService : IDialogService
         return Task.FromResult(ConfirmResult);
     }
 
+    /// <summary>
+    /// Gets the number of times the update dialog was shown.
+    /// </summary>
+    public int UpdateCalls { get; private set; }
+
+    /// <inheritdoc />
+    public bool HasUnsavedWorkWindows { get; set; }
+
+    /// <inheritdoc />
+    public Task ShowUpdateAsync()
+    {
+        UpdateCalls++;
+        return Task.CompletedTask;
+    }
+
     /// <inheritdoc />
     public Task<bool> ShowAddAccountAsync()
     {
@@ -570,6 +585,34 @@ internal sealed class FakeAppSettings : IAppSettings
         }
 
         MainWindowPlacement = value;
+    }
+
+    /// <inheritdoc />
+    public bool CheckForUpdates { get; set; } = true;
+
+    /// <inheritdoc />
+    public void SetCheckForUpdates(bool value)
+    {
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+
+        CheckForUpdates = value;
+    }
+
+    /// <inheritdoc />
+    public UpdateCheckState UpdateCheckState { get; set; } = new();
+
+    /// <inheritdoc />
+    public void ChangeUpdateCheckState(Func<UpdateCheckState, UpdateCheckState> change)
+    {
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+
+        UpdateCheckState = change(UpdateCheckState);
     }
 
     /// <summary>

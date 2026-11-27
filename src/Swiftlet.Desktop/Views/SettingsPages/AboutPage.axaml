@@ -18,6 +18,19 @@
           </StackPanel>
         </Grid>
       </Border>
+      <Border Classes="card" IsVisible="{Binding HasUpdates}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="section" Text="{loc:Loc About_Updates}" />
+          <TextBlock Text="{Binding UpdateStatusText}" TextWrapping="Wrap"
+                     IsVisible="{Binding UpdateStatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <WrapPanel ItemSpacing="8" LineSpacing="8">
+            <Button Content="{loc:Loc About_CheckNow}" Command="{Binding CheckNowCommand}" />
+            <Button Classes="accent" Content="{loc:Loc About_ShowUpdate}" Command="{Binding ShowUpdateCommand}"
+                    IsVisible="{Binding HasAvailableUpdate}" />
+          </WrapPanel>
+          <CheckBox Content="{loc:Loc About_AutoCheck}" IsChecked="{Binding CheckForUpdates}" />
+        </StackPanel>
+      </Border>
       <Border Classes="card">
         <StackPanel Spacing="8">
           <TextBlock Classes="section" Text="{loc:Loc About_Links}" />

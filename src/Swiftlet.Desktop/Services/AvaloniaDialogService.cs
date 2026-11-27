@@ -5,6 +5,7 @@ using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Swiftlet.Application;
 using Swiftlet.Application.Accounts;
 using Swiftlet.Desktop.Html;
 using Swiftlet.Desktop.Localization;
@@ -13,6 +14,7 @@ using Swiftlet.Desktop.ViewModels;
 using Swiftlet.Desktop.ViewModels.Compose;
 using Swiftlet.Desktop.ViewModels.Contacts;
 using Swiftlet.Desktop.ViewModels.Settings;
+using Swiftlet.Desktop.ViewModels.Update;
 using Swiftlet.Desktop.Views;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Folders;
@@ -29,6 +31,11 @@ public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogSe
     /// The open settings window, if any.
     /// </summary>
     private SettingsWindow? _settingsWindow;
+
+    /// <summary>
+    /// The open update window, if any.
+    /// </summary>
+    private UpdateWindow? _updateWindow;
 
     /// <summary>
     /// Gets the classic desktop lifetime of the running application.
@@ -124,19 +131,7 @@ public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogSe
         _settingsWindow = window;
         try
         {
-            // A dialog of a minimized window would stay out of sight with it.
-            if (mainWindow is { IsVisible: true, WindowState: not WindowState.Minimized })
-            {
-                await window.ShowDialog(mainWindow);
-                return;
-            }
-
-            var closed = new TaskCompletionSource();
-            window.Closed += (_, _) => closed.TrySetResult();
-            window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
-            window.Show();
-            window.Activate();
-            await closed.Task;
+            await ShowOverOrAloneAsync(window, mainWindow);
         }
         finally
         {
@@ -192,6 +187,83 @@ public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogSe
             FileTypeFilter = [new FilePickerFileType(localizer["Contacts_FileType"]) { Patterns = ["*.vcf", "*.csv"] }],
         });
         return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+    }
+
+    /// <inheritdoc />
+    public bool HasUnsavedWorkWindows => Lifetime?.Windows.Any(w => w is ComposeWindow or ContactsWindow) == true;
+
+    /// <inheritdoc />
+    public Task ShowUpdateAsync()
+    {
+        // The settings window, whose "About" page leads here, is in front of the main window while it is open.
+        return ShowUpdateAsync((Window?)_settingsWindow ?? Lifetime?.MainWindow);
+    }
+
+    /// <summary>
+    /// Shows the update window, or brings the open one to the front.
+    /// </summary>
+    /// <param name="owner">The window to be a dialog of while it is on screen.</param>
+    /// <returns>A task that completes when the window has closed.</returns>
+    internal async Task ShowUpdateAsync(Window? owner)
+    {
+        if (_updateWindow is { } open)
+        {
+            if (open.WindowState == WindowState.Minimized)
+            {
+                open.WindowState = WindowState.Normal;
+            }
+
+            open.Activate();
+            return;
+        }
+
+        var updates = services.GetRequiredService<IUpdateService>();
+        if (updates.Available is not { } available)
+        {
+            return;
+        }
+
+        var viewModel = new UpdateViewModel(
+            updates,
+            available,
+            AppVersion.Display,
+            services.GetRequiredService<ILocalizer>(),
+            services.GetService<ILogger<UpdateViewModel>>());
+        var window = new UpdateWindow { DataContext = viewModel };
+        viewModel.CloseRequested += (_, _) => window.Close();
+        window.Closed += (_, _) => viewModel.Detach();
+        _updateWindow = window;
+        try
+        {
+            await ShowOverOrAloneAsync(window, owner);
+        }
+        finally
+        {
+            _updateWindow = null;
+        }
+    }
+
+    /// <summary>
+    /// Shows a window as a dialog of another one, or on its own when that one is not on screen.
+    /// </summary>
+    /// <param name="window">The window.</param>
+    /// <param name="owner">The possible owner.</param>
+    /// <returns>A task that completes when the window has closed.</returns>
+    private static async Task ShowOverOrAloneAsync(Window window, Window? owner)
+    {
+        // A dialog of a hidden or minimized window would stay out of sight with it.
+        if (owner is { IsVisible: true, WindowState: not WindowState.Minimized })
+        {
+            await window.ShowDialog(owner);
+            return;
+        }
+
+        var closed = new TaskCompletionSource();
+        window.Closed += (_, _) => closed.TrySetResult();
+        window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        window.Show();
+        window.Activate();
+        await closed.Task;
     }
 
     /// <inheritdoc />

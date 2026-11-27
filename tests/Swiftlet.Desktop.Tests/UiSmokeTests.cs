@@ -16,6 +16,7 @@ using Swiftlet.Desktop.ViewModels.Compose;
 using Swiftlet.Desktop.ViewModels.Contacts;
 using Swiftlet.Desktop.ViewModels.Main;
 using Swiftlet.Desktop.ViewModels.Settings;
+using Swiftlet.Desktop.ViewModels.Update;
 using Swiftlet.Desktop.Views;
 
 namespace Swiftlet.Desktop.Tests;
@@ -1059,6 +1060,107 @@ public class UiSmokeTests
                 window.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == openLogs)
                     .Command.Should().BeSameAs(about.OpenLogFolderCommand);
                 window.Close();
+                return Task.CompletedTask;
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the "About" page offers the newer version that was found.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    /// <param name="show">The expected caption of the button opening the update window.</param>
+    [Theory]
+    [InlineData("zh-Hans", "查看新版本")]
+    [InlineData("en", "View new version")]
+    public async Task SettingsWindow_AboutPageWithUpdate_ShowsUpdateButtons(string language, string show)
+    {
+        await Session.Dispatch(
+            () =>
+            {
+                LocalizationManager.Instance.SetPreference(language);
+                var settings = new FakeAppSettings();
+                var updates = new FakeUpdateService { Status = UpdateStatus.Available, Available = FakeUpdateService.Newer };
+                var about = new AboutViewModel(
+                    new FakeDialogService(), LocalizationManager.Instance, new Swiftlet.Desktop.Hosting.AppPaths("data"),
+                    updates: updates, settings: settings);
+                var viewModel = new SettingsViewModel(
+                    settings, LocalizationManager.Instance, new FakeRemoteImageRules(), about: about);
+                var window = new SettingsWindow { DataContext = viewModel };
+                Render(window, $"settings-update-window-{language}", language);
+
+                SelectSettingsPage(window, 3, $"settings-about-update-{language}");
+
+                window.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == show)
+                    .IsEffectivelyVisible.Should().BeTrue();
+                window.Close();
+                viewModel.Detach();
+                return Task.CompletedTask;
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the update window shows the buttons that belong to each step.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    [Theory]
+    [InlineData("zh-Hans")]
+    [InlineData("en")]
+    public async Task UpdateWindow_EachStep_ShowsItsButtons(string language)
+    {
+        await Session.Dispatch(
+            () =>
+            {
+                LocalizationManager.Instance.SetPreference(language);
+                var updates = new FakeUpdateService { Available = FakeUpdateService.Newer, CanInstall = true };
+                var viewModel = new UpdateViewModel(updates, FakeUpdateService.Newer, "1.0.0", LocalizationManager.Instance);
+                var window = new UpdateWindow { DataContext = viewModel };
+                Render(window, $"update-prompt-{language}", language);
+
+                bool Visible(string name) => window.FindControl<Button>(name)!.IsEffectivelyVisible;
+                string[] names = ["SkipButton", "LaterButton", "CancelDownloadButton", "UpdateButton"];
+                names.Select(Visible).Should().Equal(true, true, false, true);
+
+                viewModel.Step = UpdateStep.Downloading;
+                viewModel.ProgressText = "1 MB";
+                viewModel.ProgressValue = 40;
+                Snapshot(window, $"update-downloading-{language}");
+                names.Select(Visible).Should().Equal(false, false, true, false);
+
+                viewModel.ErrorText = LocalizationManager.Instance["Update_CloseWindowsFirst"];
+                viewModel.Step = UpdateStep.Failed;
+                Snapshot(window, $"update-failed-{language}");
+                names.Select(Visible).Should().Equal(false, true, false, true);
+                window.Close();
+                return Task.CompletedTask;
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the "new version" pop-up renders and closes through its button.
+    /// </summary>
+    [Fact]
+    public async Task UpdateNoticeWindow_Shown_ClosesThroughViewModel()
+    {
+        await Session.Dispatch(
+            () =>
+            {
+                LocalizationManager.Instance.SetPreference("zh-Hans");
+                var presenter = new AvaloniaUpdateNoticePresenter();
+                var opened = 0;
+                presenter.Show(new UpdateNoticeViewModel("2.0.0", LocalizationManager.Instance, () => opened++, presenter.Close));
+                var window = presenter.Window!;
+                Snapshot(window, "update-notice-zh-Hans");
+
+                window.IsVisible.Should().BeTrue();
+                var open = window.FindControl<Button>("OpenButton")!;
+                open.Command!.Execute(null);
+
+                opened.Should().Be(1);
+                presenter.Window.Should().BeNull();
+                window.IsVisible.Should().BeFalse();
                 return Task.CompletedTask;
             },
             TestContext.Current.CancellationToken);
