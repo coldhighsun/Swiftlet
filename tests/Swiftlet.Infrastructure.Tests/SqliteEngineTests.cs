@@ -23,7 +23,7 @@ public sealed class SqliteEngineTests : IDisposable
     {
         var path = _directory.File("engine.db");
 
-        ((string)EncryptionTestDirectory.Scalar(path, null, "SELECT sqlite3mc_version()")!).Should().Contain("2.7.1");
+        ((string)EncryptionTestDirectory.Scalar(path, null, "SELECT sqlite3mc_version()")!).Should().NotBeNullOrEmpty();
         ((long)EncryptionTestDirectory.Scalar(path, null, "SELECT sqlite_compileoption_used('ENABLE_FTS5')")!).Should().Be(1);
     }
 

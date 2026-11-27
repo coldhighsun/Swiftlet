@@ -1,0 +1,2 @@
+# Sample databases of the tests; line ending conversion would corrupt them.
+*.db binary
