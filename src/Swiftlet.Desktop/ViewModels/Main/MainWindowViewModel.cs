@@ -1396,12 +1396,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         await ReloadLabelsAsync();
 
-        if (SelectedNode is null)
+        // The unified inbox is the view at startup and whenever the selected node disappears.
+        if (SelectedNode is null && Accounts.Count > 0)
         {
-            SelectedNode = Accounts
-                .SelectMany(a => a.Folders)
-                .OrderBy(f => f.SortRank)
-                .FirstOrDefault();
+            SelectedNode = UnifiedInbox;
         }
 
         if (Accounts.Count == 0)

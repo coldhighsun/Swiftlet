@@ -189,14 +189,14 @@ public partial class LocalizationTests
     {
         var scenario = new MainWindowViewModelTests.Scenario();
         scenario.Dispatcher.On<SyncAccountCommand>(_ => new SyncResult(1, 0, ["Broken"]));
-        scenario.Dispatcher.On<GetMessagesQuery>(_ => throw new IOException("db locked"));
+        scenario.Dispatcher.On<GetUnifiedInboxQuery>(_ => throw new IOException("db locked"));
         scenario.Localizer.SetPreference("en");
 
         await scenario.StartAsync();
 
         scenario.ViewModel.StatusText.Should().Be("Failed to load messages: db locked");
 
-        scenario.Dispatcher.On<GetMessagesQuery>(_ => new List<Swiftlet.Domain.Messages.MailMessage>());
+        scenario.Dispatcher.On<GetUnifiedInboxQuery>(_ => new List<Swiftlet.Domain.Messages.MailMessage>());
         await scenario.ViewModel.SyncCommand.ExecuteAsync(null);
         scenario.ViewModel.StatusText.Should().Contain("1 folder(s) failed to sync").And.Contain("problems:");
     }

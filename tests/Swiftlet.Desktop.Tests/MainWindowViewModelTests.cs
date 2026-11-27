@@ -42,7 +42,7 @@ public class MainWindowViewModelTests
 
             Work = Label.Create("Work", "#E53935");
             Dispatcher.On<GetLabelsQuery>(_ => (IReadOnlyList<Label>)new List<Label> { Work });
-            Dispatcher.On<GetUnifiedInboxQuery>(_ => Messages.OrderByDescending(m => m.SentAt).ToList());
+            Dispatcher.On<GetUnifiedInboxQuery>(_ => HasAccount ? Messages.OrderByDescending(m => m.SentAt).ToList() : []);
             Dispatcher.On<GetMessagesByLabelQuery>(q => Messages.Where(m => m.Labels.Any(l => l.Id == q.LabelId)).ToList());
             Dispatcher.On<GetAccountsQuery>(_ => HasAccount ? new List<MailAccount> { Account } : []);
             Dispatcher.On<GetFoldersQuery>(q => q.AccountId == Account.Id ? new List<MailFolder> { Sent, Inbox } : []);
@@ -153,6 +153,17 @@ public class MainWindowViewModelTests
             await ViewModel.InitializeAsync();
             await ViewModel.WhenIdleAsync();
         }
+
+        /// <summary>
+        /// Initializes the view model, opens the Inbox folder and waits until it is idle.
+        /// </summary>
+        /// <returns>A task that completes when the Inbox is shown.</returns>
+        public async Task StartInInboxAsync()
+        {
+            await StartAsync();
+            ViewModel.SelectedNode = ViewModel.Accounts[0].Folders.Single(f => f.Folder.Id == Inbox.Id);
+            await ViewModel.WhenIdleAsync();
+        }
     }
 
     /// <summary>
@@ -233,7 +244,7 @@ public class MainWindowViewModelTests
     {
         var scenario = new Scenario();
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        scenario.Dispatcher.OnAsync<GetMessagesQuery>(async (_, _) =>
+        scenario.Dispatcher.OnAsync<GetUnifiedInboxQuery>(async (_, _) =>
         {
             await gate.Task;
             return new List<MailMessage>();
@@ -255,7 +266,7 @@ public class MainWindowViewModelTests
     public async Task ListEmptyState_LoadFails_IsNone()
     {
         var scenario = new Scenario();
-        scenario.Dispatcher.On<GetMessagesQuery>(_ => throw new IOException("db locked"));
+        scenario.Dispatcher.On<GetUnifiedInboxQuery>(_ => throw new IOException("db locked"));
 
         await scenario.StartAsync();
 
@@ -537,10 +548,30 @@ public class MainWindowViewModelTests
     }
 
     /// <summary>
-    /// Verifies folders are sorted with the Inbox first and its messages are shown newest first.
+    /// Verifies nothing is selected without accounts, and adding the first one opens the unified inbox.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task AddAccount_FirstAccount_SelectsUnifiedInbox()
+    {
+        var scenario = new Scenario(hasAccount: false);
+        await scenario.StartAsync();
+        scenario.ViewModel.SelectedNode.Should().BeNull();
+        scenario.Dialogs.AddAccountResult = true;
+        scenario.Dialogs.OnAddAccount = () => scenario.HasAccount = true;
+
+        await scenario.ViewModel.AddAccountCommand.ExecuteAsync(null);
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.ViewModel.SelectedNode.Should().BeSameAs(scenario.ViewModel.UnifiedInbox);
+        scenario.ViewModel.Messages.Select(m => m.Subject).Should().Equal("Hello 2", "Hello 1");
+    }
+
+    /// <summary>
+    /// Verifies folders are sorted with the Inbox first and the unified inbox is opened with the newest message first.
     /// </summary>
     [Fact]
-    public async Task InitializeAsync_WithAccount_SelectsInboxAndLoadsMessages()
+    public async Task InitializeAsync_WithAccount_SelectsUnifiedInboxAndLoadsMessages()
     {
         var scenario = new Scenario();
 
@@ -549,7 +580,7 @@ public class MainWindowViewModelTests
         var viewModel = scenario.ViewModel;
         viewModel.Accounts.Should().ContainSingle();
         viewModel.Accounts[0].Folders.Select(f => f.Name).Should().Equal("收件箱", "已发送");
-        viewModel.SelectedNode.Should().BeOfType<FolderNodeViewModel>().Which.Folder.Id.Should().Be(scenario.Inbox.Id);
+        viewModel.SelectedNode.Should().BeSameAs(viewModel.UnifiedInbox);
         viewModel.Messages.Select(m => m.Subject).Should().Equal("Hello 2", "Hello 1");
         scenario.Dialogs.AddAccountCalls.Should().Be(0);
     }
@@ -613,7 +644,7 @@ public class MainWindowViewModelTests
     public async Task SearchCommand_WithText_SearchesSelectedAccount()
     {
         var scenario = new Scenario();
-        await scenario.StartAsync();
+        await scenario.StartInInboxAsync();
         scenario.ViewModel.SearchText = " Hello 2 ";
 
         await scenario.ViewModel.SearchCommand.ExecuteAsync(null);
@@ -1228,7 +1259,7 @@ public class MainWindowViewModelTests
     public async Task RefreshAsync_NewFolderAppears_AddsItAndKeepsSelection()
     {
         var scenario = new Scenario();
-        await scenario.StartAsync();
+        await scenario.StartInInboxAsync();
         var drafts = TestData.Folder(scenario.Account, "Drafts", FolderRole.Drafts);
         scenario.Dispatcher.On<GetFoldersQuery>(_ => new List<MailFolder> { scenario.Sent, scenario.Inbox, drafts });
 
@@ -1434,7 +1465,6 @@ public class MainWindowViewModelTests
         var trash = TestData.Folder(scenario.Account, "Trash", FolderRole.Trash);
         scenario.Dispatcher.On<GetFoldersQuery>(_ => new List<MailFolder> { scenario.Inbox, trash });
         scenario.Messages.Add(TestData.Message(scenario.Account, trash, 3, "Old news"));
-        scenario.Dispatcher.On<GetMessagesQuery>(_ => scenario.Messages.ToList());
         await scenario.StartAsync();
         scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages.Single(m => m.Subject == "Old news");
 
@@ -1550,7 +1580,6 @@ public class MainWindowViewModelTests
         var trash = TestData.Folder(scenario.Account, "Trash", FolderRole.Trash);
         scenario.Dispatcher.On<GetFoldersQuery>(_ => new List<MailFolder> { scenario.Inbox, trash });
         scenario.Messages.Add(TestData.Message(scenario.Account, trash, 3, "Old news"));
-        scenario.Dispatcher.On<GetMessagesQuery>(_ => scenario.Messages.ToList());
         await scenario.StartAsync();
         foreach (var item in scenario.ViewModel.Messages)
         {
@@ -1694,14 +1723,14 @@ public class MainWindowViewModelTests
     {
         var scenario = new Scenario();
         await scenario.StartAsync();
-        var loads = scenario.Dispatcher.Sent<GetMessagesQuery>().Count;
+        var loads = scenario.Dispatcher.Sent<GetUnifiedInboxQuery>().Count;
 
         scenario.SyncEvents.RaiseDeletion(new DeletionProgressEventArgs(scenario.Account.Id, 3, 4, finished, error, willRetry));
         await Task.WhenAll(scenario.UiThread.Invocations);
         await scenario.ViewModel.WhenIdleAsync();
 
         scenario.ViewModel.StatusText.Should().StartWith(expected);
-        (scenario.Dispatcher.Sent<GetMessagesQuery>().Count > loads).Should().Be(reloads);
+        (scenario.Dispatcher.Sent<GetUnifiedInboxQuery>().Count > loads).Should().Be(reloads);
     }
 
     /// <summary>
@@ -1750,10 +1779,10 @@ public class MainWindowViewModelTests
     }
 
     /// <summary>
-    /// Verifies deleting the selected label in the manager leaves the label view and falls back to a folder.
+    /// Verifies deleting the selected label in the manager leaves the label view and falls back to the unified inbox.
     /// </summary>
     [Fact]
-    public async Task ManageLabels_SelectedLabelDeleted_FallsBackToFolder()
+    public async Task ManageLabels_SelectedLabelDeleted_FallsBackToUnifiedInbox()
     {
         var scenario = new Scenario();
         scenario.Messages[0].AddLabel(scenario.Work);
@@ -1767,7 +1796,7 @@ public class MainWindowViewModelTests
         await scenario.ViewModel.WhenIdleAsync();
 
         scenario.ViewModel.TreeRoots.OfType<LabelNodeViewModel>().Should().BeEmpty();
-        scenario.ViewModel.SelectedNode.Should().BeOfType<FolderNodeViewModel>();
+        scenario.ViewModel.SelectedNode.Should().BeSameAs(scenario.ViewModel.UnifiedInbox);
         scenario.ViewModel.Messages.Should().HaveCount(2);
     }
 
@@ -1901,7 +1930,7 @@ public class MainWindowViewModelTests
         scenario.ViewModel.TreeRoots.OfType<AccountNodeViewModel>().Should().BeEmpty();
         scenario.ViewModel.Messages.Should().BeEmpty();
         scenario.ViewModel.SelectedMessage.Should().BeNull();
-        scenario.ViewModel.SelectedNode.Should().BeNull();
+        scenario.ViewModel.SelectedNode.Should().BeSameAs(scenario.ViewModel.UnifiedInbox);
         scenario.ViewModel.StatusText.Should().Contain(scenario.Account.EmailAddress);
     }
 
@@ -2085,10 +2114,10 @@ public class MainWindowViewModelTests
     }
 
     /// <summary>
-    /// Verifies deleting the selected account moves the selection to a remaining account's folder.
+    /// Verifies deleting the account that owns the selected folder moves the selection to the unified inbox.
     /// </summary>
     [Fact]
-    public async Task DeleteAccount_SelectedAccountRemoved_SelectsRemainingFolder()
+    public async Task DeleteAccount_SelectedAccountRemoved_SelectsUnifiedInbox()
     {
         var scenario = new Scenario();
         var other = TestData.Account("other@example.com");
@@ -2104,12 +2133,12 @@ public class MainWindowViewModelTests
             removed = true;
             return Unit.Value;
         });
-        await scenario.StartAsync();
+        await scenario.StartInInboxAsync();
 
         await scenario.ViewModel.DeleteAccountCommand.ExecuteAsync(scenario.ViewModel.Accounts.First(a => a.Account.Id == scenario.Account.Id));
         await scenario.ViewModel.WhenIdleAsync();
 
-        scenario.ViewModel.SelectedNode.Should().BeOfType<FolderNodeViewModel>().Which.Account.Id.Should().Be(other.Id);
+        scenario.ViewModel.SelectedNode.Should().BeSameAs(scenario.ViewModel.UnifiedInbox);
     }
 
     /// <summary>
@@ -2265,7 +2294,7 @@ public class MainWindowViewModelTests
     public async Task LoadMoreAsync_FullPages_AppendsUntilEverythingIsListed()
     {
         var scenario = PagedScenario(120);
-        await scenario.StartAsync();
+        await scenario.StartInInboxAsync();
         scenario.ViewModel.Messages.Should().HaveCount(50);
 
         await scenario.ViewModel.LoadMoreAsync();
@@ -2289,7 +2318,7 @@ public class MainWindowViewModelTests
     public async Task LoadMoreAsync_ShortFirstPage_SendsNoQuery()
     {
         var scenario = PagedScenario(5);
-        await scenario.StartAsync();
+        await scenario.StartInInboxAsync();
         var queries = scenario.Dispatcher.Sent<GetMessagesQuery>().Count;
 
         await scenario.ViewModel.LoadMoreAsync();
@@ -2306,7 +2335,7 @@ public class MainWindowViewModelTests
     public async Task RefreshAsync_AfterLoadMore_KeepsLoadedPages()
     {
         var scenario = PagedScenario(120);
-        await scenario.StartAsync();
+        await scenario.StartInInboxAsync();
         await scenario.ViewModel.LoadMoreAsync();
 
         await scenario.ViewModel.RefreshAsync();
@@ -2325,7 +2354,7 @@ public class MainWindowViewModelTests
     public async Task LoadMoreAsync_ShowingSearchResults_PagesTheSearch()
     {
         var scenario = PagedScenario(120);
-        await scenario.StartAsync();
+        await scenario.StartInInboxAsync();
         scenario.ViewModel.SearchText = "Paged";
         await scenario.ViewModel.SearchCommand.ExecuteAsync(null);
 
@@ -2345,7 +2374,7 @@ public class MainWindowViewModelTests
     public async Task SelectedNode_ChangedAfterLoadMore_ReloadsFirstPageOnly()
     {
         var scenario = PagedScenario(120);
-        await scenario.StartAsync();
+        await scenario.StartInInboxAsync();
         await scenario.ViewModel.LoadMoreAsync();
 
         scenario.ViewModel.SelectedNode = scenario.ViewModel.TreeRoots[0];
@@ -2365,7 +2394,7 @@ public class MainWindowViewModelTests
     public async Task LoadMoreAsync_QueryFails_KeepsListAndAllowsRetry()
     {
         var scenario = PagedScenario(120);
-        await scenario.StartAsync();
+        await scenario.StartInInboxAsync();
         var fail = true;
         scenario.Dispatcher.On<GetMessagesQuery>(q => fail
             ? throw new InvalidOperationException("db locked")
@@ -2388,7 +2417,7 @@ public class MainWindowViewModelTests
     public async Task LoadMoreAsync_WhileLoading_SendsOnlyOneQuery()
     {
         var scenario = PagedScenario(120);
-        await scenario.StartAsync();
+        await scenario.StartInInboxAsync();
         var gate = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
         scenario.Dispatcher.OnAsync<GetMessagesQuery>(async (q, _) =>
         {
