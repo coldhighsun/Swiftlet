@@ -67,7 +67,7 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
             if (startup is null || startup.IsStarted)
             {
                 var main = CreateMainWindow();
-                Adopt(desktop, main);
+                AdoptMain(desktop, main);
                 KeepInTray(desktop, main);
                 AnnounceNewMail(desktop, main);
             }
@@ -111,6 +111,29 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
     {
         desktop.MainWindow = window;
         _activator = new WindowActivator(window);
+    }
+
+    /// <summary>
+    /// Makes the main window the main window, or, when the setting says so, keeps it hidden until something shows it
+    /// (the tray icon, a second start, a new mail pop-up). The framework shows <c>MainWindow</c> on its own, so a hidden
+    /// start leaves it unset until the window is first opened, and ends the application by itself when the window closes.
+    /// </summary>
+    /// <param name="desktop">The desktop lifetime.</param>
+    /// <param name="window">The main window.</param>
+    /// <returns><see langword="true"/> if the window was left hidden.</returns>
+    private bool AdoptMain(IClassicDesktopStyleApplicationLifetime desktop, MainWindow window)
+    {
+        if (services.GetService<IAppSettings>() is not { StartMinimized: true })
+        {
+            Adopt(desktop, window);
+            return false;
+        }
+
+        _activator = new WindowActivator(window);
+        desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        window.Closed += (_, _) => desktop.Shutdown();
+        window.Opened += (_, _) => desktop.MainWindow ??= window;
+        return true;
     }
 
     /// <summary>
@@ -213,10 +236,14 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
                 var main = CreateMainWindow();
 
                 // The main window takes over first, so closing the startup window does not end the application.
-                Adopt(desktop, main);
+                var hidden = AdoptMain(desktop, main);
                 KeepInTray(desktop, main);
                 AnnounceNewMail(desktop, main);
-                main.Show();
+                if (!hidden)
+                {
+                    main.Show();
+                }
+
                 window.Close();
             }
             catch (Exception ex)

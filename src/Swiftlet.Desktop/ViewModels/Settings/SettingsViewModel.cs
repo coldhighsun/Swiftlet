@@ -65,6 +65,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         DownloadFullHistory = settings.DownloadFullHistory;
         CloseToTray = settings.CloseToTray;
         ShowNewMailNotifications = settings.ShowNewMailNotifications;
+        StartMinimized = settings.StartMinimized;
         RefreshRemoteImageRules();
         _protection = protection;
         _themeApplier = themeApplier;
@@ -245,6 +246,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     public partial bool ShowNewMailNotifications { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether the application starts without showing the main window.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool StartMinimized { get; set; }
+
+    /// <summary>
     /// Gets or sets the localized error of the last failed save, or <see langword="null"/>.
     /// </summary>
     [ObservableProperty]
@@ -343,6 +350,30 @@ public sealed partial class SettingsViewModel : ObservableObject
             // The file could not be written; show it and put the checkbox back so it matches what is stored.
             ErrorText = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
             ShowNewMailNotifications = _settings.ShowNewMailNotifications;
+        }
+    }
+
+    /// <summary>
+    /// Saves the new value as soon as the checkbox changes.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    partial void OnStartMinimizedChanged(bool value)
+    {
+        if (value == _settings.StartMinimized)
+        {
+            return;
+        }
+
+        ErrorText = null;
+        try
+        {
+            _settings.SetStartMinimized(value);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The file could not be written; show it and put the checkbox back so it matches what is stored.
+            ErrorText = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
+            StartMinimized = _settings.StartMinimized;
         }
     }
 

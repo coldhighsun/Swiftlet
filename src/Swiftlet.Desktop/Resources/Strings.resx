@@ -235,6 +235,8 @@
   <data name="Settings_CloseToTrayHint" xml:space="preserve"><value>Mail keeps synchronizing. Quit from the menu of the tray icon. Turn this off if your desktop shows no tray icons.</value></data>
   <data name="Settings_NewMailNotifications" xml:space="preserve"><value>Show a notification for new mail</value></data>
   <data name="Settings_NewMailNotificationsHint" xml:space="preserve"><value>A small window appears in the corner of the screen when unread mail arrives in an inbox. You can delete, archive or mark the mail there.</value></data>
+  <data name="Settings_StartMinimized" xml:space="preserve"><value>Start hidden in the tray</value></data>
+  <data name="Settings_StartMinimizedHint" xml:space="preserve"><value>The main window is not shown when the app starts; open it from the tray icon. Needs a tray icon on your desktop. Starting the app again also brings the window back.</value></data>
   <data name="Settings_TrayUnread" xml:space="preserve"><value>Unread in tray</value></data>
   <data name="Settings_TrayUnreadDot" xml:space="preserve"><value>Red dot</value></data>
   <data name="Settings_TrayUnreadBlink" xml:space="preserve"><value>Blinking</value></data>

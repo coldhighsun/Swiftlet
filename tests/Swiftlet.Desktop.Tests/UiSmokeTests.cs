@@ -876,8 +876,10 @@ public class UiSmokeTests
                 window.Title.Should().Be(title);
                 window.GetVisualDescendants().OfType<ComboBox>().Where(c => c.IsEffectivelyVisible)
                     .Select(c => c.SelectedItem).Should().Equal(selector.SelectedOption, viewModel.SelectedTheme, viewModel.SelectedTrayUnreadStyle);
-                window.GetVisualDescendants().OfType<CheckBox>().Should().HaveCount(2)
-                    .And.OnlyContain(b => b.IsChecked == true, "the tray and notification settings are on by default");
+                var generalBoxes = window.GetVisualDescendants().OfType<CheckBox>().ToList();
+                generalBoxes.Should().HaveCount(3);
+                generalBoxes.Take(2).Should().OnlyContain(b => b.IsChecked == true, "the tray and notification settings are on by default");
+                generalBoxes[2].IsChecked.Should().BeFalse("the hidden start is off by default");
                 window.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).Should().Contain(close);
 
                 SelectSettingsPage(window, 1, $"settings-sync-{language}");

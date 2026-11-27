@@ -458,6 +458,20 @@ internal sealed class FakeAppSettings : IAppSettings
     }
 
     /// <inheritdoc />
+    public bool StartMinimized { get; set; }
+
+    /// <inheritdoc />
+    public void SetStartMinimized(bool value)
+    {
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+
+        StartMinimized = value;
+    }
+
+    /// <inheritdoc />
     public string TrayUnreadStyle { get; set; } = Swiftlet.Desktop.Settings.TrayUnreadStyle.Dot;
 
     /// <inheritdoc />

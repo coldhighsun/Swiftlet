@@ -141,6 +141,23 @@ public class SettingsStoreTests : IDisposable
     }
 
     /// <summary>
+    /// Verifies a hidden start is off unless chosen, and the choice survives a restart without touching other settings.
+    /// </summary>
+    [Fact]
+    public void StartMinimized_DefaultsOffAndIsSaved()
+    {
+        var store = new AppSettings(StorePath);
+        store.StartMinimized.Should().BeFalse();
+
+        store.SetStartMinimized(true);
+        store.SetCloseToTray(false);
+
+        var reloaded = new AppSettings(StorePath);
+        reloaded.StartMinimized.Should().BeTrue();
+        reloaded.CloseToTray.Should().BeFalse();
+    }
+
+    /// <summary>
     /// Verifies the tray style defaults to the dot, is saved and announced.
     /// </summary>
     [Fact]

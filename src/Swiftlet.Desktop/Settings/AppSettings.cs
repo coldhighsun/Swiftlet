@@ -33,6 +33,17 @@ public interface IAppSettings : ISyncSettings
     void SetCloseToTray(bool value);
 
     /// <summary>
+    /// Gets a value indicating whether the main window stays hidden (tray only) when the application starts.
+    /// </summary>
+    bool StartMinimized { get; }
+
+    /// <summary>
+    /// Changes whether the application starts without showing the main window, and saves the choice.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    void SetStartMinimized(bool value);
+
+    /// <summary>
     /// Gets a value indicating whether newly arrived mail is announced with a pop-up.
     /// </summary>
     bool ShowNewMailNotifications { get; }
@@ -118,6 +129,11 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     private volatile bool _showNewMailNotifications;
 
     /// <summary>
+    /// The in-memory value, read when the application starts.
+    /// </summary>
+    private volatile bool _startMinimized;
+
+    /// <summary>
     /// The in-memory language preference, guarded by <see cref="_gate"/>; kept so a corrupt file never resets it.
     /// </summary>
     private string? _language;
@@ -150,6 +166,7 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
         _downloadFullHistory = file.DownloadFullHistory ?? true;
         _closeToTray = file.CloseToTray ?? true;
         _showNewMailNotifications = file.ShowNewMailNotifications ?? true;
+        _startMinimized = file.StartMinimized ?? false;
         _theme = ThemePreference.Normalize(
             file.Theme is { ValueKind: JsonValueKind.String } theme ? theme.GetString() : null);
         _trayUnreadStyle = Settings.TrayUnreadStyle.Normalize(
@@ -168,6 +185,7 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     /// <param name="ShowNewMailNotifications">Whether newly arrived mail is announced with a pop-up.</param>
     /// <param name="TrayUnreadStyle">How the tray icon points out unread mail; raw JSON for the same reason as the theme.</param>
     /// <param name="MainWindowPlacement">Where the main window was; raw JSON for the same reason as the theme.</param>
+    /// <param name="StartMinimized">Whether the main window stays hidden when the application starts.</param>
     private sealed record SettingsFile(
         string? Language,
         bool? SyncServerDeletions,
@@ -176,7 +194,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
         bool? CloseToTray = null,
         bool? ShowNewMailNotifications = null,
         JsonElement? TrayUnreadStyle = null,
-        JsonElement? MainWindowPlacement = null);
+        JsonElement? MainWindowPlacement = null,
+        bool? StartMinimized = null);
 
     /// <inheritdoc />
     public bool RemoveServerDeletedMessages => _removeServerDeletedMessages;
@@ -192,6 +211,9 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
 
     /// <inheritdoc />
     public bool ShowNewMailNotifications => _showNewMailNotifications;
+
+    /// <inheritdoc />
+    public bool StartMinimized => _startMinimized;
 
     /// <inheritdoc />
     public string TrayUnreadStyle => _trayUnreadStyle;
@@ -278,6 +300,16 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     }
 
     /// <inheritdoc />
+    public void SetStartMinimized(bool value)
+    {
+        lock (_gate)
+        {
+            Write(Snapshot() with { StartMinimized = value });
+            _startMinimized = value;
+        }
+    }
+
+    /// <inheritdoc />
     public void SetTrayUnreadStyle(string value)
     {
         var style = Settings.TrayUnreadStyle.Normalize(value);
@@ -316,7 +348,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
             _closeToTray,
             _showNewMailNotifications,
             JsonSerializer.SerializeToElement(_trayUnreadStyle),
-            _mainWindowPlacement is { } placement ? SerializePlacement(placement) : null);
+            _mainWindowPlacement is { } placement ? SerializePlacement(placement) : null,
+            _startMinimized);
     }
 
     /// <summary>
