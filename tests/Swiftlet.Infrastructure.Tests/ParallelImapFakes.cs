@@ -102,10 +102,10 @@ internal sealed class FakeImapConnection(FakeImapSession server) : IImapSession
     public Task<IReadOnlyDictionary<uint, uint>> DeleteMessagesAsync(
         string folderFullName,
         IReadOnlyList<uint> uids,
-        string? trashFolderFullName,
+        string? destinationFolderFullName,
         CancellationToken cancellationToken = default)
     {
-        return RunAsync(null, () => server.DeleteMessagesAsync(folderFullName, uids, trashFolderFullName, cancellationToken));
+        return RunAsync(null, () => server.DeleteMessagesAsync(folderFullName, uids, destinationFolderFullName, cancellationToken));
     }
 
     /// <inheritdoc />

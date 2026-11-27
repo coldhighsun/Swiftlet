@@ -178,7 +178,8 @@ public static class SqliteSchemaInitializer
     }
 
     /// <summary>
-    /// Adds the columns behind background deletion to a database created by an earlier version; does nothing when they exist.
+    /// Adds the columns behind background deletion and moving to a database created by an earlier version; does nothing when
+    /// they exist.
     /// </summary>
     /// <param name="context">The database context.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
@@ -189,6 +190,11 @@ public static class SqliteSchemaInitializer
             context,
             "SELECT COUNT(*) AS Value FROM pragma_table_info('Messages') WHERE name = 'IsDeletePending'",
             "ALTER TABLE Messages ADD COLUMN IsDeletePending INTEGER NOT NULL DEFAULT 0;",
+            cancellationToken);
+        await EnsureColumnAsync(
+            context,
+            "SELECT COUNT(*) AS Value FROM pragma_table_info('Messages') WHERE name = 'PendingMoveFolderId'",
+            "ALTER TABLE Messages ADD COLUMN PendingMoveFolderId TEXT NULL;",
             cancellationToken);
         await EnsureColumnAsync(
             context,

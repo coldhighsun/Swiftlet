@@ -224,7 +224,7 @@ internal sealed class FakeImapSession : IImapSession
     /// <summary>
     /// Gets the recorded delete calls, one per batch.
     /// </summary>
-    public List<(string Folder, uint[] Uids, string? TrashFolder)> DeleteCalls { get; } = [];
+    public List<(string Folder, uint[] Uids, string? Destination)> DeleteCalls { get; } = [];
 
     /// <summary>
     /// Gets or sets an exception to throw from <see cref="DeleteMessagesAsync"/>.
@@ -245,10 +245,10 @@ internal sealed class FakeImapSession : IImapSession
     public async Task<IReadOnlyDictionary<uint, uint>> DeleteMessagesAsync(
         string folderFullName,
         IReadOnlyList<uint> uids,
-        string? trashFolderFullName,
+        string? destinationFolderFullName,
         CancellationToken cancellationToken = default)
     {
-        DeleteCalls.Add((folderFullName, [.. uids], trashFolderFullName));
+        DeleteCalls.Add((folderFullName, [.. uids], destinationFolderFullName));
         if (OnDeleteAsync is not null)
         {
             await OnDeleteAsync();
@@ -264,26 +264,26 @@ internal sealed class FakeImapSession : IImapSession
             throw DeleteFailure;
         }
 
-        // Mimic the server: the messages leave the source folder and, for a move, appear in Trash under the next free UIDs.
+        // Mimic the server: the messages leave the source folder and, for a move, appear in the destination under the next free UIDs.
         var moved = new Dictionary<uint, uint>();
         var source = Messages.GetValueOrDefault(folderFullName);
         foreach (var uid in uids)
         {
             var original = source?.FirstOrDefault(m => m.Uid == uid);
             source?.RemoveAll(m => m.Uid == uid);
-            if (trashFolderFullName is null || original is null)
+            if (destinationFolderFullName is null || original is null)
             {
                 continue;
             }
 
-            if (!Messages.TryGetValue(trashFolderFullName, out var trash))
+            if (!Messages.TryGetValue(destinationFolderFullName, out var target))
             {
-                trash = [];
-                Messages[trashFolderFullName] = trash;
+                target = [];
+                Messages[destinationFolderFullName] = target;
             }
 
-            var newUid = Math.Max(trash.Count == 0 ? 0u : trash.Max(m => m.Uid), TrashNextUidFloor) + 1;
-            trash.Add(original with { Uid = newUid });
+            var newUid = Math.Max(target.Count == 0 ? 0u : target.Max(m => m.Uid), TrashNextUidFloor) + 1;
+            target.Add(original with { Uid = newUid });
             if (MoveReportsNewUid)
             {
                 moved[uid] = newUid;
@@ -299,7 +299,7 @@ internal sealed class FakeImapSession : IImapSession
     public bool MoveReportsNewUid { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets the UID the next message moved to Trash must exceed, to simulate Trash UIDs consumed by other clients.
+    /// Gets or sets the UID the next moved message must exceed, to simulate Trash UIDs consumed by other clients.
     /// </summary>
     public uint TrashNextUidFloor { get; set; }
 

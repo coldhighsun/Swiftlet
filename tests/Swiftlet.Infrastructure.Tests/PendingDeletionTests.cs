@@ -12,7 +12,7 @@ using Swiftlet.Infrastructure.Persistence.Repositories;
 namespace Swiftlet.Infrastructure.Tests;
 
 /// <summary>
-/// Tests for the delete commands and <see cref="PendingDeletionService"/> against real SQLite repositories and a scripted IMAP session.
+/// Tests for the delete and move commands and <see cref="PendingDeletionService"/> against real SQLite repositories and a scripted IMAP session.
 /// </summary>
 public class PendingDeletionTests
 {
@@ -94,7 +94,7 @@ public class PendingDeletionTests
         var call = s.Server.DeleteCalls.Should().ContainSingle().Which;
         call.Folder.Should().Be("INBOX");
         call.Uids.Should().Equal(5u, 6u);
-        call.TrashFolder.Should().Be(trash.FullName);
+        call.Destination.Should().Be(trash.FullName);
         (await s.FindAsync(first.Id, ct)).Should().BeNull("the Trash was never synchronized, so the next sync downloads it");
         (await s.ProcessAsync(ct)).Should().BeNull();
     }
@@ -119,7 +119,7 @@ public class PendingDeletionTests
         await s.ProcessAsync(ct);
 
         // Assert
-        s.Server.DeleteCalls.Should().ContainSingle().Which.TrashFolder.Should().BeNull();
+        s.Server.DeleteCalls.Should().ContainSingle().Which.Destination.Should().BeNull();
         s.Server.RangeCalls.Should().BeEmpty();
         (await s.FindAsync(message.Id, ct)).Should().BeNull();
     }
@@ -445,6 +445,217 @@ public class PendingDeletionTests
     }
 
     /// <summary>
+    /// Verifies moving hides the messages at once, skips those already in the target and wakes the background worker.
+    /// </summary>
+    [Fact]
+    public async Task MoveMessages_Selection_HidesThemSkipsThoseInTargetAndSignals()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var s = await Scenario.CreateAsync(ct);
+        var archive = await s.AddFolderAsync("Archive", FolderRole.Archive, ct);
+        var moved = await s.AddAsync(s.Inbox, 1, ct);
+        var already = await s.AddAsync(archive, 2, ct);
+        var signal = new DeletionSignal();
+
+        // Act
+        var marked = await new MoveMessagesCommandHandler(s.Folders, s.Messages, signal)
+            .Handle(new MoveMessagesCommand(s.Account.Id, [moved.Id, already.Id], archive.Id), ct);
+
+        // Assert
+        marked.Should().Be(1);
+        await signal.WaitAsync(ct).WaitAsync(TimeSpan.FromSeconds(5), ct);
+        (await s.Messages.GetByFolderAsync(s.Account.Id, s.Inbox.Id, 0, 10, ct)).Should().BeEmpty();
+        (await s.Messages.GetByFolderAsync(s.Account.Id, archive.Id, 0, 10, ct)).Select(m => m.Id).Should().Equal(already.Id);
+        (await s.FindAsync(moved.Id, ct))!.PendingMoveFolderId.Should().Be(archive.Id);
+        s.Factory.ConnectCount.Should().Be(0);
+    }
+
+    /// <summary>
+    /// Verifies a move to a folder the account does not have is rejected and hides nothing.
+    /// </summary>
+    [Fact]
+    public async Task MoveMessages_UnknownTarget_Throws()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var s = await Scenario.CreateAsync(ct);
+        var message = await s.AddAsync(s.Inbox, 1, ct);
+
+        // Act
+        var act = async () => await new MoveMessagesCommandHandler(s.Folders, s.Messages, new DeletionSignal())
+            .Handle(new MoveMessagesCommand(s.Account.Id, [message.Id], Guid.NewGuid()), ct);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        (await s.Messages.CountPendingDeletionsAsync(s.Account.Id, ct)).Should().Be(0);
+    }
+
+    /// <summary>
+    /// Verifies a move reaches the server and the row joins a complete cached target with its identity.
+    /// </summary>
+    [Fact]
+    public async Task ProcessBatch_PendingMove_MovesToTargetAndRehomesRow()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var s = await Scenario.CreateAsync(ct);
+        await s.AddFolderAsync("Trash", FolderRole.Trash, ct);
+        var archive = await s.AddFolderAsync("Archive", FolderRole.Archive, ct);
+        archive.UpdateUidValidity(1);
+        await s.Folders.SaveChangesAsync(ct);
+        await s.AddAsync(archive, 10, ct);
+        s.Server.Messages["Archive"] = [TestData.Remote(10)];
+        var message = await s.AddAsync(s.Inbox, 5, ct, attachment: "keep.pdf");
+        await s.MarkMoveAsync(archive.Id, ct, message);
+
+        // Act
+        var result = await s.ProcessAsync(ct);
+
+        // Assert
+        result.Should().Be(new DeletionBatchResult("INBOX", 1, 0));
+        s.Server.DeleteCalls.Should().ContainSingle().Which.Destination.Should().Be("Archive");
+        var stored = (await s.FindAsync(message.Id, ct))!;
+        stored.FolderId.Should().Be(archive.Id);
+        stored.Uid.Should().Be(11u);
+        stored.IsDeletePending.Should().BeFalse();
+        stored.PendingMoveFolderId.Should().BeNull();
+        stored.Attachments.Should().ContainSingle();
+    }
+
+    /// <summary>
+    /// Verifies moving out of Trash moves the message instead of deleting it for good; a target never synchronized
+    /// gets the message with its next sync.
+    /// </summary>
+    [Fact]
+    public async Task ProcessBatch_MoveOutOfTrash_MovesInsteadOfDeleting()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var s = await Scenario.CreateAsync(ct);
+        var trash = await s.AddFolderAsync("Trash", FolderRole.Trash, ct);
+        var message = await s.AddAsync(trash, 7, ct);
+        await s.MarkMoveAsync(s.Inbox.Id, ct, message);
+
+        // Act
+        await s.ProcessAsync(ct);
+
+        // Assert
+        s.Server.DeleteCalls.Should().ContainSingle().Which.Destination.Should().Be("INBOX");
+        s.Server.Messages["INBOX"].Should().ContainSingle();
+        (await s.FindAsync(message.Id, ct)).Should().BeNull();
+    }
+
+    /// <summary>
+    /// Verifies deletions and moves to different folders of one source folder are sent as separate server commands.
+    /// </summary>
+    [Fact]
+    public async Task ProcessBatch_SeveralDestinations_UsesOneCommandPerDestination()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var s = await Scenario.CreateAsync(ct);
+        await s.AddFolderAsync("Trash", FolderRole.Trash, ct);
+        var archive = await s.AddFolderAsync("Archive", FolderRole.Archive, ct);
+        var work = await s.AddFolderAsync("Work", FolderRole.Other, ct);
+        await s.MarkAsync(ct, await s.AddAsync(s.Inbox, 1, ct));
+        await s.MarkMoveAsync(archive.Id, ct, await s.AddAsync(s.Inbox, 2, ct), await s.AddAsync(s.Inbox, 4, ct));
+        await s.MarkMoveAsync(work.Id, ct, await s.AddAsync(s.Inbox, 3, ct));
+
+        // Act
+        while (await s.ProcessAsync(ct) is not null)
+        {
+        }
+
+        // Assert
+        s.Server.DeleteCalls.Select(c => $"{c.Destination}:{string.Join(',', c.Uids)}")
+            .Should().BeEquivalentTo(["Trash:1", "Archive:2,4", "Work:3"]);
+    }
+
+    /// <summary>
+    /// Verifies a refused move shows only its own messages again and leaves other moves pending.
+    /// </summary>
+    [Fact]
+    public async Task ProcessBatch_MoveRefused_RestoresOnlyThatMove()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var s = await Scenario.CreateAsync(ct);
+        var archive = await s.AddFolderAsync("Archive", FolderRole.Archive, ct);
+        var work = await s.AddFolderAsync("Work", FolderRole.Other, ct);
+        await s.MarkMoveAsync(archive.Id, ct, await s.AddAsync(s.Inbox, 1, ct));
+        await s.MarkMoveAsync(work.Id, ct, await s.AddAsync(s.Inbox, 2, ct));
+        s.Server.DeleteFailures.Enqueue(new MailOperationRejectedException("read only"));
+
+        // Act
+        var result = await s.ProcessAsync(ct);
+
+        // Assert
+        result!.Error.Should().Be("read only");
+        result.Remaining.Should().Be(1);
+        (await s.Messages.GetByFolderAsync(s.Account.Id, s.Inbox.Id, 0, 10, ct)).Should().ContainSingle();
+    }
+
+    /// <summary>
+    /// Verifies a move whose target folder vanished never reaches the server, and never turns into a deletion.
+    /// </summary>
+    [Fact]
+    public async Task ProcessBatch_MoveTargetGone_ShowsMessagesAgain()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var s = await Scenario.CreateAsync(ct);
+        await s.AddFolderAsync("Trash", FolderRole.Trash, ct);
+        var message = await s.AddAsync(s.Inbox, 5, ct);
+        await s.MarkMoveAsync(Guid.NewGuid(), ct, message);
+
+        // Act
+        var result = await s.ProcessAsync(ct);
+
+        // Assert
+        result!.Error.Should().NotBeNull();
+        s.Server.DeleteCalls.Should().BeEmpty();
+        var stored = (await s.FindAsync(message.Id, ct))!;
+        stored.IsDeletePending.Should().BeFalse();
+        stored.PendingMoveFolderId.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Verifies a deletion replaces a pending move, and a late move never replaces a pending deletion.
+    /// </summary>
+    /// <param name="emptyFolder">Whether the deletion empties the folder; otherwise it deletes the message.</param>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Delete_PendingMove_DeletionWins(bool emptyFolder)
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var s = await Scenario.CreateAsync(ct);
+        var archive = await s.AddFolderAsync("Archive", FolderRole.Archive, ct);
+        var message = await s.AddAsync(s.Inbox, 5, ct);
+        await s.MarkMoveAsync(archive.Id, ct, message);
+
+        // Act
+        if (emptyFolder)
+        {
+            await s.EmptyAsync(s.Inbox, ct);
+        }
+        else
+        {
+            await s.Messages.MarkDeletePendingAsync(s.Account.Id, [message.Id], ct);
+        }
+
+        var moved = await s.Messages.MarkMovePendingAsync(s.Account.Id, [message.Id], archive.Id, ct);
+
+        // Assert
+        moved.Should().Be(0);
+        var stored = (await s.FindAsync(message.Id, ct))!;
+        stored.IsDeletePending.Should().BeTrue();
+        stored.PendingMoveFolderId.Should().BeNull();
+    }
+
+    /// <summary>
     /// An account with an INBOX, its repositories and a scripted server.
     /// </summary>
     private sealed class Scenario : IAsyncDisposable
@@ -584,6 +795,31 @@ public class PendingDeletionTests
         /// <returns>A task that completes when they are marked.</returns>
         public async Task MarkAsync(CancellationToken cancellationToken, params MailMessage[] messages)
         {
+            await PutOnServerAsync(messages, cancellationToken);
+            await Messages.MarkDeletePendingAsync(Account.Id, [.. messages.Select(m => m.Id)], cancellationToken);
+        }
+
+        /// <summary>
+        /// Marks messages for a move and puts them on the server.
+        /// </summary>
+        /// <param name="targetFolderId">The folder to move them to.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <param name="messages">The messages.</param>
+        /// <returns>A task that completes when they are marked.</returns>
+        public async Task MarkMoveAsync(Guid targetFolderId, CancellationToken cancellationToken, params MailMessage[] messages)
+        {
+            await PutOnServerAsync(messages, cancellationToken);
+            await Messages.MarkMovePendingAsync(Account.Id, [.. messages.Select(m => m.Id)], targetFolderId, cancellationToken);
+        }
+
+        /// <summary>
+        /// Puts cached messages on the scripted server.
+        /// </summary>
+        /// <param name="messages">The messages.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>A task that completes when the server holds them.</returns>
+        private async Task PutOnServerAsync(MailMessage[] messages, CancellationToken cancellationToken)
+        {
             var folders = await Folders.GetByAccountAsync(Account.Id, cancellationToken);
             foreach (var message in messages)
             {
@@ -596,8 +832,6 @@ public class PendingDeletionTests
 
                 list.Add(TestData.Remote(message.Uid));
             }
-
-            await Messages.MarkDeletePendingAsync(Account.Id, [.. messages.Select(m => m.Id)], cancellationToken);
         }
 
         /// <summary>

@@ -277,7 +277,7 @@ internal sealed class MailKitImapSession(ImapClient client, ILogger<MailKitImapS
     public async Task<IReadOnlyDictionary<uint, uint>> DeleteMessagesAsync(
         string folderFullName,
         IReadOnlyList<uint> uids,
-        string? trashFolderFullName,
+        string? destinationFolderFullName,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(uids);
@@ -288,11 +288,12 @@ internal sealed class MailKitImapSession(ImapClient client, ILogger<MailKitImapS
         }
 
         logger.LogInformation(
-            "Deleting {Count} messages in {Folder} ({Mode})",
+            "Removing {Count} messages from {Folder} ({Mode} {Destination})",
             uids.Count,
             folderFullName,
-            trashFolderFullName is null ? "permanent" : "move to trash");
-        if (trashFolderFullName is null && !client.Capabilities.Contains(ImapCapability.UidPlus))
+            destinationFolderFullName is null ? "permanent delete" : "move to",
+            destinationFolderFullName);
+        if (destinationFolderFullName is null && !client.Capabilities.Contains(ImapCapability.UidPlus))
         {
             // Checked before any mutation: without UIDPLUS only a plain EXPUNGE exists, which would purge unrelated
             // flagged mail, and a \Deleted flag left behind would let any other client's EXPUNGE delete these messages.
@@ -307,7 +308,7 @@ internal sealed class MailKitImapSession(ImapClient client, ILogger<MailKitImapS
             await folder.OpenAsync(FolderAccess.ReadWrite, cancellationToken);
             try
             {
-                if (trashFolderFullName is null)
+                if (destinationFolderFullName is null)
                 {
                     // Permanent delete: flag and expunge only these UIDs (UID EXPUNGE, guarded by UIDPLUS above).
                     // The server-side behaviour (expunge failing after the flag, flag undo) cannot be unit-tested
@@ -328,8 +329,8 @@ internal sealed class MailKitImapSession(ImapClient client, ILogger<MailKitImapS
                 else
                 {
                     // MoveToAsync uses MOVE when available and falls back to COPY + delete otherwise.
-                    var trash = await client.GetFolderAsync(trashFolderFullName, cancellationToken);
-                    var moved = await folder.MoveToAsync(uniqueIds, trash, cancellationToken);
+                    var target = await client.GetFolderAsync(destinationFolderFullName, cancellationToken);
+                    var moved = await folder.MoveToAsync(uniqueIds, target, cancellationToken);
                     foreach (var (source, destination) in moved.Source.Zip(moved.Destination))
                     {
                         if (destination.IsValid)

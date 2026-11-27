@@ -248,7 +248,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Shows how the background deletion is doing and reloads the view when a run ends or messages come back; may be called from any thread.
+    /// Shows how the background deletion and moving are doing and reloads the view when a run ends or messages come back; may be called from any thread.
     /// </summary>
     /// <param name="sender">The event sender.</param>
     /// <param name="e">The event arguments.</param>
@@ -278,7 +278,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 StatusText = _localizer.Format("Status_Deleting", e.Deleted, e.Remaining);
             }
 
-            // Moved messages appear in Trash and refused ones come back, so the view is reloaded.
+            // Moved messages appear in their new folder and refused ones come back, so the view is reloaded.
             if (e.Finished || (e.Error is not null && !e.WillRetry))
             {
                 ScheduleRefresh();
@@ -451,6 +451,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// Gets one checkable entry per existing label for the selected message; empty when no message is selected.
     /// </summary>
     public ObservableCollection<MessageLabelChoiceViewModel> MessageLabelChoices { get; } = [];
+
+    /// <summary>
+    /// Gets the folders the selected messages can be moved to, as of the last <see cref="RefreshMoveTargets"/>; empty when
+    /// nothing was selected or the selection spanned several accounts.
+    /// </summary>
+    public ObservableCollection<MoveTargetViewModel> MoveTargets { get; } = [];
+
+    /// <summary>
+    /// Gets a value indicating whether the selected messages can be moved to another folder.
+    /// </summary>
+    public bool CanMove => MoveTargets.Count > 0;
 
     /// <summary>
     /// Gets or sets the selected tree node: the unified inbox, an account, a folder or a label.
@@ -676,7 +687,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [RelayCommand(CanExecute = nameof(HasSelection), AllowConcurrentExecutions = true)]
     private async Task DeleteSelectedAsync()
     {
-        var targets = DeletionTargets();
+        var targets = ActionTargets();
         if (targets.Count == 0 || !await ConfirmDeletionAsync(targets))
         {
             return;
@@ -693,6 +704,44 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             StartUnreadRefresh(accountId);
         }
+
+        // Fills the page up again, and brings the messages back if they could not be queued.
+        await ReloadViewAsync();
+    }
+
+    /// <summary>
+    /// Moves the selected messages to a folder of their account. They leave the list at once; the mail server is told in the
+    /// background. No confirmation is asked, because moving them back undoes it.
+    /// </summary>
+    /// <param name="folder">The target folder.</param>
+    /// <returns>A task that completes when the move has been queued.</returns>
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private async Task MoveSelectedAsync(FolderNodeViewModel? folder)
+    {
+        ArgumentNullException.ThrowIfNull(folder);
+        var selected = ActionTargets();
+        var accountId = folder.Folder.AccountId;
+        if (selected.Any(t => t.Message.AccountId != accountId))
+        {
+            // Mail cannot be moved between accounts.
+            return;
+        }
+
+        // A search can list messages of several folders, some of them already in the target.
+        var targets = selected.Where(t => t.Message.FolderId != folder.Folder.Id).ToList();
+        if (targets.Count == 0)
+        {
+            return;
+        }
+
+        var ids = targets.Select(t => t.Id).ToList();
+        RemoveFromList(targets);
+        await GuardedAsync("Error_MoveMessage", async () =>
+        {
+            await _dispatcher.SendAsync(new MoveMessagesCommand(accountId, ids, folder.Folder.Id));
+            StatusText = _localizer.Format("Status_MoveQueued", ids.Count, folder.Name);
+        });
+        StartUnreadRefresh(accountId);
 
         // Fills the page up again, and brings the messages back if they could not be queued.
         await ReloadViewAsync();
@@ -738,10 +787,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Gets the messages a delete applies to, in list order: the selection, or the message shown in the reading pane.
+    /// Gets the messages a delete or move applies to, in list order: the selection, or the message shown in the reading pane.
     /// </summary>
-    /// <returns>The messages to delete.</returns>
-    private List<MessageItemViewModel> DeletionTargets()
+    /// <returns>The messages to act on.</returns>
+    private List<MessageItemViewModel> ActionTargets()
     {
         var selected = SelectedMessages.ToHashSet();
         if (selected.Count == 0 && SelectedMessage is { } single)
@@ -750,6 +799,33 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         return [.. Messages.Where(selected.Contains)];
+    }
+
+    /// <summary>
+    /// Rebuilds the entries of the "move to" menu for the current selection. Called when the menu opens, and only then:
+    /// entries removed while one of them is being clicked would keep the menu from closing.
+    /// </summary>
+    public void RefreshMoveTargets()
+    {
+        var targets = ActionTargets();
+        IReadOnlyList<FolderNodeViewModel> folders = [];
+        if (targets.Count > 0 && targets.All(t => t.Message.AccountId == targets[0].Message.AccountId))
+        {
+            // The folder holding every selected message is no target.
+            var source = targets.All(t => t.Message.FolderId == targets[0].Message.FolderId) ? targets[0].Message.FolderId : (Guid?)null;
+            folders = [.. Accounts
+                .Where(a => a.Account.Id == targets[0].Message.AccountId)
+                .SelectMany(a => a.Folders)
+                .Where(f => f.Folder.Id != source)];
+        }
+
+        MoveTargets.Clear();
+        foreach (var folder in folders)
+        {
+            MoveTargets.Add(new MoveTargetViewModel(folder, MoveSelectedCommand));
+        }
+
+        OnPropertyChanged(nameof(CanMove));
     }
 
     /// <summary>

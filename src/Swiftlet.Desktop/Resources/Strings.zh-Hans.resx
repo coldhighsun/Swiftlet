@@ -52,6 +52,7 @@
   <data name="Error_InlineImages" xml:space="preserve"><value>加载邮件内嵌图片失败</value></data>
   <data name="Error_SaveImageRule" xml:space="preserve"><value>保存图片规则失败</value></data>
   <data name="Error_DeleteMessage" xml:space="preserve"><value>删除邮件失败</value></data>
+  <data name="Error_MoveMessage" xml:space="preserve"><value>移动邮件失败</value></data>
   <data name="Error_DeleteAccount" xml:space="preserve"><value>移除账号失败</value></data>
   <data name="Error_Reauthenticate" xml:space="preserve"><value>重新登录失败</value></data>
   <data name="Menu_Account_Delete" xml:space="preserve"><value>移除账号</value></data>
@@ -71,10 +72,12 @@
   <data name="Status_ProblemSeparator" xml:space="preserve"><value>；</value></data>
   <data name="Status_SearchResults" xml:space="preserve"><value>找到 {0} 封邮件</value></data>
   <data name="Status_DeleteQueued" xml:space="preserve"><value>正在后台删除 {0} 封邮件</value></data>
-  <data name="Status_Deleting" xml:space="preserve"><value>正在从服务器删除：已完成 {0} 封，剩余 {1} 封</value></data>
-  <data name="Status_DeleteDone" xml:space="preserve"><value>已在服务器上删除 {0} 封邮件</value></data>
-  <data name="Status_DeleteRetrying" xml:space="preserve"><value>服务器删除失败，稍后自动重试</value></data>
-  <data name="Error_DeleteRejected" xml:space="preserve"><value>服务器拒绝删除，邮件已重新显示</value></data>
+  <data name="Status_Deleting" xml:space="preserve"><value>正在更新服务器：已完成 {0} 封，剩余 {1} 封</value></data>
+  <data name="Status_DeleteDone" xml:space="preserve"><value>已在服务器上处理 {0} 封邮件</value></data>
+  <data name="Status_DeleteRetrying" xml:space="preserve"><value>服务器操作失败，稍后自动重试</value></data>
+  <data name="Error_DeleteRejected" xml:space="preserve"><value>服务器拒绝了操作，邮件已重新显示</value></data>
+  <data name="Menu_Message_MoveTo" xml:space="preserve"><value>移动到</value></data>
+  <data name="Status_MoveQueued" xml:space="preserve"><value>正在后台将 {0} 封邮件移动到“{1}”</value></data>
   <data name="Menu_Folder_Empty" xml:space="preserve"><value>删除全部邮件</value></data>
   <data name="Error_EmptyFolder" xml:space="preserve"><value>删除文件夹内的邮件失败</value></data>
   <data name="Status_EmptyQueued" xml:space="preserve"><value>正在后台删除“{0}”中的全部邮件</value></data>

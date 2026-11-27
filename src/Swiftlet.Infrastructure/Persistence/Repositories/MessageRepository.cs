@@ -402,7 +402,40 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
         {
             marked += await context.Messages
                 .Where(m => batch.Contains(m.Id))
-                .ExecuteUpdateAsync(setters => setters.SetProperty(m => m.IsDeletePending, true), cancellationToken);
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(m => m.IsDeletePending, true)
+                        .SetProperty(m => m.PendingMoveFolderId, (Guid?)null),
+                    cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return marked;
+    }
+
+    /// <inheritdoc />
+    public async Task<int> MarkMovePendingAsync(
+        Guid accountId,
+        IReadOnlyCollection<Guid> messageIds,
+        Guid targetFolderId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(messageIds);
+        var context = await contexts.GetAsync(accountId, cancellationToken);
+
+        // One transaction, so a selection is hidden as a whole or not at all.
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        var marked = 0;
+        foreach (var batch in messageIds.Chunk(BatchSize))
+        {
+            // A row that is already pending is left alone, so a late move never replaces a deletion.
+            marked += await context.Messages
+                .Where(m => batch.Contains(m.Id) && m.FolderId != targetFolderId && !m.IsDeletePending)
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(m => m.IsDeletePending, true)
+                        .SetProperty(m => m.PendingMoveFolderId, (Guid?)targetFolderId),
+                    cancellationToken);
         }
 
         await transaction.CommitAsync(cancellationToken);
@@ -419,7 +452,11 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
         var context = await contexts.GetAsync(accountId, cancellationToken);
         return await context.Messages
             .Where(m => m.FolderId == folderId && m.Uid <= throughUid)
-            .ExecuteUpdateAsync(setters => setters.SetProperty(m => m.IsDeletePending, true), cancellationToken);
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(m => m.IsDeletePending, true)
+                    .SetProperty(m => m.PendingMoveFolderId, (Guid?)null),
+                cancellationToken);
     }
 
     /// <inheritdoc />
@@ -433,9 +470,10 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
             .AsNoTracking()
             .Where(m => m.IsDeletePending)
             .OrderBy(m => m.FolderId)
+            .ThenBy(m => m.PendingMoveFolderId)
             .ThenBy(m => m.Uid)
             .Take(take)
-            .Select(m => new PendingDeletion(m.Id, m.FolderId, m.Uid))
+            .Select(m => new PendingDeletion(m.Id, m.FolderId, m.Uid, m.PendingMoveFolderId))
             .ToListAsync(cancellationToken);
     }
 
@@ -484,12 +522,24 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
     }
 
     /// <inheritdoc />
-    public async Task ClearDeletePendingAsync(Guid accountId, Guid folderId, CancellationToken cancellationToken = default)
+    public async Task ClearDeletePendingAsync(
+        Guid accountId,
+        Guid folderId,
+        Guid? targetFolderId = null,
+        CancellationToken cancellationToken = default)
     {
         var context = await contexts.GetAsync(accountId, cancellationToken);
-        await context.Messages
-            .Where(m => m.FolderId == folderId && m.IsDeletePending)
-            .ExecuteUpdateAsync(setters => setters.SetProperty(m => m.IsDeletePending, false), cancellationToken);
+        var pending = context.Messages.Where(m => m.FolderId == folderId && m.IsDeletePending);
+        if (targetFolderId is not null)
+        {
+            pending = pending.Where(m => m.PendingMoveFolderId == targetFolderId);
+        }
+
+        await pending.ExecuteUpdateAsync(
+            setters => setters
+                .SetProperty(m => m.IsDeletePending, false)
+                .SetProperty(m => m.PendingMoveFolderId, (Guid?)null),
+            cancellationToken);
     }
 
     /// <inheritdoc />
@@ -515,7 +565,8 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
                     setters => setters
                         .SetProperty(m => m.FolderId, folderId)
                         .SetProperty(m => m.Uid, uid)
-                        .SetProperty(m => m.IsDeletePending, false),
+                        .SetProperty(m => m.IsDeletePending, false)
+                        .SetProperty(m => m.PendingMoveFolderId, (Guid?)null),
                     cancellationToken);
         }
 

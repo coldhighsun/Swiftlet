@@ -1636,6 +1636,132 @@ public class MainWindowViewModelTests
     }
 
     /// <summary>
+    /// Verifies the move menu offers the other folders of the selected message's account, and nothing without a selection.
+    /// </summary>
+    [Fact]
+    public async Task MoveTargets_SelectedMessage_ListsTheOtherFoldersOfItsAccount()
+    {
+        var scenario = new Scenario();
+        var archive = TestData.Folder(scenario.Account, "Archive", FolderRole.Archive);
+        var trash = TestData.Folder(scenario.Account, "Trash", FolderRole.Trash);
+        scenario.Dispatcher.On<GetFoldersQuery>(_ => new List<MailFolder> { trash, scenario.Inbox, archive });
+        await scenario.StartAsync();
+        scenario.ViewModel.RefreshMoveTargets();
+        scenario.ViewModel.CanMove.Should().BeFalse();
+
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+        scenario.ViewModel.RefreshMoveTargets();
+
+        scenario.ViewModel.CanMove.Should().BeTrue();
+        scenario.ViewModel.MoveTargets.Select(t => t.Folder.Folder.Id).Should().Equal(archive.Id, trash.Id);
+        scenario.ViewModel.MoveTargets[0].Name.Should().Be("归档");
+    }
+
+    /// <summary>
+    /// Verifies a selection from several folders may be moved into any of them.
+    /// </summary>
+    [Fact]
+    public async Task MoveTargets_SelectionFromSeveralFolders_ListsEveryFolder()
+    {
+        var scenario = new Scenario();
+        var trash = TestData.Folder(scenario.Account, "Trash", FolderRole.Trash);
+        scenario.Dispatcher.On<GetFoldersQuery>(_ => new List<MailFolder> { scenario.Inbox, trash });
+        scenario.Messages.Add(TestData.Message(scenario.Account, trash, 3, "Old news"));
+        scenario.Dispatcher.On<GetMessagesQuery>(_ => scenario.Messages.ToList());
+        scenario.Dispatcher.On<MoveMessagesCommand>(c => c.MessageIds.Count);
+        await scenario.StartAsync();
+        foreach (var item in scenario.ViewModel.Messages)
+        {
+            scenario.ViewModel.SelectedMessages.Add(item);
+        }
+
+        scenario.ViewModel.RefreshMoveTargets();
+        var target = scenario.ViewModel.MoveTargets.Single(t => t.Folder.Folder.Id == trash.Id);
+        scenario.ViewModel.MoveTargets.Should().HaveCount(2);
+        await scenario.ViewModel.MoveSelectedCommand.ExecuteAsync(target.Folder);
+
+        // The message already in the target is left out.
+        scenario.Dispatcher.Sent<MoveMessagesCommand>().Should().ContainSingle().Which.MessageIds.Should().HaveCount(2);
+    }
+
+    /// <summary>
+    /// Verifies a selection spanning several accounts cannot be moved.
+    /// </summary>
+    [Fact]
+    public async Task MoveTargets_SelectionFromSeveralAccounts_IsEmpty()
+    {
+        var scenario = new Scenario();
+        var other = TestData.Account("other@example.com");
+        scenario.Messages.Add(TestData.Message(other, TestData.Folder(other, "INBOX", FolderRole.Inbox), 3, "Elsewhere"));
+        scenario.Dispatcher.On<GetMessagesQuery>(_ => scenario.Messages.ToList());
+        await scenario.StartAsync();
+
+        foreach (var item in scenario.ViewModel.Messages)
+        {
+            scenario.ViewModel.SelectedMessages.Add(item);
+        }
+
+        scenario.ViewModel.RefreshMoveTargets();
+
+        scenario.ViewModel.MoveTargets.Should().BeEmpty();
+        scenario.ViewModel.CanMove.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies moving asks nothing, queues the message, removes it at once and selects the next one.
+    /// </summary>
+    [Fact]
+    public async Task MoveSelected_TargetFolder_SendsCommandRemovesAndSelectsNext()
+    {
+        var scenario = new Scenario();
+        var archive = TestData.Folder(scenario.Account, "Archive", FolderRole.Archive);
+        scenario.Dispatcher.On<GetFoldersQuery>(_ => new List<MailFolder> { scenario.Inbox, archive });
+        scenario.Dispatcher.On<MoveMessagesCommand>(c =>
+        {
+            scenario.Messages.RemoveAll(m => c.MessageIds.Contains(m.Id));
+            return c.MessageIds.Count;
+        });
+        await scenario.StartAsync();
+        var item = scenario.ViewModel.Messages[0];
+        var next = scenario.ViewModel.Messages[1];
+        scenario.ViewModel.SelectedMessage = item;
+
+        scenario.ViewModel.RefreshMoveTargets();
+
+        await scenario.ViewModel.MoveSelectedCommand.ExecuteAsync(scenario.ViewModel.MoveTargets.Single().Folder);
+
+        var sent = scenario.Dispatcher.Sent<MoveMessagesCommand>().Should().ContainSingle().Which;
+        sent.AccountId.Should().Be(scenario.Account.Id);
+        sent.MessageIds.Should().Equal(item.Id);
+        sent.TargetFolderId.Should().Be(archive.Id);
+        scenario.Dialogs.Confirmations.Should().BeEmpty();
+        scenario.ViewModel.Messages.Should().Equal(next);
+        scenario.ViewModel.SelectedMessage.Should().BeSameAs(next);
+        scenario.ViewModel.StatusText.Should().Be("正在后台将 1 封邮件移动到“归档”");
+    }
+
+    /// <summary>
+    /// Verifies that when the move cannot be queued the message comes back and the error is shown.
+    /// </summary>
+    [Fact]
+    public async Task MoveSelected_QueueingFails_RestoresMessageAndShowsError()
+    {
+        var scenario = new Scenario();
+        var archive = TestData.Folder(scenario.Account, "Archive", FolderRole.Archive);
+        scenario.Dispatcher.On<GetFoldersQuery>(_ => new List<MailFolder> { scenario.Inbox, archive });
+        scenario.Dispatcher.On<MoveMessagesCommand>(_ => throw new IOException("disk full"));
+        await scenario.StartAsync();
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+
+        scenario.ViewModel.RefreshMoveTargets();
+
+        await scenario.ViewModel.MoveSelectedCommand.ExecuteAsync(scenario.ViewModel.MoveTargets.Single().Folder);
+
+        scenario.ViewModel.Messages.Should().HaveCount(2);
+        scenario.ViewModel.StatusText.Should().Contain("disk full").And.Contain("移动邮件失败");
+    }
+
+    /// <summary>
     /// Verifies emptying a folder confirms with the folder and the kind of deletion, then queues it.
     /// </summary>
     /// <param name="hasTrash">Whether the account has a Trash folder.</param>
@@ -1712,10 +1838,10 @@ public class MainWindowViewModelTests
     /// <param name="expected">The expected start of the status text.</param>
     /// <param name="reloads">Whether the list is reloaded.</param>
     [Theory]
-    [InlineData(false, null, false, "正在从服务器删除：已完成 3 封，剩余 4 封", false)]
-    [InlineData(true, null, false, "已在服务器上删除 3 封邮件", true)]
-    [InlineData(false, "offline", true, "服务器删除失败，稍后自动重试", false)]
-    [InlineData(true, "read only", false, "服务器拒绝删除", true)]
+    [InlineData(false, null, false, "正在更新服务器：已完成 3 封，剩余 4 封", false)]
+    [InlineData(true, null, false, "已在服务器上处理 3 封邮件", true)]
+    [InlineData(false, "offline", true, "服务器操作失败，稍后自动重试", false)]
+    [InlineData(true, "read only", false, "服务器拒绝了操作", true)]
     public async Task DeletionProgressed_Report_UpdatesStatusAndReloads(
         bool finished,
         string? error,

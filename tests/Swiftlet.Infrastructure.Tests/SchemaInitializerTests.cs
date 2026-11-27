@@ -80,6 +80,10 @@ public class SchemaInitializerTests
             .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM pragma_table_info('Messages') WHERE name = 'IsDeletePending' UNION ALL SELECT COUNT(*) FROM pragma_table_info('Folders') WHERE name = 'EmptyThroughUid'")
             .ToListAsync(ct);
         deletion.Should().Equal(1, 1);
+        var moveColumns = await context.Database
+            .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM pragma_table_info('Messages') WHERE name = 'PendingMoveFolderId'")
+            .SingleAsync(ct);
+        moveColumns.Should().Be(1);
         (await context.Database.SqlQueryRaw<int>("SELECT IsDeletePending AS Value FROM Messages").SingleAsync(ct)).Should().Be(0);
         var pending = await context.Database
             .SqlQueryRaw<int>("SELECT IsFlagSyncPending AS Value FROM Messages")

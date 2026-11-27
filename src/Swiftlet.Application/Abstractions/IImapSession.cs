@@ -93,15 +93,15 @@ public interface IImapSession : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Deletes messages of one folder on the server.
+    /// Deletes messages of one folder on the server, or moves them to another folder.
     /// Messages that are already gone count as deleted; every other failure is thrown.
     /// </summary>
     /// <param name="folderFullName">The full server-side path of the folder holding the messages.</param>
     /// <param name="uids">The IMAP UIDs of the messages.</param>
-    /// <param name="trashFolderFullName">The Trash folder to move the messages to, or <see langword="null"/> to delete them permanently.</param>
+    /// <param name="destinationFolderFullName">The folder to move the messages to (Trash when deleting), or <see langword="null"/> to delete them permanently.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>
-    /// The UID each moved message has in the Trash folder, keyed by its old UID. A message is missing when it was deleted
+    /// The UID each moved message has in the destination folder, keyed by its old UID. A message is missing when it was deleted
     /// permanently, was already gone, or the server did not report the new UID (no UIDPLUS).
     /// </returns>
     /// <exception cref="MailOperationRejectedException">The server refused the operation; repeating it cannot succeed.</exception>
@@ -109,7 +109,7 @@ public interface IImapSession : IAsyncDisposable
     Task<IReadOnlyDictionary<uint, uint>> DeleteMessagesAsync(
         string folderFullName,
         IReadOnlyList<uint> uids,
-        string? trashFolderFullName,
+        string? destinationFolderFullName,
         CancellationToken cancellationToken = default);
 
     /// <summary>

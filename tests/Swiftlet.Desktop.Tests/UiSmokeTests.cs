@@ -836,6 +836,66 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies the message context menu lists the target folders, keeping underscores, and a click moves the selection.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_MessageContextMenu_MovesSelectionToChosenFolder()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference("en");
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Localizer.SetPreference("en");
+                var custom = TestData.Folder(scenario.Account, "my_work", Swiftlet.Domain.Folders.FolderRole.Other);
+                scenario.Dispatcher.On<Swiftlet.Application.Queries.GetFoldersQuery>(
+                    _ => new List<Swiftlet.Domain.Folders.MailFolder> { scenario.Inbox, custom });
+                scenario.Dispatcher.On<Swiftlet.Application.Messages.MoveMessagesCommand>(c =>
+                {
+                    scenario.Messages.Clear();
+                    return c.MessageIds.Count;
+                });
+                await scenario.StartAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-move-menu", "en");
+                var list = window.GetVisualDescendants().OfType<ListBox>().Single();
+                list.SelectAll();
+                Dispatcher.UIThread.RunJobs();
+
+                // Opened with the mouse, as a user does, so the targets are filled while opening.
+                var row = list.GetVisualDescendants().OfType<ListBoxItem>().First();
+                var rowPoint = row.TranslatePoint(new Point(10, 10), window)!.Value;
+                window.MouseDown(rowPoint, MouseButton.Right);
+                window.MouseUp(rowPoint, MouseButton.Right);
+                Dispatcher.UIThread.RunJobs();
+                var menu = list.ContextMenu!;
+                menu.IsOpen.Should().BeTrue();
+                Dispatcher.UIThread.RunJobs();
+                var move = menu.Items.OfType<MenuItem>().Single(i => Equals(i.Header, "Move to"));
+                move.IsEffectivelyEnabled.Should().BeTrue();
+                move.IsSubMenuOpen = true;
+                Dispatcher.UIThread.RunJobs();
+                Snapshot(window, "main-window-move-menu-open");
+                var entry = (MenuItem)move.ContainerFromIndex(0)!;
+                entry.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).Should().Contain("my_work");
+                var point = entry.TranslatePoint(new Point(10, 10), window)!.Value;
+                window.MouseMove(point);
+                window.MouseDown(point, MouseButton.Left);
+                window.MouseUp(point, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+                await scenario.ViewModel.WhenIdleAsync();
+
+                var sent = scenario.Dispatcher.Sent<Swiftlet.Application.Messages.MoveMessagesCommand>().Should().ContainSingle().Which;
+                sent.TargetFolderId.Should().Be(custom.Id);
+                sent.MessageIds.Should().HaveCount(2);
+                scenario.ViewModel.Messages.Should().BeEmpty();
+                menu.IsOpen.Should().BeFalse();
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Verifies folder nodes offer deleting all messages, except for All Mail.
     /// </summary>
     [Fact]

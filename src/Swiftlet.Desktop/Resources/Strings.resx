@@ -52,6 +52,7 @@
   <data name="Error_InlineImages" xml:space="preserve"><value>Failed to load images embedded in the message</value></data>
   <data name="Error_SaveImageRule" xml:space="preserve"><value>Failed to save the image rule</value></data>
   <data name="Error_DeleteMessage" xml:space="preserve"><value>Failed to delete message</value></data>
+  <data name="Error_MoveMessage" xml:space="preserve"><value>Failed to move message</value></data>
   <data name="Error_DeleteAccount" xml:space="preserve"><value>Failed to remove account</value></data>
   <data name="Error_Reauthenticate" xml:space="preserve"><value>Re-sign-in failed</value></data>
   <data name="Menu_Account_Delete" xml:space="preserve"><value>Remove account</value></data>
@@ -71,10 +72,12 @@
   <data name="Status_ProblemSeparator" xml:space="preserve"><value>; </value></data>
   <data name="Status_SearchResults" xml:space="preserve"><value>Found {0} message(s)</value></data>
   <data name="Status_DeleteQueued" xml:space="preserve"><value>Deleting {0} message(s) in the background</value></data>
-  <data name="Status_Deleting" xml:space="preserve"><value>Deleting on the server: {0} done, {1} to go</value></data>
-  <data name="Status_DeleteDone" xml:space="preserve"><value>Deleted {0} message(s) on the server</value></data>
-  <data name="Status_DeleteRetrying" xml:space="preserve"><value>Deleting on the server failed and will be retried</value></data>
-  <data name="Error_DeleteRejected" xml:space="preserve"><value>The server refused to delete; the messages are shown again</value></data>
+  <data name="Status_Deleting" xml:space="preserve"><value>Updating the server: {0} done, {1} to go</value></data>
+  <data name="Status_DeleteDone" xml:space="preserve"><value>Updated {0} message(s) on the server</value></data>
+  <data name="Status_DeleteRetrying" xml:space="preserve"><value>Updating the server failed and will be retried</value></data>
+  <data name="Error_DeleteRejected" xml:space="preserve"><value>The server refused the change; the messages are shown again</value></data>
+  <data name="Menu_Message_MoveTo" xml:space="preserve"><value>Move to</value></data>
+  <data name="Status_MoveQueued" xml:space="preserve"><value>Moving {0} message(s) to "{1}" in the background</value></data>
   <data name="Menu_Folder_Empty" xml:space="preserve"><value>Delete all messages</value></data>
   <data name="Error_EmptyFolder" xml:space="preserve"><value>Failed to delete the folder contents</value></data>
   <data name="Status_EmptyQueued" xml:space="preserve"><value>Deleting all messages of "{0}" in the background</value></data>

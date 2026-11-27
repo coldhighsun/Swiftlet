@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using Swiftlet.Desktop.ViewModels.Main;
@@ -66,6 +67,16 @@ public partial class MainWindow : Window
             // LoadMoreAsync reports failures in the status line itself; the event handler boundary only needs the call.
             await viewModel.LoadMoreAsync();
         }
+    }
+
+    /// <summary>
+    /// Fills the "move to" submenu for the selection the context menu was opened on.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OnMessageMenuOpening(object? sender, CancelEventArgs e)
+    {
+        (DataContext as MainWindowViewModel)?.RefreshMoveTargets();
     }
 
     /// <summary>

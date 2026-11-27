@@ -6,18 +6,18 @@ using Swiftlet.Domain.Messages;
 namespace Swiftlet.Application.Messages;
 
 /// <summary>
-/// What one deletion batch did.
+/// What one batch of pending deletions or moves did.
 /// </summary>
 /// <param name="FolderName">The full name of the folder worked on.</param>
-/// <param name="Deleted">The number of messages deleted on the server.</param>
-/// <param name="Remaining">How many messages are still known to be waiting for deletion.</param>
-/// <param name="Error">Why the server refused, in which case the folder's messages are visible again; otherwise <see langword="null"/>.</param>
+/// <param name="Deleted">The number of messages deleted or moved on the server.</param>
+/// <param name="Remaining">How many messages are still known to be waiting.</param>
+/// <param name="Error">Why the server refused, in which case the refused messages are visible again; otherwise <see langword="null"/>.</param>
 public sealed record DeletionBatchResult(string FolderName, int Deleted, int Remaining, string? Error = null);
 
 /// <summary>
-/// Carries out pending deletions on the server in batches.
-/// When the server moved messages to Trash and the cached Trash is provably complete, the cached rows are re-homed into
-/// Trash instead of being deleted, so the next sync does not download the same messages again.
+/// Carries out pending deletions and moves on the server in batches.
+/// When the server moved messages and the cached destination folder is provably complete, the cached rows are re-homed
+/// into it instead of being deleted, so the next sync does not download the same messages again.
 /// </summary>
 /// <param name="folders">The folder repository.</param>
 /// <param name="messages">The message repository.</param>
@@ -33,7 +33,7 @@ public sealed class PendingDeletionService(
     public const int BatchSize = 100;
 
     /// <summary>
-    /// Determines whether an account has anything left to delete.
+    /// Determines whether an account has anything left to delete or move.
     /// </summary>
     /// <param name="accountId">The account identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
@@ -45,7 +45,8 @@ public sealed class PendingDeletionService(
     }
 
     /// <summary>
-    /// Deletes the next batch of one folder on the server and updates the cache once the server confirmed.
+    /// Deletes or moves the next batch of one folder on the server and updates the cache once the server confirmed.
+    /// All messages of a batch share one destination.
     /// The caller must hold the account's <see cref="Sync.SyncCoordinator"/> lock so no sync changes the folders meanwhile.
     /// A failure that may pass (such as a lost connection) is thrown and leaves everything pending.
     /// </summary>
@@ -60,6 +61,7 @@ public sealed class PendingDeletionService(
         var all = await folders.GetByAccountAsync(accountId, cancellationToken);
         var folder = all.FirstOrDefault(f => f.EmptyThroughUid is not null);
         IReadOnlyList<PendingDeletion> pending = [];
+        Guid? targetId = null;
         if (folder is null)
         {
             pending = await messages.GetPendingDeletionsAsync(accountId, BatchSize, cancellationToken);
@@ -71,7 +73,9 @@ public sealed class PendingDeletionService(
             var folderId = pending[0].FolderId;
             folder = all.FirstOrDefault(f => f.Id == folderId)
                 ?? throw new InvalidOperationException($"Folder {folderId} was not found.");
-            pending = [.. pending.Where(p => p.FolderId == folderId)];
+            var batchTargetId = pending[0].TargetFolderId;
+            pending = [.. pending.Where(p => p.FolderId == folderId && p.TargetFolderId == batchTargetId)];
+            targetId = batchTargetId;
         }
 
         try
@@ -84,19 +88,29 @@ public sealed class PendingDeletionService(
                     $"The UIDs cached for folder '{folder.FullName}' are stale (UIDVALIDITY changed on the server). Synchronize the account first.");
             }
 
-            // Deleting from Trash, or from an account without Trash, is permanent.
-            var trash = folder.Role == FolderRole.Trash ? null : all.FirstOrDefault(f => f.Role == FolderRole.Trash);
+            MailFolder? destination;
+            if (targetId is { } id)
+            {
+                destination = all.FirstOrDefault(f => f.Id == id)
+                    ?? throw new MailOperationRejectedException("The folder the messages were to be moved to no longer exists.");
+            }
+            else
+            {
+                // Deleting from Trash, or from an account without Trash, is permanent.
+                destination = folder.Role == FolderRole.Trash ? null : all.FirstOrDefault(f => f.Role == FolderRole.Trash);
+            }
+
             return folder.EmptyThroughUid is { } through
-                ? await EmptyBatchAsync(session, folder, trash, through, cancellationToken)
-                : await DeleteBatchAsync(session, folder, trash, pending, cancellationToken);
+                ? await EmptyBatchAsync(session, folder, destination, through, cancellationToken)
+                : await DeleteBatchAsync(session, folder, destination, pending, cancellationToken);
         }
         catch (Exception ex) when (ex is MailOperationRejectedException or NotSupportedException)
         {
             // Repeating cannot help, so the messages come back into view and the user is told why.
-            logger.LogWarning(ex, "The server refused to delete messages of {Folder}; they are shown again.", folder.FullName);
+            logger.LogWarning(ex, "The server refused to delete or move messages of {Folder}; they are shown again.", folder.FullName);
             folder.ClearEmptyRequest();
             await folders.SaveChangesAsync(cancellationToken);
-            await messages.ClearDeletePendingAsync(accountId, folder.Id, cancellationToken);
+            await messages.ClearDeletePendingAsync(accountId, folder.Id, targetId, cancellationToken);
             return new DeletionBatchResult(
                 folder.FullName,
                 0,
@@ -106,25 +120,25 @@ public sealed class PendingDeletionService(
     }
 
     /// <summary>
-    /// Deletes selected messages of a folder.
+    /// Deletes or moves selected messages of a folder.
     /// </summary>
     /// <param name="session">The IMAP session.</param>
     /// <param name="folder">The folder.</param>
-    /// <param name="trash">The Trash folder, or <see langword="null"/> to delete permanently.</param>
+    /// <param name="destination">The folder to move the messages to, or <see langword="null"/> to delete permanently.</param>
     /// <param name="batch">The messages.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The batch result.</returns>
     private async Task<DeletionBatchResult> DeleteBatchAsync(
         IImapSession session,
         MailFolder folder,
-        MailFolder? trash,
+        MailFolder? destination,
         IReadOnlyList<PendingDeletion> batch,
         CancellationToken cancellationToken)
     {
-        var moved = await session.DeleteMessagesAsync(folder.FullName, [.. batch.Select(p => p.Uid)], trash?.FullName, cancellationToken);
+        var moved = await session.DeleteMessagesAsync(folder.FullName, [.. batch.Select(p => p.Uid)], destination?.FullName, cancellationToken);
 
         // Only after the server confirmed: a failure above leaves the local rows pending.
-        await RemoveCachedAsync(session, folder.AccountId, trash, batch, moved, cancellationToken);
+        await RemoveCachedAsync(session, folder.AccountId, destination, batch, moved, cancellationToken);
         var remaining = await messages.CountPendingDeletionsAsync(folder.AccountId, cancellationToken);
         return new DeletionBatchResult(folder.FullName, batch.Count, remaining);
     }
@@ -170,38 +184,38 @@ public sealed class PendingDeletionService(
     }
 
     /// <summary>
-    /// Updates the cache for messages the server deleted: rows that can join the cached Trash without a hole are moved there,
-    /// the others are removed and the next sync downloads them from Trash.
+    /// Updates the cache for messages the server removed from a folder: rows that can join the cached destination without a
+    /// hole are moved there, the others are removed and the next sync downloads them from the destination.
     /// </summary>
     /// <param name="session">The IMAP session.</param>
     /// <param name="accountId">The account identifier.</param>
-    /// <param name="trash">The Trash folder, or <see langword="null"/> after a permanent delete.</param>
-    /// <param name="cached">The cached rows of the deleted messages.</param>
+    /// <param name="destination">The folder the messages were moved to, or <see langword="null"/> after a permanent delete.</param>
+    /// <param name="cached">The cached rows of the removed messages.</param>
     /// <param name="moved">The new UID of each moved message, keyed by its old UID.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that completes when the cache is up to date.</returns>
     private async Task RemoveCachedAsync(
         IImapSession session,
         Guid accountId,
-        MailFolder? trash,
+        MailFolder? destination,
         IReadOnlyList<PendingDeletion> cached,
         IReadOnlyDictionary<uint, uint> moved,
         CancellationToken cancellationToken)
     {
         IReadOnlyList<(Guid MessageId, uint Uid)> rehomed = [];
-        if (trash is not null)
+        if (destination is not null)
         {
             try
             {
-                rehomed = await FindRehomableAsync(session, trash, cached, moved, cancellationToken);
+                rehomed = await FindRehomableAsync(session, destination, cached, moved, cancellationToken);
             }
             catch (MailOperationRejectedException ex)
             {
-                // The messages are already moved; only the shortcut is lost, and the next sync downloads them from Trash.
-                logger.LogWarning(ex, "Could not inspect {Folder}; the moved messages will be downloaded again.", trash.FullName);
+                // The messages are already moved; only the shortcut is lost, and the next sync downloads them from there.
+                logger.LogWarning(ex, "Could not inspect {Folder}; the moved messages will be downloaded again.", destination.FullName);
             }
 
-            await messages.MoveToFolderAsync(accountId, trash.Id, [.. rehomed], cancellationToken);
+            await messages.MoveToFolderAsync(accountId, destination.Id, [.. rehomed], cancellationToken);
         }
 
         var kept = rehomed.Select(r => r.MessageId).ToHashSet();
@@ -209,19 +223,19 @@ public sealed class PendingDeletionService(
     }
 
     /// <summary>
-    /// Finds the moved rows that can join the cached Trash: the cached Trash belongs to the server's current UIDVALIDITY and
+    /// Finds the moved rows that can join the cached destination: it belongs to the server's current UIDVALIDITY and
     /// the server holds no other message between the highest cached UID and theirs. A hole would never be filled, because
     /// the incremental sync only looks above the highest cached UID.
     /// </summary>
     /// <param name="session">The IMAP session.</param>
-    /// <param name="trash">The cached Trash folder.</param>
+    /// <param name="destination">The cached destination folder.</param>
     /// <param name="cached">The cached rows of the moved messages.</param>
     /// <param name="moved">The new UID of each moved message, keyed by its old UID.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The rows to move with their new UIDs.</returns>
     private async Task<IReadOnlyList<(Guid MessageId, uint Uid)>> FindRehomableAsync(
         IImapSession session,
-        MailFolder trash,
+        MailFolder destination,
         IReadOnlyList<PendingDeletion> cached,
         IReadOnlyDictionary<uint, uint> moved,
         CancellationToken cancellationToken)
@@ -236,13 +250,13 @@ public sealed class PendingDeletionService(
         }
 
         if (candidates.Count == 0
-            || trash.UidValidity is not { } cachedValidity
-            || await session.GetUidValidityAsync(trash.FullName, cancellationToken) != cachedValidity)
+            || destination.UidValidity is not { } cachedValidity
+            || await session.GetUidValidityAsync(destination.FullName, cancellationToken) != cachedValidity)
         {
             return [];
         }
 
-        var highestCached = await messages.GetMaxUidAsync(trash.AccountId, trash.Id, cancellationToken);
+        var highestCached = await messages.GetMaxUidAsync(destination.AccountId, destination.Id, cancellationToken);
         candidates = [.. candidates.Where(c => c.Uid > highestCached)];
         if (candidates.Count == 0)
         {
@@ -251,7 +265,7 @@ public sealed class PendingDeletionService(
 
         var newest = candidates.Max(c => c.Uid);
         var onServer = await session.ListUidsBetweenAsync(
-            trash.FullName,
+            destination.FullName,
             highestCached,
             newest == uint.MaxValue ? newest : newest + 1,
             cancellationToken);

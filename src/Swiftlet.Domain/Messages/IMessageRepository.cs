@@ -253,7 +253,22 @@ public interface IMessageRepository
     Task<int> MarkFolderDeletePendingAsync(Guid accountId, Guid folderId, uint throughUid, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Gets messages of an account waiting to be deleted on the server, ordered by folder and UID.
+    /// Marks messages as moved by the user, which hides them from every view until the server has been told.
+    /// Messages already in the target folder and messages already waiting for deletion or another move are left alone.
+    /// </summary>
+    /// <param name="accountId">The owning account.</param>
+    /// <param name="messageIds">The message identifiers; unknown ones are ignored.</param>
+    /// <param name="targetFolderId">The folder of the same account to move the messages to.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The number of messages marked.</returns>
+    Task<int> MarkMovePendingAsync(
+        Guid accountId,
+        IReadOnlyCollection<Guid> messageIds,
+        Guid targetFolderId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets messages of an account waiting to be deleted or moved on the server, ordered by folder, target folder and UID.
     /// </summary>
     /// <param name="accountId">The owning account.</param>
     /// <param name="take">The maximum number of messages to return.</param>
@@ -294,13 +309,18 @@ public interface IMessageRepository
     Task DeleteThroughUidAsync(Guid accountId, Guid folderId, uint throughUid, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Makes the messages of a folder that wait for deletion visible again, because the server refused to delete them.
+    /// Makes pending messages of a folder visible again, because the server refused to delete or move them.
     /// </summary>
     /// <param name="accountId">The owning account.</param>
     /// <param name="folderId">The folder.</param>
+    /// <param name="targetFolderId">Only restore the moves to this folder; <see langword="null"/> restores every pending message.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that completes when the marks are removed.</returns>
-    Task ClearDeletePendingAsync(Guid accountId, Guid folderId, CancellationToken cancellationToken = default);
+    Task ClearDeletePendingAsync(
+        Guid accountId,
+        Guid folderId,
+        Guid? targetFolderId = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Re-homes cached messages after the server moved them to another folder of the same account, so their content need

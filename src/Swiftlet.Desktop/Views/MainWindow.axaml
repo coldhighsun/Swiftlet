@@ -196,8 +196,23 @@
                 <KeyBinding Gesture="Delete" Command="{Binding DeleteSelectedCommand}" />
               </ListBox.KeyBindings>
               <ListBox.ContextMenu>
-                <ContextMenu>
+                <ContextMenu Opening="OnMessageMenuOpening">
                   <MenuItem Header="{loc:Loc Toolbar_Delete}" Command="{Binding DeleteSelectedCommand}" />
+                  <MenuItem Header="{loc:Loc Menu_Message_MoveTo}" ItemsSource="{Binding MoveTargets}" IsEnabled="{Binding CanMove}">
+                    <MenuItem.ItemContainerTheme>
+                      <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}"
+                                    x:DataType="main:MoveTargetViewModel">
+                        <Setter Property="Command" Value="{Binding Command}" />
+                        <Setter Property="CommandParameter" Value="{Binding Folder}" />
+                      </ControlTheme>
+                    </MenuItem.ItemContainerTheme>
+                    <MenuItem.ItemTemplate>
+                      <!-- A text block keeps underscores of folder names, which a plain header reads as access keys. -->
+                      <DataTemplate DataType="main:MoveTargetViewModel">
+                        <TextBlock Text="{Binding Name}" />
+                      </DataTemplate>
+                    </MenuItem.ItemTemplate>
+                  </MenuItem>
                 </ContextMenu>
               </ListBox.ContextMenu>
               <ListBox.ItemTemplate>

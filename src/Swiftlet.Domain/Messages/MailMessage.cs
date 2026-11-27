@@ -104,9 +104,15 @@ public sealed class MailMessage
     public bool IsFlagSyncPending { get; private set; }
 
     /// <summary>
-    /// Gets a value indicating whether the user deleted the message and the server has not been told yet. Such a message is hidden from every view.
+    /// Gets a value indicating whether the user deleted or moved the message and the server has not been told yet. Such a
+    /// message is hidden from every view.
     /// </summary>
     public bool IsDeletePending { get; private set; }
+
+    /// <summary>
+    /// Gets the folder a pending message is to be moved to, or <see langword="null"/> when it is to be deleted.
+    /// </summary>
+    public Guid? PendingMoveFolderId { get; private set; }
 
     /// <summary>
     /// Gets the attachments.
