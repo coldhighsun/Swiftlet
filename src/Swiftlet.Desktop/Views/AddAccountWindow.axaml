@@ -11,9 +11,11 @@
     <PathIcon Data="{StaticResource Icon.Logo}" Width="48" Height="40" HorizontalAlignment="Center"
               Foreground="{DynamicResource Brush.Accent}" />
     <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-      <Button Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+      <!-- Google sign-in is hidden until the project has its own Google client (see CLAUDE.md, "Remaining work").
+           To restore it, show this button again and move the Microsoft button back to the second column only. -->
+      <Button Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" IsVisible="False"
               Content="{loc:Loc AddAccount_SignInGoogle}" Command="{Binding SignInWithGoogleCommand}" />
-      <Button Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+      <Button Grid.Column="0" Grid.ColumnSpan="2" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
               Content="{loc:Loc AddAccount_SignInMicrosoft}" Command="{Binding SignInWithMicrosoftCommand}" />
     </Grid>
     <Grid ColumnDefinitions="*,Auto,*" ColumnSpacing="12">
