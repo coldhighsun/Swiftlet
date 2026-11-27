@@ -1293,7 +1293,8 @@ public class UiSmokeTests
     }
 
     /// <summary>
-    /// Verifies the tree shows the unread badge next to the inbox and none next to a folder without unread mail.
+    /// Verifies the tree shows the unread badge next to the inbox and its account, and none next to a folder without
+    /// unread mail.
     /// </summary>
     [Fact]
     public async Task MainWindow_UnreadMessages_ShowBadgeInTree()
@@ -1308,8 +1309,55 @@ public class UiSmokeTests
 
                 var badges = window.GetVisualDescendants().OfType<TextBlock>()
                     .Where(t => t.Classes.Contains("badge") && t.IsEffectivelyVisible).ToList();
-                badges.Select(t => t.Text).Should().Equal("2", "2");
-                badges.Select(t => t.DataContext).Should().Contain(scenario.ViewModel.UnifiedInbox);
+                badges.Select(t => t.Text).Should().Equal("2", "2", "2");
+                badges.Select(t => t.DataContext).Should().Contain(scenario.ViewModel.UnifiedInbox)
+                    .And.Contain(scenario.ViewModel.Accounts[0]);
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies rows with unread mail stand out by weight and badge color, and return to normal once read.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_RowsWithUnreadMail_AreHighlighted()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var scenario = new MainWindowViewModelTests.Scenario();
+                await scenario.StartAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-unread-highlight");
+                var account = scenario.ViewModel.Accounts[0];
+                var inbox = account.Folders.Single(f => f.Folder.Id == scenario.Inbox.Id);
+                var sent = account.Folders.Single(f => f.Folder.Id == scenario.Sent.Id);
+                object[] unreadRows = [scenario.ViewModel.UnifiedInbox, account, inbox];
+
+                foreach (var row in unreadRows)
+                {
+                    RowName(window, row).FontWeight.Should().Be(Avalonia.Media.FontWeight.SemiBold);
+                }
+
+                RowName(window, sent).FontWeight.Should().Be(Avalonia.Media.FontWeight.Normal);
+                foreach (var badge in VisibleBadges(window))
+                {
+                    badge.FontWeight.Should().Be(Avalonia.Media.FontWeight.SemiBold);
+                    Color(badge.Foreground).Should().Be(Token(window, "Brush.AccentText"));
+                }
+
+                inbox.UnreadCount = 0;
+                account.UnreadCount = 0;
+                scenario.ViewModel.UnifiedInbox.UnreadCount = 0;
+                Snapshot(window, "main-window-unread-read");
+
+                foreach (var row in unreadRows)
+                {
+                    RowName(window, row).FontWeight.Should().Be(Avalonia.Media.FontWeight.Normal);
+                }
+
+                VisibleBadges(window).Should().BeEmpty();
                 window.Close();
             },
             TestContext.Current.CancellationToken);
@@ -1336,7 +1384,7 @@ public class UiSmokeTests
                     Snapshot(window, $"main-window-unread-{width}");
 
                     var badges = VisibleBadges(window);
-                    badges.Should().HaveCount(2);
+                    badges.Should().HaveCount(3);
                     foreach (var badge in badges)
                     {
                         var name = ((Panel)badge.Parent!).Children.OfType<TextBlock>().Single(t => t != badge);
@@ -1413,6 +1461,19 @@ public class UiSmokeTests
     {
         return window.GetVisualDescendants().OfType<TextBlock>()
             .Where(t => t.Classes.Contains("badge") && t.IsEffectivelyVisible).ToList();
+    }
+
+    /// <summary>
+    /// Finds the name shown on a tree row that can carry an unread badge.
+    /// </summary>
+    /// <param name="window">The window.</param>
+    /// <param name="row">The node of the row.</param>
+    /// <returns>The name.</returns>
+    private static TextBlock RowName(Window window, object row)
+    {
+        var badge = window.GetVisualDescendants().OfType<TextBlock>()
+            .Single(t => t.Classes.Contains("badge") && t.DataContext == row);
+        return ((Panel)badge.Parent!).Children.OfType<TextBlock>().Single(t => t != badge);
     }
 
     /// <summary>

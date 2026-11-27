@@ -24,7 +24,7 @@ public class ThemeTests
     /// </summary>
     private static readonly string[] Tokens =
     [
-        "Brush.Accent", "Brush.AccentHover", "Brush.OnAccent", "Brush.AccentSubtle", "Brush.WindowBg", "Brush.SidebarBg",
+        "Brush.Accent", "Brush.AccentHover", "Brush.AccentText", "Brush.OnAccent", "Brush.AccentSubtle", "Brush.WindowBg", "Brush.SidebarBg",
         "Brush.Surface", "Brush.Border", "Brush.TextPrimary", "Brush.TextSecondary", "Brush.Danger", "Brush.Star",
         "Brush.WarningBg",
     ];
@@ -70,7 +70,7 @@ public class ThemeTests
         await UiSmokeTests.Session.Dispatch(
             () =>
             {
-                string[] texts = ["Brush.TextPrimary", "Brush.TextSecondary"];
+                string[] texts = ["Brush.TextPrimary", "Brush.TextSecondary", "Brush.AccentText"];
                 string[] backgrounds = ["Brush.WindowBg", "Brush.SidebarBg", "Brush.Surface", "Brush.AccentSubtle"];
                 var pairs = texts.SelectMany(t => backgrounds.Select(b => (Text: t, Background: b))).ToList();
                 pairs.Add(("Brush.OnAccent", "Brush.Accent"));

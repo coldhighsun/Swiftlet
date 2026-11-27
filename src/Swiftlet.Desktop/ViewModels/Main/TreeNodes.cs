@@ -13,8 +13,26 @@ namespace Swiftlet.Desktop.ViewModels.Main;
 /// An account node in the folder tree.
 /// </summary>
 /// <param name="account">The account.</param>
-public sealed class AccountNodeViewModel(MailAccount account)
+public sealed partial class AccountNodeViewModel(MailAccount account) : ObservableObject
 {
+    /// <summary>
+    /// Gets or sets the number of unread messages downloaded into the account's inbox.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UnreadText))]
+    [NotifyPropertyChangedFor(nameof(HasUnread))]
+    public partial int UnreadCount { get; set; }
+
+    /// <summary>
+    /// Gets the badge text.
+    /// </summary>
+    public string UnreadText => UnreadBadge.Format(UnreadCount);
+
+    /// <summary>
+    /// Gets a value indicating whether the badge is shown.
+    /// </summary>
+    public bool HasUnread => UnreadCount > 0;
+
     /// <summary>
     /// Gets the account.
     /// </summary>

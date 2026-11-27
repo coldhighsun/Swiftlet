@@ -1433,7 +1433,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         // Also covers removed accounts, for which nothing is queried.
-        UpdateUnifiedUnread();
+        UpdateInboxUnread();
     }
 
     /// <summary>
@@ -1479,7 +1479,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                     folder.UnreadCount = counts.GetValueOrDefault(folder.Folder.Id);
                 }
 
-                UpdateUnifiedUnread();
+                UpdateInboxUnread();
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -1490,14 +1490,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Shows the sum of the inbox counts on the unified inbox.
+    /// Shows each account's inbox count on the account, and their sum on the unified inbox.
     /// </summary>
-    private void UpdateUnifiedUnread()
+    private void UpdateInboxUnread()
     {
-        UnifiedInbox.UnreadCount = Accounts
-            .SelectMany(a => a.Folders)
-            .Where(f => f.Folder.Role == FolderRole.Inbox)
-            .Sum(f => f.UnreadCount);
+        foreach (var account in Accounts)
+        {
+            account.UnreadCount = account.Folders
+                .Where(f => f.Folder.Role == FolderRole.Inbox)
+                .Sum(f => f.UnreadCount);
+        }
+
+        UnifiedInbox.UnreadCount = Accounts.Sum(a => a.UnreadCount);
 
         // Raised even when the total is unchanged, because the counts of the single accounts may differ.
         UnreadChanged?.Invoke(this, EventArgs.Empty);

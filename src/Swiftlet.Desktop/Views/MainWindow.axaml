@@ -12,6 +12,11 @@
     <Style Selector="TextBlock.unread">
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
+    <!-- Shown only on rows with unread mail, whose names are also set in the unread weight. -->
+    <Style Selector="TextBlock.caption.badge">
+      <Setter Property="Foreground" Value="{DynamicResource Brush.AccentText}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
     <Style Selector="TreeViewItem">
       <Setter Property="IsExpanded" Value="True" />
     </Style>
@@ -114,8 +119,12 @@
                     <TextBlock Text="{Binding Initial}" Foreground="White" FontSize="12" HorizontalAlignment="Center"
                                VerticalAlignment="Center" />
                   </Border>
-                  <TextBlock Grid.Column="1" Text="{Binding DisplayName}" FontWeight="SemiBold" VerticalAlignment="Center"
-                             TextTrimming="CharacterEllipsis" />
+                  <DockPanel Grid.Column="1" HorizontalAlignment="Left">
+                    <TextBlock DockPanel.Dock="Right" Classes="caption badge" Text="{Binding UnreadText}" IsVisible="{Binding HasUnread}"
+                               Margin="8,0,0,0" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding DisplayName}" Classes.unread="{Binding HasUnread}" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                  </DockPanel>
                 </Grid>
               </TreeDataTemplate>
               <DataTemplate DataType="main:UnifiedInboxNodeViewModel">
@@ -125,7 +134,7 @@
                   <DockPanel Grid.Column="1" HorizontalAlignment="Left">
                     <TextBlock DockPanel.Dock="Right" Classes="caption badge" Text="{Binding UnreadText}" IsVisible="{Binding HasUnread}"
                                Margin="8,0,0,0" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Name}" Classes.unread="{Binding HasUnread}" TextTrimming="CharacterEllipsis" />
                   </DockPanel>
                 </Grid>
               </DataTemplate>
@@ -148,7 +157,7 @@
                   <DockPanel Grid.Column="1" HorizontalAlignment="Left">
                     <TextBlock DockPanel.Dock="Right" Classes="caption badge" Text="{Binding UnreadText}" IsVisible="{Binding HasUnread}"
                                Margin="8,0,0,0" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Name}" Classes.unread="{Binding HasUnread}" TextTrimming="CharacterEllipsis" />
                   </DockPanel>
                 </Grid>
               </DataTemplate>

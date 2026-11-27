@@ -299,7 +299,8 @@ public class MainWindowViewModelTests
     }
 
     /// <summary>
-    /// A reload shows the unread count on each folder and their inbox sum on the unified inbox.
+    /// A reload shows the unread count on each folder, the inbox count on its account, and the inbox sum on the unified
+    /// inbox.
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>
     [Fact]
@@ -317,6 +318,7 @@ public class MainWindowViewModelTests
         var folders = scenario.ViewModel.Accounts[0].Folders;
         folders.Single(f => f.Folder.Id == scenario.Inbox.Id).UnreadCount.Should().Be(12);
         folders.Single(f => f.Folder.Id == scenario.Sent.Id).UnreadCount.Should().Be(3);
+        scenario.ViewModel.Accounts[0].UnreadCount.Should().Be(12, "only the inbox counts for the account");
         scenario.ViewModel.UnifiedInbox.UnreadCount.Should().Be(12);
     }
 

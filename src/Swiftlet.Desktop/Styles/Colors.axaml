@@ -5,6 +5,7 @@
     <ResourceDictionary x:Key="Light">
       <SolidColorBrush x:Key="Brush.Accent">#0E7C9B</SolidColorBrush>
       <SolidColorBrush x:Key="Brush.AccentHover">#0B6A86</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.AccentText">#0B6A86</SolidColorBrush>
       <SolidColorBrush x:Key="Brush.OnAccent">#FFFFFF</SolidColorBrush>
       <SolidColorBrush x:Key="Brush.AccentSubtle">#E0F2F7</SolidColorBrush>
       <SolidColorBrush x:Key="Brush.WindowBg">#F6F8FA</SolidColorBrush>
@@ -20,6 +21,7 @@
     <ResourceDictionary x:Key="Dark">
       <SolidColorBrush x:Key="Brush.Accent">#4FB8D4</SolidColorBrush>
       <SolidColorBrush x:Key="Brush.AccentHover">#6CC7DF</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.AccentText">#4FB8D4</SolidColorBrush>
       <SolidColorBrush x:Key="Brush.OnAccent">#06222B</SolidColorBrush>
       <SolidColorBrush x:Key="Brush.AccentSubtle">#15323D</SolidColorBrush>
       <SolidColorBrush x:Key="Brush.WindowBg">#12171C</SolidColorBrush>
