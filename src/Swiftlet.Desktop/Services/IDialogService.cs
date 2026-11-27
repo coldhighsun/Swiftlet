@@ -130,6 +130,13 @@ public interface IDialogService
     void ShowHtmlInBrowser(string html);
 
     /// <summary>
+    /// Puts a text on the clipboard.
+    /// </summary>
+    /// <param name="text">The text.</param>
+    /// <returns>A task that completes when the text has been copied.</returns>
+    Task CopyTextAsync(string text);
+
+    /// <summary>
     /// Opens a folder in the file manager of the system.
     /// </summary>
     /// <param name="path">The folder.</param>

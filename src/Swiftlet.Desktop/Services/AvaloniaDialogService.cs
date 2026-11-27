@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -242,6 +243,15 @@ public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogSe
     {
         var path = services.GetRequiredService<HtmlPreviewStore>().Write(html);
         Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+    }
+
+    /// <inheritdoc />
+    public async Task CopyTextAsync(string text)
+    {
+        if (ActiveWindow?.Clipboard is { } clipboard)
+        {
+            await clipboard.SetTextAsync(text);
+        }
     }
 
     /// <inheritdoc />

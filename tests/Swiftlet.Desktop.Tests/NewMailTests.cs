@@ -1,9 +1,11 @@
 using Avalonia;
 using AwesomeAssertions;
+using Swiftlet.Application.Contacts;
 using Swiftlet.Application.Messages;
 using Swiftlet.Application.Sync;
 using Swiftlet.Desktop.Hosting;
 using Swiftlet.Desktop.Localization;
+using Swiftlet.Desktop.Services;
 using Swiftlet.Desktop.ViewModels;
 using Swiftlet.Desktop.Views;
 
@@ -111,6 +113,32 @@ public class NewMailTests
 
         viewModel.Sender.Should().Be("bob@example.com");
         viewModel.Subject.Should().Be("(No subject)");
+    }
+
+    /// <summary>
+    /// Verifies a sender and a receiving account in the address book show with their contact names, loading the address
+    /// book if needed.
+    /// </summary>
+    [Fact]
+    public async Task ViewModel_AddressesAreContacts_ShowsContactNamesAndAddresses()
+    {
+        var dispatcher = Dispatcher();
+        dispatcher.On<GetContactNamesQuery>(_ => (IReadOnlyDictionary<string, string>)new Dictionary<string, string>
+        {
+            ["alice@example.com"] = "Alice Smith",
+            ["me@example.com"] = "My Work Mail",
+        });
+
+        using var viewModel = new NewMailViewModel(
+            Arrival("me@example.com", ("Hello", 1)),
+            dispatcher,
+            TestLocalizer.English(),
+            () => { },
+            contacts: new ContactDirectory(dispatcher));
+        await viewModel.ContactsLoad;
+
+        viewModel.Sender.Should().Be("Alice Smith <alice@example.com>");
+        viewModel.AccountAddress.Should().Be("My Work Mail <me@example.com>");
     }
 
     /// <summary>

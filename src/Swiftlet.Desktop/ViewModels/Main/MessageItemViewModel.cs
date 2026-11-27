@@ -2,10 +2,12 @@ using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Contacts;
 using Swiftlet.Application.Queries;
 using Swiftlet.Desktop.Formatting;
 using Swiftlet.Desktop.Html;
 using Swiftlet.Desktop.Localization;
+using Swiftlet.Desktop.Services;
 using Swiftlet.Domain.Messages;
 
 namespace Swiftlet.Desktop.ViewModels.Main;
@@ -82,6 +84,26 @@ public sealed partial class MessageItemViewModel : ObservableObject
     private readonly TimeProvider _timeProvider;
 
     /// <summary>
+    /// The address book whose names are shown; <see langword="null"/> when there is none.
+    /// </summary>
+    private readonly IContactDirectory? _contacts;
+
+    /// <summary>
+    /// What the menus of the header addresses do; <see langword="null"/> disables them.
+    /// </summary>
+    private readonly MessageAddressActions? _addressActions;
+
+    /// <summary>
+    /// The header entry of the sender, once asked for.
+    /// </summary>
+    private MessageAddressViewModel? _senderAddress;
+
+    /// <summary>
+    /// The header entries of the recipients, once asked for.
+    /// </summary>
+    private MessageAddressViewModel[]? _recipientAddresses;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="MessageItemViewModel"/> class.
     /// </summary>
     /// <param name="message">The cached message.</param>
@@ -89,17 +111,23 @@ public sealed partial class MessageItemViewModel : ObservableObject
     /// <param name="localizer">The localizer used for the placeholder subject.</param>
     /// <param name="rememberRemoteImages">The action invoked to save a rule that always allows remote images (the rule is an address or a domain).</param>
     /// <param name="timeProvider">The clock the list time is relative to; optional.</param>
+    /// <param name="contacts">The address book whose names are shown; optional.</param>
+    /// <param name="addressActions">What the menus of the header addresses do; optional.</param>
     public MessageItemViewModel(
         MailMessage message,
         Func<AttachmentItemViewModel, Task> saveAttachment,
         ILocalizer localizer,
         Func<MessageItemViewModel, string, Task>? rememberRemoteImages = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IContactDirectory? contacts = null,
+        MessageAddressActions? addressActions = null)
     {
         ArgumentNullException.ThrowIfNull(message);
         _localizer = localizer;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _rememberRemoteImages = rememberRemoteImages;
+        _contacts = contacts;
+        _addressActions = addressActions;
         Message = message;
         IsRead = message.IsRead;
         IsFlagged = message.IsFlagged;
@@ -188,7 +216,9 @@ public sealed partial class MessageItemViewModel : ObservableObject
     /// <summary>
     /// Gets the initial shown in the sender's avatar.
     /// </summary>
-    public string SenderInitial => Avatar.Initial(Message.FromName, Message.FromAddress);
+    public string SenderInitial => Avatar.Initial(
+        AddressText.Name(_contacts, Message.FromName, Message.FromAddress),
+        Message.FromAddress);
 
     /// <summary>
     /// Gets the avatar color of the sender; created on first use so view models stay creatable off the UI thread.
@@ -218,24 +248,46 @@ public sealed partial class MessageItemViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(Subject));
         OnPropertyChanged(nameof(ListTimeText));
+        RefreshContacts();
     }
 
     /// <summary>
-    /// Gets the sender's display name, falling back to the address.
+    /// Re-reads the names and menu texts that come from the address book.
     /// </summary>
-    public string FromDisplay => string.IsNullOrWhiteSpace(Message.FromName) ? Message.FromAddress : Message.FromName;
+    public void RefreshContacts()
+    {
+        OnPropertyChanged(nameof(FromDisplay));
+        OnPropertyChanged(nameof(SenderInitial));
+        OnPropertyChanged(nameof(AlwaysAllowSenderText));
+        _senderAddress?.Refresh();
+        foreach (var recipient in _recipientAddresses ?? [])
+        {
+            recipient.Refresh();
+        }
+    }
 
     /// <summary>
-    /// Gets the sender as <c>Name &lt;address&gt;</c>.
+    /// Gets the sender as shown in the list: <c>Name &lt;address&gt;</c> for a contact, otherwise the sender's display
+    /// name, falling back to the address.
     /// </summary>
-    public string FromFull => string.IsNullOrWhiteSpace(Message.FromName)
-        ? Message.FromAddress
-        : $"{Message.FromName} <{Message.FromAddress}>";
+    public string FromDisplay => AddressText.Compact(_contacts, Message.FromName, Message.FromAddress);
 
     /// <summary>
-    /// Gets the recipients.
+    /// Gets the sender as shown in the reading pane; created on first use, because list rows do not need it.
     /// </summary>
-    public string Recipients => Message.Recipients;
+    public MessageAddressViewModel SenderAddress =>
+        _senderAddress ??= CreateAddress(Message.FromName, Message.FromAddress);
+
+    /// <summary>
+    /// Gets the To and Cc recipients as shown in the reading pane; created on first use.
+    /// </summary>
+    public IReadOnlyList<MessageAddressViewModel> RecipientAddresses =>
+        _recipientAddresses ??=
+        [
+            .. RecipientList.Split(Message.Recipients)
+                .Select(RecipientList.Parse)
+                .Select(r => CreateAddress(r.Name, r.Address)),
+        ];
 
     /// <summary>
     /// Gets the sent time in the local time zone.
@@ -314,12 +366,25 @@ public sealed partial class MessageItemViewModel : ObservableObject
     /// <summary>
     /// Gets the menu text of the "always allow this sender" choice.
     /// </summary>
-    public string AlwaysAllowSenderText => _localizer.Format("Reader_AlwaysAllowSender", SenderRule ?? string.Empty);
+    public string AlwaysAllowSenderText => _localizer.Format(
+        "Reader_AlwaysAllowSender",
+        SenderRule is { } rule ? AddressText.Compact(_contacts, null, rule) : string.Empty);
 
     /// <summary>
     /// Gets the menu text of the "always allow this sender's domain" choice.
     /// </summary>
     public string AlwaysAllowDomainText => _localizer.Format("Reader_AlwaysAllowDomain", DomainRule ?? string.Empty);
+
+    /// <summary>
+    /// Creates the header entry of one address of this message.
+    /// </summary>
+    /// <param name="name">The name that came with the mail.</param>
+    /// <param name="address">The address.</param>
+    /// <returns>The entry.</returns>
+    private MessageAddressViewModel CreateAddress(string name, string address)
+    {
+        return new MessageAddressViewModel(Message.AccountId, name, address, _contacts, _localizer, _addressActions);
+    }
 
     /// <summary>
     /// Allows this message to load images from the web.

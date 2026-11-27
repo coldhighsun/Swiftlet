@@ -207,7 +207,8 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
                 _ = viewModel.ShowMessageAsync(shown);
             },
             viewModel.RefreshAfterLocalChange,
-            services.GetService<ILogger<NewMailNotifier>>());
+            services.GetService<ILogger<NewMailNotifier>>(),
+            services.GetService<IContactDirectory>());
         desktop.Exit += (_, _) => notifier.Dispose();
     }
 

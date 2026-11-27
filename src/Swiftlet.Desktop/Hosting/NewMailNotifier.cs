@@ -54,6 +54,11 @@ public sealed class NewMailNotifier : IDisposable
     private readonly Action _changed;
 
     /// <summary>
+    /// The address book whose names the pop-up shows, if any.
+    /// </summary>
+    private readonly IContactDirectory? _contacts;
+
+    /// <summary>
     /// The logger.
     /// </summary>
     private readonly ILogger _logger;
@@ -80,6 +85,7 @@ public sealed class NewMailNotifier : IDisposable
     /// <param name="open">Shows the mail when the pop-up is clicked; gets the message that was shown, if any.</param>
     /// <param name="changed">Told after an action of the pop-up changed a cached message.</param>
     /// <param name="logger">The logger; optional.</param>
+    /// <param name="contacts">The address book whose names the pop-up shows; optional.</param>
     public NewMailNotifier(
         ISyncEvents events,
         IAppSettings settings,
@@ -89,7 +95,8 @@ public sealed class NewMailNotifier : IDisposable
         INewMailPresenter presenter,
         Action<Guid?> open,
         Action changed,
-        ILogger<NewMailNotifier>? logger = null)
+        ILogger<NewMailNotifier>? logger = null,
+        IContactDirectory? contacts = null)
     {
         ArgumentNullException.ThrowIfNull(events);
         _events = events;
@@ -100,6 +107,7 @@ public sealed class NewMailNotifier : IDisposable
         _presenter = presenter;
         _open = open;
         _changed = changed;
+        _contacts = contacts;
         _logger = logger ?? NullLogger<NewMailNotifier>.Instance;
         events.NewMailArrived += OnNewMailArrived;
     }
@@ -160,7 +168,7 @@ public sealed class NewMailNotifier : IDisposable
 
         if (_current is null)
         {
-            _current = new NewMailViewModel(arrival, _dispatcher, _localizer, _changed, _logger);
+            _current = new NewMailViewModel(arrival, _dispatcher, _localizer, _changed, _logger, _contacts);
             _current.OpenRequested += OnOpenRequested;
             _current.CloseRequested += OnCloseRequested;
             _current.Interacted += OnInteracted;

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Application.Accounts;
+using Swiftlet.Application.Contacts;
 using Swiftlet.Application.Labels;
 using Swiftlet.Application.Messages;
 using Swiftlet.Application.Queries;
@@ -41,6 +42,8 @@ public class MainWindowViewModelTests
             Messages = [TestData.Message(Account, Inbox, 1, "Hello 1"), TestData.Message(Account, Inbox, 2, "Hello 2")];
 
             Work = Label.Create("Work", "#E53935");
+            Dispatcher.On<GetContactNamesQuery>(_ => (IReadOnlyDictionary<string, string>)new Dictionary<string, string>(
+                ContactNames, StringComparer.OrdinalIgnoreCase));
             Dispatcher.On<GetLabelsQuery>(_ => (IReadOnlyList<Label>)new List<Label> { Work });
             Dispatcher.On<GetUnifiedInboxQuery>(_ => HasAccount ? Messages.OrderByDescending(m => m.SentAt).ToList() : []);
             Dispatcher.On<GetMessagesByLabelQuery>(q => Messages.Where(m => m.Labels.Any(l => l.Id == q.LabelId)).ToList());
@@ -88,6 +91,11 @@ public class MainWindowViewModelTests
         /// Gets or sets a value indicating whether the account exists.
         /// </summary>
         public bool HasAccount { get; set; }
+
+        /// <summary>
+        /// Gets the address book, as address and contact name.
+        /// </summary>
+        public Dictionary<string, string> ContactNames { get; } = [];
 
         /// <summary>
         /// Gets the dispatcher.
@@ -1134,21 +1142,179 @@ public class MainWindowViewModelTests
     }
 
     /// <summary>
-    /// Verifies adding the sender opens the contacts window for the selected message.
+    /// Creates a scenario whose newest message goes to the own account and two others.
+    /// </summary>
+    /// <returns>The started scenario with that message selected.</returns>
+    private static async Task<Scenario> StartWithRecipientsAsync()
+    {
+        var scenario = new Scenario();
+        scenario.Messages[1] = MailMessage.Create(
+            scenario.Account.Id,
+            scenario.Inbox.Id,
+            2,
+            "To several",
+            "Alice",
+            "alice@example.com",
+            "me@example.com, bob@example.com, unknown@invalid, ALICE@example.com",
+            new DateTimeOffset(2026, 1, 1, 1, 0, 0, TimeSpan.Zero),
+            "text",
+            null,
+            "<2@example.com>",
+            true);
+        await scenario.StartAsync();
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+        return scenario;
+    }
+
+    /// <summary>
+    /// Verifies the "add to contacts" menu lists the sender and the recipients once, without the own account and unusable
+    /// addresses, and marks those already saved.
     /// </summary>
     [Fact]
-    public async Task AddSenderToContactsCommand_SelectedMessage_PassesSender()
+    public async Task RefreshContactTargets_SelectedMessage_ListsSenderAndRecipients()
+    {
+        var scenario = await StartWithRecipientsAsync();
+        scenario.ContactNames["bob@example.com"] = "Bob Brown";
+        await scenario.ViewModel.OpenContactsCommand.ExecuteAsync(null);
+
+        scenario.ViewModel.RefreshContactTargets();
+
+        scenario.ViewModel.CanAddContact.Should().BeTrue();
+        scenario.ViewModel.ContactTargets.Select(t => t.Header).Should().Equal(
+            "发件人：Alice <alice@example.com>",
+            "收件人：Bob Brown <bob@example.com>（已添加）");
+    }
+
+    /// <summary>
+    /// Verifies choosing an entry opens the contacts window for that address.
+    /// </summary>
+    [Fact]
+    public async Task ContactTarget_Recipient_OpensContactsForAddress()
+    {
+        var scenario = await StartWithRecipientsAsync();
+        scenario.ViewModel.RefreshContactTargets();
+
+        scenario.ViewModel.ContactTargets[1].Command.Execute(null);
+
+        scenario.Dialogs.ContactsRequests.Should().ContainSingle()
+            .Which.Should().Be(new ContactsRequest(string.Empty, "bob@example.com"));
+    }
+
+    /// <summary>
+    /// Verifies the menu is empty for a selection of several messages.
+    /// </summary>
+    [Fact]
+    public async Task RefreshContactTargets_SeveralMessages_IsEmpty()
     {
         var scenario = new Scenario();
         await scenario.StartAsync();
-        scenario.ViewModel.AddSenderToContactsCommand.CanExecute(null).Should().BeFalse();
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+        scenario.ViewModel.SelectedMessages.Clear();
+        foreach (var message in scenario.ViewModel.Messages)
+        {
+            scenario.ViewModel.SelectedMessages.Add(message);
+        }
+
+        scenario.ViewModel.RefreshContactTargets();
+
+        scenario.ViewModel.CanAddContact.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies the first list already shows contact names, and closing the contacts window updates them.
+    /// </summary>
+    [Fact]
+    public async Task OpenContactsCommand_NameAdded_ListedMessagesShowIt()
+    {
+        var scenario = new Scenario();
+        scenario.ContactNames["alice@example.com"] = "Alice Smith";
+        await scenario.StartAsync();
+        var item = scenario.ViewModel.Messages[0];
+        item.FromDisplay.Should().Be("Alice Smith <alice@example.com>");
+        var changed = new List<string?>();
+        item.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+        scenario.ContactNames["alice@example.com"] = "Ally";
+
+        await scenario.ViewModel.OpenContactsCommand.ExecuteAsync(null);
+
+        item.FromDisplay.Should().Be("Ally <alice@example.com>");
+        changed.Should().Contain(nameof(MessageItemViewModel.FromDisplay));
+    }
+
+    /// <summary>
+    /// Verifies the menu of a header address writes from the account of the message, copies and opens the contact.
+    /// </summary>
+    [Fact]
+    public async Task HeaderAddress_Commands_ActOnTheAddress()
+    {
+        var scenario = await StartWithRecipientsAsync();
+        scenario.ContactNames["bob@example.com"] = "Bob Brown";
+        await scenario.ViewModel.OpenContactsCommand.ExecuteAsync(null);
+        var bob = scenario.ViewModel.SelectedMessage!.RecipientAddresses[1];
+        bob.Text.Should().Be("Bob Brown <bob@example.com>");
+        bob.ContactText.Should().Be("查看联系人");
+
+        await bob.WriteCommand.ExecuteAsync(null);
+        await bob.CopyCommand.ExecuteAsync(null);
+        await bob.ContactCommand.ExecuteAsync(null);
+
+        var compose = scenario.Dialogs.ComposeRequests.Should().ContainSingle().Subject;
+        compose.To.Should().Be("Bob Brown <bob@example.com>");
+        compose.AccountId.Should().Be(scenario.Account.Id);
+        scenario.Dialogs.CopiedTexts.Should().Equal("bob@example.com");
+        scenario.Dialogs.ContactsRequests[^1].Should().Be(new ContactsRequest(string.Empty, "bob@example.com"));
+    }
+
+    /// <summary>
+    /// Verifies a placeholder address can only be copied.
+    /// </summary>
+    [Fact]
+    public async Task HeaderAddress_Placeholder_CannotBeAddedOrWrittenTo()
+    {
+        var scenario = await StartWithRecipientsAsync();
+
+        var placeholder = scenario.ViewModel.SelectedMessage!.RecipientAddresses[2];
+
+        placeholder.CanBeContact.Should().BeFalse();
+        placeholder.ContactCommand.CanExecute(null).Should().BeFalse();
+        placeholder.WriteCommand.CanExecute(null).Should().BeFalse();
+        placeholder.CopyCommand.CanExecute(null).Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies a reply to a contact carries nothing from the address book.
+    /// </summary>
+    [Fact]
+    public async Task ReplyCommand_SenderIsContact_UsesBareAddress()
+    {
+        var scenario = new Scenario();
+        scenario.ContactNames["alice@example.com"] = "Private Sender Note";
+        await scenario.StartAsync();
         scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
 
-        await scenario.ViewModel.AddSenderToContactsCommand.ExecuteAsync(null);
+        await scenario.ViewModel.ReplyCommand.ExecuteAsync(null);
 
-        var message = scenario.ViewModel.Messages[0].Message;
-        scenario.Dialogs.ContactsRequests.Should().ContainSingle()
-            .Which.Should().Be(new ContactsRequest(message.FromName, message.FromAddress));
+        var request = scenario.Dialogs.ComposeRequests.Should().ContainSingle().Subject;
+        request.To.Should().Be("alice@example.com");
+        request.Body.Should().Contain("Alice <alice@example.com>").And.NotContain("Private");
+    }
+
+    /// <summary>
+    /// Verifies a forwarded header carries nothing from the address book.
+    /// </summary>
+    [Fact]
+    public async Task ForwardCommand_Contacts_KeepsTheHeaderOfTheMail()
+    {
+        var scenario = new Scenario();
+        scenario.ContactNames["alice@example.com"] = "Private Sender Note";
+        scenario.ContactNames["me@example.com"] = "Private Recipient Note";
+        await scenario.StartAsync();
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+
+        await scenario.ViewModel.ForwardCommand.ExecuteAsync(null);
+
+        scenario.Dialogs.ComposeRequests.Should().ContainSingle().Which.Body
+            .Should().Contain("Alice <alice@example.com>").And.Contain("me@example.com").And.NotContain("Private");
     }
 
     /// <summary>

@@ -274,6 +274,18 @@ internal sealed class FakeDialogService : IDialogService
         return Task.FromResult(ContactsRecipient);
     }
 
+    /// <summary>
+    /// Gets the texts put on the clipboard.
+    /// </summary>
+    public List<string> CopiedTexts { get; } = [];
+
+    /// <inheritdoc />
+    public Task CopyTextAsync(string text)
+    {
+        CopiedTexts.Add(text);
+        return Task.CompletedTask;
+    }
+
     /// <inheritdoc />
     public Task<string?> PickContactFileAsync()
     {

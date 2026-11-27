@@ -83,6 +83,17 @@
     <Setter Property="Padding" Value="8" />
   </Style>
 
+  <!-- An address in the header of a message: reads as text, and shows that it can be clicked under the pointer. -->
+  <Style Selector="Button.address">
+    <Setter Property="Padding" Value="4,2" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="MinHeight" Value="0" />
+  </Style>
+  <Style Selector="ItemsControl.recipients Button.address">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}" />
+  </Style>
+
   <Style Selector="Button.icon:disabled /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
   </Style>

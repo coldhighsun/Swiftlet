@@ -291,7 +291,21 @@
                 <ContextMenu Opening="OnMessageMenuOpening">
                   <MenuItem Header="{loc:Loc Toolbar_Archive}" Command="{Binding ArchiveSelectedCommand}" />
                   <MenuItem Header="{loc:Loc Toolbar_Delete}" Command="{Binding DeleteSelectedCommand}" />
-                  <MenuItem Header="{loc:Loc Menu_Message_AddContact}" Command="{Binding AddSenderToContactsCommand}" />
+                  <MenuItem Header="{loc:Loc Menu_Message_AddContact}" ItemsSource="{Binding ContactTargets}"
+                            IsEnabled="{Binding CanAddContact}">
+                    <MenuItem.ItemContainerTheme>
+                      <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}"
+                                    x:DataType="main:ContactTargetViewModel">
+                        <Setter Property="Command" Value="{Binding Command}" />
+                      </ControlTheme>
+                    </MenuItem.ItemContainerTheme>
+                    <MenuItem.ItemTemplate>
+                      <!-- A text block keeps underscores of addresses, which a plain header reads as access keys. -->
+                      <DataTemplate DataType="main:ContactTargetViewModel">
+                        <TextBlock Text="{Binding Header}" />
+                      </DataTemplate>
+                    </MenuItem.ItemTemplate>
+                  </MenuItem>
                   <MenuItem Header="{loc:Loc Menu_Message_MoveTo}" ItemsSource="{Binding MoveTargets}" IsEnabled="{Binding CanMove}">
                     <MenuItem.ItemContainerTheme>
                       <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}"
@@ -316,7 +330,7 @@
                       <Border Classes="unreadDot" Width="8" Height="8" CornerRadius="4" HorizontalAlignment="Left" VerticalAlignment="Center"
                               Background="{DynamicResource Brush.Accent}" IsVisible="{Binding IsUnread}" />
                       <TextBlock Grid.Column="1" Text="{Binding FromDisplay}" Classes.unread="{Binding IsUnread}"
-                                 TextTrimming="CharacterEllipsis" />
+                                 TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding FromDisplay}" />
                       <TextBlock Grid.Column="2" Classes="caption" Text="{Binding ListTimeText}" Margin="8,0,0,0" VerticalAlignment="Center" />
                       <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Subject}" Classes.unread="{Binding IsUnread}"
                                  TextTrimming="CharacterEllipsis" />
@@ -435,10 +449,6 @@
               </Button.Flyout>
               <PathIcon Data="{StaticResource Icon.Tag}" />
             </Button>
-            <Button Classes="icon" Command="{Binding AddSenderToContactsCommand}"
-                    ToolTip.Tip="{loc:Loc Menu_Message_AddContact}" AutomationProperties.Name="{loc:Loc Menu_Message_AddContact}">
-              <PathIcon Data="{StaticResource Icon.AddAccount}" />
-            </Button>
             <Button Classes="icon" Command="{Binding OpenHtmlCommand}"
                     ToolTip.Tip="{loc:Loc Toolbar_ViewInBrowser}" AutomationProperties.Name="{loc:Loc Toolbar_ViewInBrowser}">
               <PathIcon Data="{StaticResource Icon.Browser}" />
@@ -461,6 +471,24 @@
             <ContentControl.DataTemplates>
               <DataTemplate DataType="main:MessageItemViewModel">
                 <DockPanel Margin="16">
+                  <DockPanel.DataTemplates>
+                    <!-- One address of the header: clicking it offers what can be done with it. -->
+                    <DataTemplate DataType="main:MessageAddressViewModel">
+                      <Button Classes="icon address" ToolTip.Tip="{Binding Text}" AutomationProperties.Name="{Binding Text}">
+                        <Button.Flyout>
+                          <MenuFlyout Placement="BottomEdgeAlignedLeft">
+                            <MenuItem Header="{Binding ContactText}" Command="{Binding ContactCommand}"
+                                      IsVisible="{Binding CanBeContact}" x:DataType="main:MessageAddressViewModel" />
+                            <MenuItem Header="{loc:Loc Menu_Address_Write}" Command="{Binding WriteCommand}"
+                                      IsVisible="{Binding CanBeContact}" x:DataType="main:MessageAddressViewModel" />
+                            <MenuItem Header="{loc:Loc Menu_Address_Copy}" Command="{Binding CopyCommand}"
+                                      x:DataType="main:MessageAddressViewModel" />
+                          </MenuFlyout>
+                        </Button.Flyout>
+                        <TextBlock Text="{Binding Text}" TextTrimming="CharacterEllipsis" />
+                      </Button>
+                    </DataTemplate>
+                  </DockPanel.DataTemplates>
                   <StackPanel DockPanel.Dock="Top" Spacing="12">
                     <TextBlock Classes="title" Text="{Binding Subject}" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
                                ToolTip.Tip="{Binding Subject}" />
@@ -470,10 +498,21 @@
                                    VerticalAlignment="Center" />
                       </Border>
                       <Grid Grid.Column="1" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="2">
-                        <TextBlock Grid.Row="0" Classes="secondary" Text="{loc:Loc Reader_From}" />
-                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding FromFull}" TextWrapping="Wrap" />
-                        <TextBlock Grid.Row="1" Classes="caption" Text="{loc:Loc Reader_To}" />
-                        <TextBlock Grid.Row="1" Grid.Column="1" Classes="caption" Text="{Binding Recipients}" TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="0" Classes="secondary" VerticalAlignment="Center" Text="{loc:Loc Reader_From}" />
+                        <!-- The negative margins cancel the button padding, so the addresses line up with the time. -->
+                        <ContentControl Grid.Row="0" Grid.Column="1" Margin="-4,0,0,0" Content="{Binding SenderAddress}"
+                                        HorizontalAlignment="Left" />
+                        <TextBlock Grid.Row="1" Classes="caption" Margin="0,3,0,0" VerticalAlignment="Top" Text="{loc:Loc Reader_To}" />
+                        <!-- A mail to very many people scrolls instead of pushing the body out of sight. -->
+                        <ScrollViewer Grid.Row="1" Grid.Column="1" Margin="-4,0,0,0" MaxHeight="72" HorizontalScrollBarVisibility="Disabled">
+                          <ItemsControl x:Name="RecipientList" Classes="recipients" ItemsSource="{Binding RecipientAddresses}">
+                            <ItemsControl.ItemsPanel>
+                              <ItemsPanelTemplate>
+                                <WrapPanel />
+                              </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                          </ItemsControl>
+                        </ScrollViewer>
                         <TextBlock Grid.Row="2" Classes="caption" Text="{loc:Loc Reader_Time}" />
                         <TextBlock Grid.Row="2" Grid.Column="1" Classes="caption" Text="{Binding SentAtText}" />
                       </Grid>

@@ -36,14 +36,16 @@
               HorizontalContentAlignment="Stretch" VerticalContentAlignment="Top" Command="{Binding OpenCommand}"
               ToolTip.Tip="{loc:Loc Notification_Open}" AutomationProperties.Name="{loc:Loc Notification_Open}">
         <StackPanel Spacing="4">
-          <TextBlock Text="{Binding Sender}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxLines="1" />
+          <TextBlock Text="{Binding Sender}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxLines="1"
+                     ToolTip.Tip="{Binding Sender}" />
           <TextBlock Text="{Binding Subject}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="2" />
           <TextBlock Classes="secondary" Text="{Binding Preview}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="2" />
         </StackPanel>
       </Button>
 
       <Grid ColumnDefinitions="*,Auto" Margin="16,4,16,0">
-        <TextBlock Classes="caption" Text="{Binding AccountAddress}" TextTrimming="CharacterEllipsis" MaxLines="1" />
+        <TextBlock Classes="caption" Text="{Binding AccountAddress}" TextTrimming="CharacterEllipsis" MaxLines="1"
+                   ToolTip.Tip="{Binding AccountAddress}" />
         <TextBlock Grid.Column="1" Classes="caption" Text="{Binding Position}" Margin="8,0,0,0"
                    IsVisible="{Binding HasSeveral}" />
       </Grid>

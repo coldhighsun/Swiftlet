@@ -95,13 +95,15 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Fills the "move to" submenu for the selection the context menu was opened on.
+    /// Fills the "move to" and "add to contacts" submenus for the selection the context menu was opened on.
     /// </summary>
     /// <param name="sender">The event sender.</param>
     /// <param name="e">The event arguments.</param>
     private void OnMessageMenuOpening(object? sender, CancelEventArgs e)
     {
-        (DataContext as MainWindowViewModel)?.RefreshMoveTargets();
+        var viewModel = DataContext as MainWindowViewModel;
+        viewModel?.RefreshMoveTargets();
+        viewModel?.RefreshContactTargets();
     }
 
     /// <summary>

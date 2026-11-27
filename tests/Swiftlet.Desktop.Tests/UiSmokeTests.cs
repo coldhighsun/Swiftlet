@@ -1448,7 +1448,7 @@ public class UiSmokeTests
                 reader.Bounds.Width.Should().BeGreaterThanOrEqualTo(300);
                 reader.Bounds.Right.Should().BeLessThanOrEqualTo(800);
                 var buttons = window.FindControl<Control>("ReaderActions")!.GetVisualDescendants().OfType<Button>().ToList();
-                buttons.Should().HaveCount(8);
+                buttons.Should().HaveCount(7);
                 foreach (var button in buttons)
                 {
                     button.Bounds.Width.Should().BeGreaterThan(0);
@@ -1787,6 +1787,115 @@ public class UiSmokeTests
                         .Should().BeLessThanOrEqualTo(800.5, (control as TextBlock)?.Text ?? control.ToString());
                 }
 
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies every address of the header is a named button with a menu, many recipients stay inside the narrowest
+    /// window, and they do not push the text out of sight.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_ManyRecipientsAt800_ShowsAddressButtonsWithMenu()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference("en");
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Localizer.SetPreference("en");
+                scenario.ContactNames["alice@example.com"] = "Alice Smith";
+                var recipients = string.Join(", ", Enumerable.Range(0, 40).Select(i => $"person_{i}@example.com"))
+                    + $", {new string('r', 120)}@example.com";
+                scenario.Messages[1] = Swiftlet.Domain.Messages.MailMessage.Create(
+                    scenario.Account.Id,
+                    scenario.Inbox.Id,
+                    2,
+                    "To everyone",
+                    "Alice",
+                    "alice@example.com",
+                    recipients,
+                    new DateTimeOffset(2026, 1, 1, 1, 0, 0, TimeSpan.Zero),
+                    "text",
+                    null,
+                    "<2@example.com>",
+                    true);
+                await scenario.StartAsync();
+                scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+                await scenario.ViewModel.WhenIdleAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel, Width = 800, Height = 480 };
+                Render(window, "main-window-recipients", "en");
+
+                var reader = window.FindControl<Control>("ReaderPane")!;
+                var buttons = reader.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("address")).ToList();
+                buttons.Should().HaveCount(42);
+                UiQueries.ButtonCaptions(window).Should().Contain("Alice Smith <alice@example.com>");
+                foreach (var button in buttons)
+                {
+                    button.TranslatePoint(new Point(button.Bounds.Width, 0), window)!.Value.X.Should().BeLessThanOrEqualTo(800.5);
+                }
+
+                var body = reader.GetVisualDescendants().OfType<SelectableTextBlock>().Single();
+                body.GetVisualAncestors().OfType<ScrollViewer>().First().Bounds.Height.Should().BeGreaterThan(60);
+
+                var sender = buttons.Single(b => ReferenceEquals(b.DataContext, scenario.ViewModel.SelectedMessage!.SenderAddress));
+                var point = sender.TranslatePoint(new Point(10, 8), window)!.Value;
+                window.MouseDown(point, MouseButton.Left);
+                window.MouseUp(point, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+                var flyout = (MenuFlyout)sender.Flyout!;
+                flyout.IsOpen.Should().BeTrue();
+                Snapshot(window, "main-window-address-menu");
+                var items = flyout.Items.OfType<MenuItem>().ToList();
+                items.Select(i => i.Header).Should().Equal("View contact", "Write email", "Copy address");
+                items[2].Command!.Execute(null);
+                scenario.Dialogs.CopiedTexts.Should().Equal("alice@example.com");
+                flyout.Hide();
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the message context menu offers the sender and recipients for the address book.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_MessageContextMenu_ListsContactTargets()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference("en");
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Localizer.SetPreference("en");
+                await scenario.StartAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-contact-menu", "en");
+                var list = window.GetVisualDescendants().OfType<ListBox>().First(l => l.ItemCount == 2);
+
+                var row = list.GetVisualDescendants().OfType<ListBoxItem>().First();
+                var rowPoint = row.TranslatePoint(new Point(10, 10), window)!.Value;
+                window.MouseDown(rowPoint, MouseButton.Right);
+                window.MouseUp(rowPoint, MouseButton.Right);
+                Dispatcher.UIThread.RunJobs();
+                var menu = list.ContextMenu!;
+                menu.IsOpen.Should().BeTrue();
+                Dispatcher.UIThread.RunJobs();
+                var add = menu.Items.OfType<MenuItem>().Single(i => Equals(i.Header, "Add to contacts"));
+                add.IsEffectivelyEnabled.Should().BeTrue();
+                add.IsSubMenuOpen = true;
+                Dispatcher.UIThread.RunJobs();
+                Snapshot(window, "main-window-contact-menu-open");
+                var entry = (MenuItem)add.ContainerFromIndex(0)!;
+                entry.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text)
+                    .Should().Contain("From: Alice <alice@example.com>");
+
+                entry.Command!.Execute(null);
+
+                scenario.Dialogs.ContactsRequests.Should().ContainSingle()
+                    .Which!.Address.Should().Be("alice@example.com");
+                menu.Close();
                 window.Close();
             },
             TestContext.Current.CancellationToken);

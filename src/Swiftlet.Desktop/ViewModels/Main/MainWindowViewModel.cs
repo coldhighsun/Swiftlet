@@ -4,16 +4,17 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Swiftlet.Application.Abstractions;
+using Swiftlet.Application.Contacts;
 using Swiftlet.Application.Labels;
 using Swiftlet.Application.Logging;
 using Swiftlet.Application.Messages;
 using Swiftlet.Application.Queries;
 using Swiftlet.Application.Sync;
+using Swiftlet.Desktop.Formatting;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
 using Swiftlet.Desktop.ViewModels.Compose;
 using Swiftlet.Domain.Accounts;
-using Swiftlet.Domain.Contacts;
 using Swiftlet.Domain.Folders;
 using Swiftlet.Domain.Labels;
 using Swiftlet.Domain.Messages;
@@ -75,6 +76,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// The dialog service.
     /// </summary>
     private readonly IDialogService _dialogs;
+
+    /// <summary>
+    /// The address book whose names the messages show.
+    /// </summary>
+    private readonly IContactDirectory _contacts;
+
+    /// <summary>
+    /// What the menus of the addresses in the reading pane do.
+    /// </summary>
+    private readonly MessageAddressActions _addressActions;
 
     /// <summary>
     /// The localizer.
@@ -187,6 +198,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <param name="remoteImageRules">The saved rules that allow remote images for senders.</param>
     /// <param name="logger">The logger; optional.</param>
     /// <param name="timeProvider">The clock; optional.</param>
+    /// <param name="contacts">The address book names are taken from; optional.</param>
     public MainWindowViewModel(
         IRequestDispatcher dispatcher,
         IDialogService dialogs,
@@ -195,8 +207,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         IUiThread uiThread,
         IRemoteImageRules remoteImageRules,
         ILogger<MainWindowViewModel>? logger = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IContactDirectory? contacts = null)
     {
+        _contacts = contacts ?? new ContactDirectory(dispatcher);
+        _addressActions = new MessageAddressActions(
+            (name, address) => ShowContactsAsync(new ContactsRequest(name, address)),
+            (accountId, to) => ComposeToAsync(accountId, to),
+            dialogs.CopyTextAsync);
         _logger = logger ?? NullLogger<MainWindowViewModel>.Instance;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _remoteImageRules = remoteImageRules;
@@ -558,6 +576,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public bool CanMove => MoveTargets.Count > 0;
 
     /// <summary>
+    /// Gets the addresses of the selected message that can be added to the contacts, as of the last
+    /// <see cref="RefreshContactTargets"/>; empty for a selection of several messages.
+    /// </summary>
+    public ObservableCollection<ContactTargetViewModel> ContactTargets { get; } = [];
+
+    /// <summary>
+    /// Gets a value indicating whether the "add to contacts" menu has entries.
+    /// </summary>
+    public bool CanAddContact => ContactTargets.Count > 0;
+
+    /// <summary>
     /// Gets or sets the selected tree node: the unified inbox, an account, a folder or a label.
     /// </summary>
     [ObservableProperty]
@@ -584,7 +613,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(ForwardCommand))]
     [NotifyCanExecuteChangedFor(nameof(ToggleFlagCommand))]
     [NotifyCanExecuteChangedFor(nameof(OpenHtmlCommand))]
-    [NotifyCanExecuteChangedFor(nameof(AddSenderToContactsCommand))]
     [NotifyCanExecuteChangedFor(nameof(DeleteSelectedCommand))]
     [NotifyCanExecuteChangedFor(nameof(ArchiveSelectedCommand))]
     [NotifyPropertyChangedFor(nameof(IsNoMessageSelected))]
@@ -636,6 +664,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <returns>A task that completes when initialization is done.</returns>
     public async Task InitializeAsync()
     {
+        // Loaded first, so the first list already shows the names; messages listed before this are refreshed.
+        await ReloadContactNamesAsync();
         await GuardedAsync("Error_LoadAccounts", ReloadAccountsAsync);
         if (Accounts.Count == 0)
         {
@@ -1352,27 +1382,85 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private Task OpenContactsAsync() => ShowContactsAsync(null);
 
     /// <summary>
-    /// Opens the contacts window for the sender of the selected message, to look it up or add it.
-    /// </summary>
-    /// <returns>A task that completes when the windows have been handled.</returns>
-    [RelayCommand(CanExecute = nameof(HasContactSender))]
-    private Task AddSenderToContactsAsync()
-    {
-        var message = SelectedMessage!.Message;
-        return ShowContactsAsync(new ContactsRequest(message.FromName, message.FromAddress));
-    }
-
-    /// <summary>
     /// Shows the contacts window and writes to the recipient it returns.
     /// </summary>
     /// <param name="request">An address to show or add, or <see langword="null"/>.</param>
     /// <returns>A task that completes when the windows have been handled.</returns>
     private async Task ShowContactsAsync(ContactsRequest? request)
     {
-        if (await _dialogs.ShowContactsAsync(request) is { } recipient)
+        var recipient = await _dialogs.ShowContactsAsync(request);
+
+        // Contacts change only in that window.
+        await ReloadContactNamesAsync();
+        if (recipient is not null)
         {
             await ComposeToAsync(recipient);
         }
+    }
+
+    /// <summary>
+    /// Reads the address book again and shows its names on the listed messages.
+    /// </summary>
+    /// <returns>A task that completes when the names are shown.</returns>
+    private async Task ReloadContactNamesAsync()
+    {
+        await _contacts.ReloadAsync();
+        foreach (var message in Messages)
+        {
+            message.RefreshContacts();
+        }
+    }
+
+    /// <summary>
+    /// Rebuilds the entries of the "add to contacts" menu: the sender and the recipients of the selected message, without
+    /// the own accounts. Called when the menu opens, like <see cref="RefreshMoveTargets"/>.
+    /// </summary>
+    public void RefreshContactTargets()
+    {
+        ContactTargets.Clear();
+        if (SelectedMessages.Count <= 1 && SelectedMessage is { } item)
+        {
+            var seen = new HashSet<string>(_accounts.Select(a => a.EmailAddress), StringComparer.OrdinalIgnoreCase);
+            AddContactTarget(
+                who => _localizer.Format("Menu_Message_ContactFrom", who),
+                item.Message.FromName,
+                item.Message.FromAddress,
+                seen);
+            foreach (var recipient in RecipientList.Split(item.Message.Recipients).Select(RecipientList.Parse))
+            {
+                AddContactTarget(
+                    who => _localizer.Format("Menu_Message_ContactTo", who),
+                    recipient.Name,
+                    recipient.Address,
+                    seen);
+            }
+        }
+
+        OnPropertyChanged(nameof(CanAddContact));
+    }
+
+    /// <summary>
+    /// Adds one entry to the "add to contacts" menu unless the address cannot be a contact or is listed already.
+    /// </summary>
+    /// <param name="describe">Writes the menu text, which says whether it is the sender or a recipient.</param>
+    /// <param name="name">The name that came with the mail.</param>
+    /// <param name="address">The address.</param>
+    /// <param name="seen">The addresses to leave out; the added one joins them.</param>
+    private void AddContactTarget(Func<string, string> describe, string name, string address, HashSet<string> seen)
+    {
+        if (!AddressText.CanBeContact(address) || !seen.Add(address))
+        {
+            return;
+        }
+
+        var header = describe(AddressText.Full(_contacts, name, address));
+        if (_contacts.Contains(address))
+        {
+            header = _localizer.Format("Menu_Message_ContactSaved", header);
+        }
+
+        var request = new ContactsRequest(name, address);
+        ContactTargets.Add(new ContactTargetViewModel(header, new AsyncRelayCommand(() => ShowContactsAsync(request))));
     }
 
     /// <summary>
@@ -1380,9 +1468,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// </summary>
     /// <param name="to">The initial recipient list.</param>
     /// <returns>A task that completes when the window has been opened.</returns>
-    private async Task ComposeToAsync(string to)
+    private Task ComposeToAsync(string to)
     {
         var accountId = ScopeAccountId(SelectedNode) ?? (_accounts.Count > 0 ? _accounts[0].Id : null);
+        return ComposeToAsync(accountId, to);
+    }
+
+    /// <summary>
+    /// Opens a compose window for a new message.
+    /// </summary>
+    /// <param name="accountId">The account to send from by default, if known.</param>
+    /// <param name="to">The initial recipient list.</param>
+    /// <returns>A task that completes when the window has been opened.</returns>
+    private async Task ComposeToAsync(Guid? accountId, string to)
+    {
         await _dialogs.ShowComposeAsync(_accounts, new ComposeRequest(ComposeMode.New, accountId, to, string.Empty, string.Empty, null));
     }
 
@@ -1450,14 +1549,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// Gets a value indicating whether a message is selected.
     /// </summary>
     private bool HasSelectedMessage => SelectedMessage is not null;
-
-    /// <summary>
-    /// Gets a value indicating whether the selected message has a sender that can be a contact. Messages without a
-    /// usable address carry a placeholder in the reserved <c>invalid</c> domain.
-    /// </summary>
-    private bool HasContactSender => SelectedMessage is { } item
-        && Contact.IsValidEmail(item.Message.FromAddress)
-        && !item.Message.FromAddress.EndsWith("@invalid", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Gets a value indicating whether there is at least one message to delete.
@@ -2370,7 +2461,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <returns>The new item.</returns>
     private MessageItemViewModel CreateItem(MailMessage message)
     {
-        return new MessageItemViewModel(message, SaveAttachmentAsync, _localizer, RememberRemoteImagesAsync, _timeProvider);
+        return new MessageItemViewModel(
+            message,
+            SaveAttachmentAsync,
+            _localizer,
+            RememberRemoteImagesAsync,
+            _timeProvider,
+            _contacts,
+            _addressActions);
     }
 
     /// <summary>

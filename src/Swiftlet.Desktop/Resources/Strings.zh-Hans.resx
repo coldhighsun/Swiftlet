@@ -308,7 +308,14 @@
   <data name="AccountPage_AddedAt" xml:space="preserve"><value>添加时间</value></data>
   <data name="AccountPage_Servers" xml:space="preserve"><value>服务器</value></data>
   <data name="Toolbar_Contacts" xml:space="preserve"><value>通讯录</value></data>
-  <data name="Menu_Message_AddContact" xml:space="preserve"><value>将发件人加入通讯录</value></data>
+  <data name="Menu_Message_AddContact" xml:space="preserve"><value>加入通讯录</value></data>
+  <data name="Menu_Message_ContactFrom" xml:space="preserve"><value>发件人：{0}</value></data>
+  <data name="Menu_Message_ContactTo" xml:space="preserve"><value>收件人：{0}</value></data>
+  <data name="Menu_Message_ContactSaved" xml:space="preserve"><value>{0}（已添加）</value></data>
+  <data name="Menu_Address_AddContact" xml:space="preserve"><value>添加到通讯录</value></data>
+  <data name="Menu_Address_ViewContact" xml:space="preserve"><value>查看联系人</value></data>
+  <data name="Menu_Address_Write" xml:space="preserve"><value>写邮件</value></data>
+  <data name="Menu_Address_Copy" xml:space="preserve"><value>复制地址</value></data>
   <data name="Contacts_Title" xml:space="preserve"><value>通讯录</value></data>
   <data name="Contacts_TabContacts" xml:space="preserve"><value>联系人</value></data>
   <data name="Contacts_TabCollected" xml:space="preserve"><value>自动收集</value></data>

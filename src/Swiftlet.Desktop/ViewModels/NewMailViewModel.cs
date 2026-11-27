@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Swiftlet.Application.Messages;
 using Swiftlet.Application.Sync;
+using Swiftlet.Desktop.Formatting;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
 
@@ -78,6 +79,11 @@ public sealed partial class NewMailViewModel : ObservableObject, IDisposable
     private QuickActionAvailability? _availability;
 
     /// <summary>
+    /// The address book whose names are shown, if any.
+    /// </summary>
+    private readonly IContactDirectory? _contacts;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="NewMailViewModel"/> class.
     /// </summary>
     /// <param name="arrival">The first arrived mail.</param>
@@ -85,12 +91,14 @@ public sealed partial class NewMailViewModel : ObservableObject, IDisposable
     /// <param name="localizer">The localizer.</param>
     /// <param name="changed">Told after an action changed a cached message.</param>
     /// <param name="logger">The logger; optional.</param>
+    /// <param name="contacts">The address book whose names are shown; optional.</param>
     public NewMailViewModel(
         NewMailEventArgs arrival,
         IRequestDispatcher dispatcher,
         ILocalizer localizer,
         Action changed,
-        ILogger? logger = null)
+        ILogger? logger = null,
+        IContactDirectory? contacts = null)
     {
         ArgumentNullException.ThrowIfNull(arrival);
         ArgumentNullException.ThrowIfNull(dispatcher);
@@ -100,9 +108,11 @@ public sealed partial class NewMailViewModel : ObservableObject, IDisposable
         _localizer = localizer;
         _changed = changed;
         _logger = logger ?? NullLogger.Instance;
+        _contacts = contacts;
         Enqueue(arrival);
         localizer.LanguageChanged += OnLanguageChanged;
         AvailabilityLoad = LoadAvailabilityAsync();
+        ContactsLoad = LoadContactsAsync();
     }
 
     /// <summary>
@@ -126,6 +136,11 @@ public sealed partial class NewMailViewModel : ObservableObject, IDisposable
     internal Task AvailabilityLoad { get; private set; }
 
     /// <summary>
+    /// Gets the load of the address book, which was possibly not read yet when the application started in the tray.
+    /// </summary>
+    internal Task ContactsLoad { get; }
+
+    /// <summary>
     /// Gets the heading, which says how many messages are still to be handled.
     /// </summary>
     public string Title => _queue.Count <= 1
@@ -142,7 +157,7 @@ public sealed partial class NewMailViewModel : ObservableObject, IDisposable
     /// </summary>
     public string Sender => Current is not { } entry
         ? string.Empty
-        : string.IsNullOrWhiteSpace(entry.Message.FromName) ? entry.Message.FromAddress : entry.Message.FromName;
+        : AddressText.Compact(_contacts, entry.Message.FromName, entry.Message.FromAddress);
 
     /// <summary>
     /// Gets the subject of the shown message.
@@ -157,9 +172,12 @@ public sealed partial class NewMailViewModel : ObservableObject, IDisposable
     public string Preview => Current?.Message.Preview ?? string.Empty;
 
     /// <summary>
-    /// Gets the account of the shown message.
+    /// Gets the account that received the shown message: <c>Name &lt;address&gt;</c> when the address book has a name
+    /// for it, otherwise the address.
     /// </summary>
-    public string AccountAddress => Current?.AccountAddress ?? string.Empty;
+    public string AccountAddress => Current is not { } entry
+        ? string.Empty
+        : AddressText.Full(_contacts, null, entry.AccountAddress);
 
     /// <summary>
     /// Gets the place of the shown message among those still to be handled.
@@ -458,6 +476,23 @@ public sealed partial class NewMailViewModel : ObservableObject, IDisposable
         {
             _logger.LogWarning(ex, "The actions of the new mail pop-up could not be looked up");
         }
+    }
+
+    /// <summary>
+    /// Reads the address book unless that happened already, then shows the contact names of the sender and the account.
+    /// </summary>
+    /// <returns>A task that completes when both are up to date.</returns>
+    private async Task LoadContactsAsync()
+    {
+        if (_contacts is null)
+        {
+            return;
+        }
+
+        // The directory logs its own failures; the sender then stays as the mail named it.
+        await _contacts.EnsureLoadedAsync();
+        OnPropertyChanged(nameof(Sender));
+        OnPropertyChanged(nameof(AccountAddress));
     }
 
     /// <summary>

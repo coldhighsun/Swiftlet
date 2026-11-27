@@ -308,7 +308,14 @@
   <data name="AccountPage_AddedAt" xml:space="preserve"><value>Added</value></data>
   <data name="AccountPage_Servers" xml:space="preserve"><value>Servers</value></data>
   <data name="Toolbar_Contacts" xml:space="preserve"><value>Contacts</value></data>
-  <data name="Menu_Message_AddContact" xml:space="preserve"><value>Add sender to contacts</value></data>
+  <data name="Menu_Message_AddContact" xml:space="preserve"><value>Add to contacts</value></data>
+  <data name="Menu_Message_ContactFrom" xml:space="preserve"><value>From: {0}</value></data>
+  <data name="Menu_Message_ContactTo" xml:space="preserve"><value>To: {0}</value></data>
+  <data name="Menu_Message_ContactSaved" xml:space="preserve"><value>{0} (saved)</value></data>
+  <data name="Menu_Address_AddContact" xml:space="preserve"><value>Add to contacts</value></data>
+  <data name="Menu_Address_ViewContact" xml:space="preserve"><value>View contact</value></data>
+  <data name="Menu_Address_Write" xml:space="preserve"><value>Write email</value></data>
+  <data name="Menu_Address_Copy" xml:space="preserve"><value>Copy address</value></data>
   <data name="Contacts_Title" xml:space="preserve"><value>Contacts</value></data>
   <data name="Contacts_TabContacts" xml:space="preserve"><value>Contacts</value></data>
   <data name="Contacts_TabCollected" xml:space="preserve"><value>Collected</value></data>
