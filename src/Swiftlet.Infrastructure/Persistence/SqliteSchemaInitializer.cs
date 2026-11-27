@@ -55,7 +55,36 @@ public static class SqliteSchemaInitializer
         "CREATE TABLE IF NOT EXISTS RemoteImageRules (Rule TEXT NOT NULL PRIMARY KEY, AddedAt INTEGER NOT NULL);";
 
     /// <summary>
-    /// Ensures the global store (accounts, labels, label links) exists.
+    /// SQL statements creating the address book tables in a global store that predates them.
+    /// </summary>
+    private static readonly string[] AddressBookTables =
+    [
+        """
+        CREATE TABLE IF NOT EXISTS Contacts (
+            Id TEXT NOT NULL CONSTRAINT PK_Contacts PRIMARY KEY,
+            Company TEXT NOT NULL,
+            Emails TEXT NOT NULL,
+            FirstName TEXT NOT NULL,
+            LastName TEXT NOT NULL,
+            Note TEXT NOT NULL,
+            Phones TEXT NOT NULL);
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS SentRecipients (
+            AccountId TEXT NOT NULL,
+            Address TEXT NOT NULL,
+            LastUsedAt INTEGER NOT NULL,
+            Name TEXT NOT NULL,
+            CONSTRAINT PK_SentRecipients PRIMARY KEY (AccountId, Address));
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS DismissedAddresses (
+            Address TEXT NOT NULL CONSTRAINT PK_DismissedAddresses PRIMARY KEY);
+        """,
+    ];
+
+    /// <summary>
+    /// Ensures the global store (accounts, labels, label links, image rules, address book) exists.
     /// </summary>
     /// <param name="context">The global database context.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
@@ -70,6 +99,11 @@ public static class SqliteSchemaInitializer
 
         // EnsureCreated leaves an existing database untouched, so tables added later are created here (idempotent).
         await context.Database.ExecuteSqlRawAsync(RemoteImageRulesTable, cancellationToken);
+        foreach (var statement in AddressBookTables)
+        {
+            await context.Database.ExecuteSqlRawAsync(statement, cancellationToken);
+        }
+
         await EnsureCustomDisplayNameColumnAsync(context, cancellationToken);
         await EnsureArchiveFolderColumnAsync(context, cancellationToken);
         await EnsureSortOrderColumnAsync(context, cancellationToken);

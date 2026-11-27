@@ -87,8 +87,10 @@ internal sealed class AccountRepository(GlobalDbContext context, IAccountDbConte
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         // The account row is the point of no return. Label links of its messages are removed with it (the messages
-        // themselves live in the account's own database), and the database files go last.
+        // themselves live in the account's own database), and the database files go last. The addresses mail was sent to
+        // from the account go too; contacts are shared by all accounts and stay.
         await context.MessageLabels.Where(l => l.AccountId == id).ExecuteDeleteAsync(cancellationToken);
+        await context.SentRecipients.Where(r => r.AccountId == id).ExecuteDeleteAsync(cancellationToken);
         await context.Accounts.Where(a => a.Id == id).ExecuteDeleteAsync(cancellationToken);
         await accountDatabases.DeleteAsync(id, cancellationToken);
     }

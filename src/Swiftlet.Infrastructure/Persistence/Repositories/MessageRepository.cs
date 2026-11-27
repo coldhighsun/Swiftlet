@@ -585,6 +585,23 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
         await transaction.CommitAsync(cancellationToken);
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<SentMessageRecipients>> GetSentFolderRecipientsAsync(CancellationToken cancellationToken = default)
+    {
+        var result = new List<SentMessageRecipients>();
+        foreach (var accountId in await GetAccountIdsAsync(cancellationToken))
+        {
+            var context = await contexts.GetAsync(accountId, cancellationToken);
+            result.AddRange(await context.Messages
+                .AsNoTracking()
+                .Where(m => context.Folders.Any(f => f.Id == m.FolderId && f.Role == FolderRole.Sent))
+                .Select(m => new SentMessageRecipients(m.Recipients, m.SentAt))
+                .ToListAsync(cancellationToken));
+        }
+
+        return result;
+    }
+
     /// <summary>
     /// Searches one account's database.
     /// </summary>

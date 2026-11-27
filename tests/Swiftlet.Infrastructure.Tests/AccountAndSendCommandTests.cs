@@ -153,7 +153,7 @@ public class AccountAndSendCommandTests
         var account = TestData.Account(email);
         await repository.AddAsync(account, ct);
         var sender = new RecordingMailSender();
-        var handler = new SendMessageCommandHandler(repository, sender, new SyncEvents());
+        var handler = new SendMessageCommandHandler(repository, sender, new SyncEvents(), db.CreateContactRepository());
         var message = new OutgoingMessage { To = ["you@example.com"], Subject = "Hi", TextBody = "Body" };
 
         await handler.Handle(new SendMessageCommand(account.Id, message, explicitSave), ct);
@@ -177,7 +177,7 @@ public class AccountAndSendCommandTests
         var events = new SyncEvents();
         var announced = new List<Guid>();
         events.MessageSent += (_, e) => announced.Add(e.AccountId);
-        var handler = new SendMessageCommandHandler(repository, new RecordingMailSender(), events);
+        var handler = new SendMessageCommandHandler(repository, new RecordingMailSender(), events, db.CreateContactRepository());
 
         await handler.Handle(new SendMessageCommand(account.Id, new OutgoingMessage { To = ["you@example.com"] }), ct);
 
@@ -199,7 +199,7 @@ public class AccountAndSendCommandTests
         var announced = 0;
         events.MessageSent += (_, _) => announced++;
         var sender = new RecordingMailSender { Failure = new IOException("offline") };
-        var handler = new SendMessageCommandHandler(repository, sender, events);
+        var handler = new SendMessageCommandHandler(repository, sender, events, db.CreateContactRepository());
 
         var act = async () => await handler.Handle(new SendMessageCommand(account.Id, new OutgoingMessage()), ct);
 
@@ -215,7 +215,7 @@ public class AccountAndSendCommandTests
     {
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
-        var handler = new SendMessageCommandHandler(db.CreateAccountRepository(), new RecordingMailSender(), new SyncEvents());
+        var handler = new SendMessageCommandHandler(db.CreateAccountRepository(), new RecordingMailSender(), new SyncEvents(), db.CreateContactRepository());
 
         var act = async () => await handler.Handle(new SendMessageCommand(Guid.NewGuid(), new OutgoingMessage()), ct);
 

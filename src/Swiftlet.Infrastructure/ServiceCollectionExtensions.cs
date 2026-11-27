@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Application.Logging;
 using Swiftlet.Domain.Accounts;
+using Swiftlet.Domain.Contacts;
 using Swiftlet.Domain.Folders;
 using Swiftlet.Domain.Labels;
 using Swiftlet.Domain.Messages;
@@ -58,6 +59,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IFolderRepository, FolderRepository>();
         services.AddScoped<IMessageRepository, MessageRepository>();
         services.AddScoped<ILabelRepository, LabelRepository>();
+        services.AddScoped<IContactRepository, ContactRepository>();
         services.AddSingleton<IRemoteImageRules, RemoteImageRuleStore>();
 
         services.AddSingleton<ISecretStore>(sp => PlatformSecretStore.Create(dataDirectory, sp.GetRequiredService<ILoggerFactory>().CreateLogger("Swiftlet.Secrets")));

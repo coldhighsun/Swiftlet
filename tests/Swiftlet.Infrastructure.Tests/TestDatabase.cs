@@ -285,6 +285,15 @@ public sealed class TestDatabase : IAsyncDisposable
     }
 
     /// <summary>
+    /// Creates a contact repository on the shared global context.
+    /// </summary>
+    /// <returns>The repository.</returns>
+    internal ContactRepository CreateContactRepository()
+    {
+        return new ContactRepository(Context);
+    }
+
+    /// <summary>
     /// Gets the shared context of one account's database (the one the repositories of this instance track).
     /// </summary>
     /// <param name="accountId">The account identifier.</param>

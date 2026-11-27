@@ -170,6 +170,13 @@ public interface IMessageRepository
     Task<IReadOnlyList<FolderMessageCount>> CountByFolderAsync(Guid accountId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Gets the recipients of every cached message in the Sent folders of all accounts, without loading the messages.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>One entry per cached sent message, in no particular order.</returns>
+    Task<IReadOnlyList<SentMessageRecipients>> GetSentFolderRecipientsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Deletes one cached message with its attachments and label links; does nothing if it does not exist.
     /// </summary>
     /// <param name="accountId">The owning account.</param>
