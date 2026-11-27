@@ -25,6 +25,16 @@ public sealed record ProviderPreset(
 public static class ProviderPresets
 {
     /// <summary>
+    /// The settings of work and school accounts. Organizations use their own domains, so it is not found by domain.
+    /// </summary>
+    private static readonly ProviderPreset Microsoft365 = new(
+        "Microsoft 365",
+        new ServerEndpoint("outlook.office365.com", 993, true),
+        new ServerEndpoint("smtp.office365.com", 587, false),
+        SavesSentCopyAutomatically: true,
+        RequiresAppPassword: false);
+
+    /// <summary>
     /// The known providers keyed by lower-case email domain.
     /// </summary>
     private static readonly Dictionary<string, ProviderPreset> ByDomain = Build();
@@ -57,9 +67,15 @@ public static class ProviderPresets
     /// Gets the server settings used for accounts signed in through an OAuth provider.
     /// </summary>
     /// <param name="provider">The OAuth provider.</param>
+    /// <param name="isOrganizationAccount">Whether a Microsoft account belongs to an organization.</param>
     /// <returns>The preset of the provider's mail service.</returns>
-    public static ProviderPreset For(OAuthProvider provider)
+    public static ProviderPreset For(OAuthProvider provider, bool isOrganizationAccount = false)
     {
+        if (provider == OAuthProvider.Microsoft && isOrganizationAccount)
+        {
+            return Microsoft365;
+        }
+
         var sample = provider == OAuthProvider.Google ? "user@gmail.com" : "user@outlook.com";
         return TryGet(sample, out var preset)
             ? preset

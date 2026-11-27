@@ -90,6 +90,43 @@ public class OAuthTests
     }
 
     /// <summary>
+    /// Verifies only a tenant id other than the personal-account tenant marks an organization account.
+    /// </summary>
+    /// <param name="payload">The ID token payload.</param>
+    /// <param name="expected">Whether it is an organization account.</param>
+    [Theory]
+    [InlineData("""{"tid":"11111111-2222-3333-4444-555555555555"}""", true)]
+    [InlineData("""{"tid":"9188040d-6c67-4c5b-b112-36a304b66dad"}""", false)]
+    [InlineData("""{"tid":"9188040D-6C67-4C5B-B112-36A304B66DAD"}""", false)]
+    [InlineData("""{"tid":""}""", false)]
+    [InlineData("""{"email":"a@outlook.com"}""", false)]
+    public void IsOrganizationAccount_TenantId_DistinguishesPersonalAccounts(string payload, bool expected)
+    {
+        OAuthTokenClient.IsOrganizationAccount(OAuthTestData.Jwt(payload)).Should().Be(expected);
+    }
+
+    /// <summary>
+    /// Verifies the sign-in result marks organization accounts for Microsoft only.
+    /// </summary>
+    /// <param name="provider">The provider.</param>
+    /// <param name="expected">Whether the result is an organization account.</param>
+    [Theory]
+    [InlineData(OAuthProvider.Microsoft, true)]
+    [InlineData(OAuthProvider.Google, false)]
+    public async Task AuthorizeAsync_TokenWithTenant_MarksMicrosoftOrganizationAccount(OAuthProvider provider, bool expected)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var idToken = OAuthTestData.Jwt("""{"email":"me@contoso.example","tid":"11111111-2222-3333-4444-555555555555"}""");
+        var handler = StubHttpHandler.Json(OAuthTestData.TokenJson("access-1", "refresh-1", idToken));
+        var browser = new FakeBrowserLauncher { OnOpen = uri => FollowRedirectAsync(uri, state => $"code=abc&state={state}") };
+
+        var result = await CreateAuthorizer(handler, browser, OAuthTestData.Configured).AuthorizeAsync(provider, ct);
+        await browser.UserAction!;
+
+        result.IsOrganizationAccount.Should().Be(expected);
+    }
+
+    /// <summary>
     /// Verifies the code exchange sends the PKCE verifier and, for Google only, the client secret.
     /// </summary>
     [Fact]

@@ -42,7 +42,7 @@ public sealed class AddOAuthAccountCommandHandler(
             throw new InvalidOperationException($"Account {email} already exists.");
         }
 
-        var preset = ProviderPresets.For(command.Provider);
+        var preset = ProviderPresets.For(command.Provider, authorization.IsOrganizationAccount);
         var hasCustomName = !string.IsNullOrWhiteSpace(command.DisplayName);
         var displayName = hasCustomName
             ? command.DisplayName!

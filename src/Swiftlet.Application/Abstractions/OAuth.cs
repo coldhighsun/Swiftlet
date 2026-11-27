@@ -16,7 +16,15 @@ public sealed record OAuthTokens(string AccessToken, string RefreshToken, DateTi
 /// <param name="EmailAddress">The email address of the signed-in user.</param>
 /// <param name="DisplayName">The user's display name, if the provider reported one.</param>
 /// <param name="Tokens">The issued tokens.</param>
-public sealed record OAuthAuthorization(string EmailAddress, string? DisplayName, OAuthTokens Tokens);
+/// <param name="IsOrganizationAccount">
+/// Whether this is a work or school account of an organization (Microsoft 365), whose mail servers can differ from
+/// those of a personal account.
+/// </param>
+public sealed record OAuthAuthorization(
+    string EmailAddress,
+    string? DisplayName,
+    OAuthTokens Tokens,
+    bool IsOrganizationAccount = false);
 
 /// <summary>
 /// Runs the interactive OAuth 2.0 sign-in in the user's browser.

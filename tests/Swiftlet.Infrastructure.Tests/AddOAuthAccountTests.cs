@@ -65,7 +65,33 @@ public class AddOAuthAccountTests
         saved.DisplayName.Should().Be("Work");
         saved.HasCustomDisplayName.Should().BeTrue();
         saved.Imap.Host.Should().Be("outlook.office365.com");
+        saved.Smtp.Host.Should().Be("smtp-mail.outlook.com");
         saved.Smtp.Port.Should().Be(587);
+    }
+
+    /// <summary>
+    /// Verifies a work or school account sends through the Microsoft 365 SMTP server with STARTTLS.
+    /// </summary>
+    [Fact]
+    public async Task Handle_MicrosoftOrganizationAccount_UsesMicrosoft365Smtp()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var result = SignedIn with { EmailAddress = "me@contoso.example", IsOrganizationAccount = true };
+        var handler = new AddOAuthAccountCommandHandler(
+            db.CreateAccountRepository(),
+            new InMemorySecretStore(),
+            new FakeOAuthAuthorizer { Result = result },
+            new FakeImapSessionFactory(),
+            TimeProvider.System);
+
+        var id = await handler.Handle(new AddOAuthAccountCommand(OAuthProvider.Microsoft), ct);
+
+        var saved = await db.CreateAccountRepository().GetAsync(id, ct);
+        saved!.Imap.Host.Should().Be("outlook.office365.com");
+        saved.Smtp.Host.Should().Be("smtp.office365.com");
+        saved.Smtp.Port.Should().Be(587);
+        saved.Smtp.UseSsl.Should().BeFalse();
     }
 
     /// <summary>

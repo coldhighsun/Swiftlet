@@ -84,6 +84,10 @@ internal sealed class OAuthAuthorizer(
             throw new OAuthException("The provider did not report the email address of the signed-in user.");
         }
 
-        return new OAuthAuthorization(email, name, new OAuthTokens(tokens.AccessToken, tokens.RefreshToken, tokens.ExpiresAt));
+        return new OAuthAuthorization(
+            email,
+            name,
+            new OAuthTokens(tokens.AccessToken, tokens.RefreshToken, tokens.ExpiresAt),
+            provider == OAuthProvider.Microsoft && OAuthTokenClient.IsOrganizationAccount(tokens.IdToken));
     }
 }

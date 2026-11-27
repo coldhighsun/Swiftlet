@@ -51,6 +51,11 @@ internal sealed class OAuthTokenClient(HttpClient http, OAuthClientConfiguration
     private const int RefreshRetries = 3;
 
     /// <summary>
+    /// The tenant id Microsoft puts into the ID token of every personal account.
+    /// </summary>
+    private const string MicrosoftPersonalTenantId = "9188040d-6c67-4c5b-b112-36a304b66dad";
+
+    /// <summary>
     /// Repeats a token refresh after network errors and busy answers. A code exchange never goes through it: a code works once.
     /// </summary>
     private readonly Polly.ResiliencePipeline _refreshRetry =
@@ -163,19 +168,49 @@ internal sealed class OAuthTokenClient(HttpClient http, OAuthClientConfiguration
     /// <returns>The email address and display name; either may be <see langword="null"/>.</returns>
     public static (string? Email, string? Name) ReadIdentity(string? idToken)
     {
-        var parts = idToken?.Split('.');
-        if (parts is not { Length: 3 })
+        using var document = ParsePayload(idToken);
+        if (document is null)
         {
             return (null, null);
         }
 
-        var payload = parts[1].Replace('-', '+').Replace('_', '/');
-        payload = payload.PadRight(payload.Length + ((4 - (payload.Length % 4)) % 4), '=');
-        using var document = JsonDocument.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(payload)));
         var root = document.RootElement;
         var email = root.TryGetProperty("email", out var e) ? e.GetString()
             : root.TryGetProperty("preferred_username", out var u) ? u.GetString()
             : null;
         return (email, root.TryGetProperty("name", out var n) ? n.GetString() : null);
+    }
+
+    /// <summary>
+    /// Tells from a Microsoft ID token whether the user signed in with an organization (work or school) account.
+    /// All personal accounts are issued by one fixed tenant; any other tenant id belongs to an organization.
+    /// </summary>
+    /// <param name="idToken">The ID token (a JWT).</param>
+    /// <returns><see langword="false"/> for a personal account or a token without a tenant id.</returns>
+    public static bool IsOrganizationAccount(string? idToken)
+    {
+        using var document = ParsePayload(idToken);
+        return document is not null
+            && document.RootElement.TryGetProperty("tid", out var tenant)
+            && tenant.GetString() is { Length: > 0 } tenantId
+            && !string.Equals(tenantId, MicrosoftPersonalTenantId, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Decodes the payload of a JWT.
+    /// </summary>
+    /// <param name="idToken">The token.</param>
+    /// <returns>The payload, or <see langword="null"/> if the value does not have the shape of a JWT.</returns>
+    private static JsonDocument? ParsePayload(string? idToken)
+    {
+        var parts = idToken?.Split('.');
+        if (parts is not { Length: 3 })
+        {
+            return null;
+        }
+
+        var payload = parts[1].Replace('-', '+').Replace('_', '/');
+        payload = payload.PadRight(payload.Length + ((4 - (payload.Length % 4)) % 4), '=');
+        return JsonDocument.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(payload)));
     }
 }

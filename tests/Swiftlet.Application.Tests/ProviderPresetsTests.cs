@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using Swiftlet.Application.Accounts;
+using Swiftlet.Domain.Accounts;
 
 namespace Swiftlet.Application.Tests;
 
@@ -56,5 +57,21 @@ public class ProviderPresetsTests
 
         gmail.SavesSentCopyAutomatically.Should().BeTrue();
         qq.SavesSentCopyAutomatically.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies only Microsoft organization accounts get the Microsoft 365 SMTP server.
+    /// </summary>
+    /// <param name="provider">The provider.</param>
+    /// <param name="isOrganizationAccount">Whether the account belongs to an organization.</param>
+    /// <param name="smtpHost">The expected SMTP host.</param>
+    [Theory]
+    [InlineData(OAuthProvider.Microsoft, false, "smtp-mail.outlook.com")]
+    [InlineData(OAuthProvider.Microsoft, true, "smtp.office365.com")]
+    [InlineData(OAuthProvider.Google, false, "smtp.gmail.com")]
+    [InlineData(OAuthProvider.Google, true, "smtp.gmail.com")]
+    public void For_ProviderAndAccountType_SelectsSmtpServer(OAuthProvider provider, bool isOrganizationAccount, string smtpHost)
+    {
+        ProviderPresets.For(provider, isOrganizationAccount).Smtp.Host.Should().Be(smtpHost);
     }
 }
