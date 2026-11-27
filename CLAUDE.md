@@ -6,7 +6,7 @@ This file lets Claude Code pick the project up in a fresh session; it also holds
 ## First steps when taking over
 
 1. Run `git log --oneline` and `git status` to see where the project stands and whether anything is uncommitted.
-2. Run `dotnet build Swiftlet.slnx`, then run the tests project by project (see below). The baseline is **1147 tests** (Domain 58 / Application 89 / Infrastructure 508 / Desktop 492, the totals reported by the runner) with a 0-warning build; on Windows one Unix-only test is skipped.
+2. Run `dotnet build Swiftlet.slnx`, then run the tests project by project (see below). The baseline is **1158 tests** (Domain 58 / Application 89 / Infrastructure 508 / Desktop 503, the totals reported by the runner) with a 0-warning build; on Windows one Unix-only test is skipped.
 3. Read "Remaining work" at the end of this file. **M5a (unified inbox + labels + server-side delete) and M5.5 (read/starred flag sync) are done.** **Account management (account settings, delete, OAuth re-sign-in), IMAP IDLE, history backfill, parallel sync and the immediate flag push are implemented.** The next step is not chosen yet; candidates are verifying against real providers or M6. Ask the user before starting. The rules feature and the local trash were cancelled by the user: do not build them.
 4. Storage is split per account (see **Database** below). There are no EF migrations and no code that moves data out of an old single-file database: the local dev database `%LocalAppData%\Swiftlet\swiftlet.db` created by an earlier version must be deleted once and the accounts added again, otherwise the global store has the wrong schema. Inside an account database, `SqliteSchemaInitializer` still adds the column `Messages.IsFlagSyncPending` in place, and in the global store it adds `Accounts.HasCustomDisplayName` and `Accounts.ArchiveFolderName`.
 
@@ -27,7 +27,7 @@ dotnet run --project src/Swiftlet.Desktop
 
 ## Versioning
 
-MinVer (a `GlobalPackageReference` in `Directory.Packages.props`) sets the version of every project from the git tags; never set `<Version>` by hand. Release tags are `v1.2.3` (`MinVerTagPrefix` = `v`). Without any tag a build is `0.0.0-alpha.0.<height>` (the number of commits on top of the first one); after a tag it is the next patch, `x.y.(z+1)-alpha.0.<commits since the tag>`. Code reads it through `AppVersion` (Application): `Display` for the IMAP ID, `Full` (with the commit hash) for the startup log. `AssemblyVersion` is only `major.0.0.0`, so do not show it. A build needs git and the history: a shallow clone (for example a CI checkout without `fetch-depth: 0`) or a source archive gets a wrong version.
+MinVer (a `GlobalPackageReference` in `Directory.Packages.props`) sets the version of every project from the git tags; never set `<Version>` by hand. Release tags are `v1.2.3` (`MinVerTagPrefix` = `v`). Without any tag a build is `0.0.0-alpha.0.<height>` (the number of commits on top of the first one); after a tag it is the next patch, `x.y.(z+1)-alpha.0.<commits since the tag>`. Code reads it through `AppVersion` (Application): `Display` for the About page and the IMAP ID, `Full` (with the commit hash) for the startup log. `AssemblyVersion` is only `major.0.0.0`, so do not show it. A build needs git and the history: a shallow clone (for example a CI checkout without `fetch-depth: 0`) or a source archive gets a wrong version.
 
 ## Architecture
 
@@ -40,8 +40,8 @@ src/Swiftlet.Desktop         Avalonia views, ViewModels, localization, dialog se
 
 Folders inside `Swiftlet.Desktop` (the namespace follows the folder; only `App` and `Program` stay at the project root):
 
-- `Views/` the windows, including the code-built `ConfirmWindow`
-- `ViewModels/` add account, label manager and startup; `Main/` (main window, tree nodes, list items), `Settings/` (settings, language and theme options), `Compose/`
+- `Views/` the windows, including the code-built `ConfirmWindow`; `SettingsPages/` the pages of the settings window
+- `ViewModels/` add account, label manager and startup; `Main/` (main window, tree nodes, list items), `Settings/` (settings and its "About" page, language and theme options), `Compose/`
 - `Services/` abstractions the view models use (dialogs, request dispatcher, UI thread, theme) and their implementations
 - `Hosting/` startup, shutdown, logging setup, single instance and close-to-tray; `Html/` mail HTML document and browser preview; `Formatting/` display text and avatars
 - `Controls/`, `Converters/`, `Localization/`, `Settings/`, `Styles/`, `Assets/`, `Resources/`
@@ -92,6 +92,7 @@ Key design points (understand these before changing code):
 - Every button has a text `Content` or `AutomationProperties.Name`; icon-only buttons also have a tooltip. Tests find buttons with `UiQueries.Caption`.
 - Main window: sidebar (logo, compose, tree, add account, settings), message list (search, sync), reading pane (message actions, shown only with a selected message). The list explains an empty result through `MainWindowViewModel.ListEmptyState`, set only after a load or search succeeded. Rows with unread mail show the name semibold and a badge in `Brush.AccentText` (text needs this token: `Brush.Accent` is below 4.5:1 on the sidebar in the light theme); an account row and the unified inbox count inboxes only. Unread badges come from `GetUnreadCountsQuery` (downloaded mail only), refreshed after account reloads, mark-as-read, delete and empty folder. The query runs off the UI thread and is covered by the index `IX_Messages_Unread`, which `SqliteSchemaInitializer` also adds to existing account databases (never measured on a large real mailbox).
 - The theme (`system` / `light` / `dark`) is saved in `settings.json` and applied by `IThemeApplier`; the language and theme pickers are in the Settings window.
+- Settings window: a sidebar (`TabControl.nav`, its template replaced in `Controls.axaml`) with the pages General, Sync, Privacy & security and About; the Close button and the save error stay below every page. A new page is a `UserControl` with its own `ScrollViewer` and `title` heading in `Views/SettingsPages/` plus a `TabItem` (icon, text, `AutomationProperties.Name`) in `SettingsWindow.axaml`. The folder is not called `Settings` to avoid confusion with the `Swiftlet.Desktop.Settings` namespace. Only the selected page is in the visual tree, so tests select the page first (`SelectSettingsPage`). "About" is bound to `AboutViewModel` (hidden when `SettingsViewModel.About` is null): `AppVersion.Display` (see **Versioning**), links to the GitHub project and its legal files on `main`, and buttons opening the log and data folders (`AppPaths`, `IDialogService.OpenFolderAsync`).
 
 ## Localization (required reading when changing the UI)
 
@@ -176,6 +177,7 @@ All tests are unit tests with fake objects. The code has **never connected to a 
 - The new mail pop-up on a real desktop (only rendered headlessly): the corner position with display scaling and several screens, that it does not take focus, showing it while the app is hidden in the tray, restoring the main window by clicking it, behaviour over full-screen apps, and macOS / Linux (Wayland may ignore the position). The announcement rules were only tested with fakes.
 - The tray unread indicator on a real desktop: how readable the red dot is, whether blinking is smooth (also with the icon in the Windows overflow area), a changed style applying at once, and macOS / Linux (some desktops may redraw a changing icon poorly). Only headless tests ran.
 - The tray icon on a real desktop: the icon and tooltip (line breaks), the click, the menu, close-to-tray and restoring a maximized window and the web view, a second start bringing the window to the front, quitting from the menu with dialogs or compose windows open, signing out of Windows, and all of it on macOS / Linux. Only the start of the app and the exit of a second instance were run on Windows (isolated profile); the rest has headless tests.
+- The settings sidebar in a real window (keyboard navigation, hover colors, resizing), and on the "About" page the links reaching the browser (they give 404 if the repository is not public) and the folder buttons opening the file manager.
 - The redesigned UI in a real window (it was only rendered headlessly): the label flyout and the image drop-down, which now open over the native web view, column resizing, the narrowest window, switching the theme while running, the application icon in the taskbar, Chinese font fallback, and macOS / Linux.
 
 ## Remaining work

@@ -702,6 +702,7 @@ public class UiSmokeTests
                 var viewModel = new SettingsViewModel(new FakeAppSettings(), LocalizationManager.Instance, rules);
                 var window = new SettingsWindow { DataContext = viewModel };
                 Render(window, $"settings-remote-images-{language}", language);
+                SelectSettingsPage(window, 2, $"settings-remote-images-{language}");
 
                 var list = window.GetVisualDescendants().OfType<ListBox>().Single();
                 list.ItemCount.Should().Be(3);
@@ -758,7 +759,8 @@ public class UiSmokeTests
     }
 
     /// <summary>
-    /// Verifies the settings window shows the checkbox, its hint and the close button, in both languages.
+    /// Verifies the settings window shows the pickers, the checkboxes, their hints and the close button on their pages, in
+    /// both languages.
     /// </summary>
     /// <param name="language">The UI language.</param>
     /// <param name="title">The expected window title.</param>
@@ -780,22 +782,102 @@ public class UiSmokeTests
                 var viewModel = new SettingsViewModel(
                     new FakeAppSettings(), LocalizationManager.Instance, new FakeRemoteImageRules(), languageSelector: selector);
                 var window = new SettingsWindow { DataContext = viewModel };
-                Render(window, $"settings-{language}", language);
+                Render(window, $"settings-general-{language}", language);
 
                 window.Title.Should().Be(title);
-                var boxes = window.GetVisualDescendants().OfType<CheckBox>().ToList();
-                boxes.Should().HaveCount(5);
                 window.GetVisualDescendants().OfType<ComboBox>().Where(c => c.IsEffectivelyVisible)
                     .Select(c => c.SelectedItem).Should().Equal(selector.SelectedOption, viewModel.SelectedTheme, viewModel.SelectedTrayUnreadStyle);
+                window.GetVisualDescendants().OfType<CheckBox>().Should().HaveCount(2)
+                    .And.OnlyContain(b => b.IsChecked == true, "the tray and notification settings are on by default");
+                window.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).Should().Contain(close);
+
+                SelectSettingsPage(window, 1, $"settings-sync-{language}");
+
+                var boxes = window.GetVisualDescendants().OfType<CheckBox>().ToList();
+                boxes.Should().HaveCount(3);
                 var box = boxes.Single(b => b.Content as string == checkbox);
                 box.IsChecked.Should().BeFalse();
-                boxes.Where(b => b != box).Should().OnlyContain(b => b.IsChecked == true, "the tray, notification and history download settings are on by default");
-                window.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).Should().Contain(close);
+                boxes.Where(b => b != box).Should().OnlyContain(b => b.IsChecked == true, "the history downloads are on by default");
                 window.GetVisualDescendants().OfType<TextBlock>().Count(t => !string.IsNullOrEmpty(t.Text) && t.Text.Length > 40).Should().BeGreaterThan(0);
                 window.Close();
                 return Task.CompletedTask;
             },
             TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the sidebar names every page and the "About" page shows the version, the links and the folder buttons,
+    /// also at the smallest window size.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    /// <param name="pages">The expected names of the pages, separated by '|'.</param>
+    /// <param name="openLogs">The expected caption of the log folder button.</param>
+    [Theory]
+    [InlineData("zh-Hans", "通用|同步|隐私与安全|关于", "打开日志目录")]
+    [InlineData("en", "General|Sync|Privacy & security|About", "Open log folder")]
+    public async Task SettingsWindow_AboutPage_ShowsVersionLinksAndFolders(string language, string pages, string openLogs)
+    {
+        await Session.Dispatch(
+            () =>
+            {
+                LocalizationManager.Instance.SetPreference(language);
+                var about = new AboutViewModel(
+                    new FakeDialogService(), LocalizationManager.Instance, new Swiftlet.Desktop.Hosting.AppPaths("data"));
+                var viewModel = new SettingsViewModel(
+                    new FakeAppSettings(), LocalizationManager.Instance, new FakeRemoteImageRules(), about: about);
+                var window = new SettingsWindow { DataContext = viewModel };
+                window.Width = window.MinWidth;
+                window.Height = window.MinHeight;
+                Render(window, $"settings-minimum-{language}", language);
+
+                var items = window.GetVisualDescendants().OfType<TabItem>().ToList();
+                items.Select(Avalonia.Automation.AutomationProperties.GetName).Should().Equal(pages.Split('|'));
+                items.Should().OnlyContain(i => i.IsEffectivelyVisible && i.Bounds.Width > 0);
+
+                SelectSettingsPage(window, 3, $"settings-about-{language}");
+
+                window.GetVisualDescendants().OfType<SelectableTextBlock>().Select(t => t.Text).Should().Contain(about.VersionText);
+                window.GetVisualDescendants().OfType<HyperlinkButton>().Select(l => l.NavigateUri).Should().Equal(
+                    about.HomePage, about.IssuesPage, about.LicensePage, about.ThirdPartyNoticesPage, about.PrivacyPage, about.TermsPage);
+                window.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == openLogs)
+                    .Command.Should().BeSameAs(about.OpenLogFolderCommand);
+                window.Close();
+                return Task.CompletedTask;
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the sidebar has no "About" entry when there is nothing to show on it.
+    /// </summary>
+    [Fact]
+    public async Task SettingsWindow_NoAboutPage_HidesItsEntry()
+    {
+        await Session.Dispatch(
+            () =>
+            {
+                var viewModel = new SettingsViewModel(new FakeAppSettings(), LocalizationManager.Instance, new FakeRemoteImageRules());
+                var window = new SettingsWindow { DataContext = viewModel };
+                Render(window, "settings-no-about", "en");
+
+                window.GetVisualDescendants().OfType<TabItem>().Select(i => i.IsEffectivelyVisible)
+                    .Should().Equal(true, true, true, false);
+                window.Close();
+                return Task.CompletedTask;
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Shows a page of the settings window and optionally saves a snapshot.
+    /// </summary>
+    /// <param name="window">The settings window.</param>
+    /// <param name="index">The position of the page in the sidebar.</param>
+    /// <param name="name">The snapshot file name without extension.</param>
+    private static void SelectSettingsPage(Window window, int index, string name)
+    {
+        window.GetVisualDescendants().OfType<TabControl>().Single().SelectedIndex = index;
+        Snapshot(window, name);
     }
 
     /// <summary>
@@ -1520,6 +1602,20 @@ public class UiSmokeTests
                             name);
                         window.Close();
                     }
+
+                    var about = new AboutViewModel(new FakeDialogService(), localizer, new Swiftlet.Desktop.Hosting.AppPaths("data"));
+                    var settings = new SettingsWindow
+                    {
+                        DataContext = new SettingsViewModel(
+                            new FakeAppSettings(), localizer, new FakeRemoteImageRules(), protection, about: about),
+                    };
+                    Render(settings, "dark-settings-general");
+                    foreach (var (index, page) in ((int, string)[])[(1, "sync"), (2, "privacy"), (3, "about")])
+                    {
+                        SelectSettingsPage(settings, index, $"dark-settings-{page}");
+                    }
+
+                    settings.Close();
                 }
                 finally
                 {

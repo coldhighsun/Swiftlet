@@ -1,0 +1,50 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:settings="using:Swiftlet.Desktop.ViewModels.Settings"
+             xmlns:loc="using:Swiftlet.Desktop.Localization"
+             x:Class="Swiftlet.Desktop.Views.SettingsPages.AboutPage"
+             x:DataType="settings:AboutViewModel">
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="16" Spacing="12">
+      <TextBlock Classes="title" Text="{loc:Loc Settings_PageAbout}" />
+      <Border Classes="card">
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
+          <PathIcon Data="{StaticResource Icon.Logo}" Width="48" Height="48" Foreground="{DynamicResource Brush.Accent}"
+                    VerticalAlignment="Center" />
+          <StackPanel Grid.Column="1" Spacing="4">
+            <TextBlock Classes="section" Text="Swiftlet" />
+            <SelectableTextBlock Text="{Binding VersionText}" />
+            <TextBlock Classes="caption" Text="{loc:Loc About_Description}" TextWrapping="Wrap" />
+          </StackPanel>
+        </Grid>
+      </Border>
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="section" Text="{loc:Loc About_Links}" />
+          <HyperlinkButton Classes="link" Content="{loc:Loc About_Homepage}" NavigateUri="{Binding HomePage}" />
+          <HyperlinkButton Classes="link" Content="{loc:Loc About_ReportIssue}" NavigateUri="{Binding IssuesPage}" />
+        </StackPanel>
+      </Border>
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="section" Text="{loc:Loc About_Legal}" />
+          <HyperlinkButton Classes="link" Content="{loc:Loc About_License}" NavigateUri="{Binding LicensePage}" />
+          <HyperlinkButton Classes="link" Content="{loc:Loc About_ThirdParty}" NavigateUri="{Binding ThirdPartyNoticesPage}" />
+          <HyperlinkButton Classes="link" Content="{loc:Loc About_Privacy}" NavigateUri="{Binding PrivacyPage}" />
+          <HyperlinkButton Classes="link" Content="{loc:Loc About_Terms}" NavigateUri="{Binding TermsPage}" />
+        </StackPanel>
+      </Border>
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="section" Text="{loc:Loc About_Troubleshooting}" />
+          <WrapPanel ItemSpacing="8" LineSpacing="8">
+            <Button Content="{loc:Loc About_OpenLogs}" Command="{Binding OpenLogFolderCommand}" />
+            <Button Content="{loc:Loc About_OpenData}" Command="{Binding OpenDataFolderCommand}" />
+          </WrapPanel>
+          <TextBlock Classes="error" Text="{Binding ErrorText}" TextWrapping="Wrap"
+                     IsVisible="{Binding ErrorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

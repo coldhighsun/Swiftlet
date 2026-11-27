@@ -48,13 +48,15 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <param name="protection">The protection of the local data; optional.</param>
     /// <param name="themeApplier">Applies a newly chosen theme; optional.</param>
     /// <param name="languageSelector">The language picker shown in the window; optional.</param>
+    /// <param name="about">The "About" page; optional.</param>
     public SettingsViewModel(
         IAppSettings settings,
         ILocalizer localizer,
         IRemoteImageRules remoteImageRules,
         IDatabaseProtection? protection = null,
         IThemeApplier? themeApplier = null,
-        LanguageSelectorViewModel? languageSelector = null)
+        LanguageSelectorViewModel? languageSelector = null,
+        AboutViewModel? about = null)
     {
         _settings = settings;
         _localizer = localizer;
@@ -68,6 +70,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _protection = protection;
         _themeApplier = themeApplier;
         LanguageSelector = languageSelector;
+        About = about;
         ThemeOptions =
         [
             new ChoiceOptionViewModel(ThemePreference.System, () => localizer["Settings_ThemeSystem"]),
@@ -88,6 +91,11 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// Gets the language picker, or <see langword="null"/> when the language cannot be chosen.
     /// </summary>
     public LanguageSelectorViewModel? LanguageSelector { get; }
+
+    /// <summary>
+    /// Gets the "About" page, or <see langword="null"/> when the window has none.
+    /// </summary>
+    public AboutViewModel? About { get; }
 
     /// <summary>
     /// Gets the available themes.
@@ -193,6 +201,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             option.RefreshLanguage();
         }
 
+        About?.RefreshLanguage();
         OnPropertyChanged(nameof(DatabaseStatusText));
         UpdateRemoteImageRuleCount();
     }

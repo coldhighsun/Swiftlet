@@ -36,7 +36,7 @@ public class ThemeTests
     [
         "Compose", "Reply", "Forward", "Star", "StarFilled", "Tag", "Browser", "Delete", "Sync", "Search", "Settings",
         "AddAccount", "Attach", "Download", "Close", "Inbox", "AllInboxes", "Sent", "Drafts", "Trash", "Junk", "Archive",
-        "AllMail", "Folder", "Mail", "Logo",
+        "AllMail", "Folder", "Mail", "Shield", "Info", "Logo",
     ];
 
     /// <summary>
@@ -258,7 +258,7 @@ public class ThemeTests
     public void Xaml_Windows_UseTokensForColors()
     {
         var directory = Path.Combine(Path.GetDirectoryName(SourceFile())!, "..", "..", "src", "Swiftlet.Desktop", "Views");
-        var windows = Directory.GetFiles(Path.GetFullPath(directory), "*.axaml");
+        var windows = Directory.GetFiles(Path.GetFullPath(directory), "*.axaml", SearchOption.AllDirectories);
 
         windows.Should().HaveCountGreaterThanOrEqualTo(6);
         foreach (var file in windows)

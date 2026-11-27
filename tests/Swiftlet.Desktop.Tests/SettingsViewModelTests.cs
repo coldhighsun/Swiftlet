@@ -555,6 +555,24 @@ public class SettingsViewModelTests
     }
 
     /// <summary>
+    /// Verifies a language switch also reaches the "About" page of the window.
+    /// </summary>
+    [Fact]
+    public void LanguageSwitched_AboutPage_IsRelabelled()
+    {
+        var localizer = TestLocalizer.English();
+        var about = new AboutViewModel(new FakeDialogService(), localizer, new Swiftlet.Desktop.Hosting.AppPaths("data"));
+        var viewModel = new SettingsViewModel(new FakeAppSettings(), localizer, new FakeRemoteImageRules(), about: about);
+        var changed = new List<string?>();
+        about.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        localizer.SetPreference("zh-Hans");
+
+        viewModel.About.Should().BeSameAs(about);
+        changed.Should().Contain(nameof(AboutViewModel.VersionText));
+    }
+
+    /// <summary>
     /// Verifies a closed window's view model no longer listens to the long-lived localizer.
     /// </summary>
     [Fact]

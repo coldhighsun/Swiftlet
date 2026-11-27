@@ -236,4 +236,20 @@
   <data name="Tray_SummaryNoAccounts" xml:space="preserve"><value>Swiftlet - 尚未添加账户</value></data>
   <data name="Tray_SummaryAccount" xml:space="preserve"><value>{0}：{1}</value></data>
   <data name="Tray_SummaryMore" xml:space="preserve"><value>另有 {0} 个账户</value></data>
+  <data name="Settings_PagePrivacy" xml:space="preserve"><value>隐私与安全</value></data>
+  <data name="Settings_PageAbout" xml:space="preserve"><value>关于</value></data>
+  <data name="About_Description" xml:space="preserve"><value>跨平台邮件客户端。</value></data>
+  <data name="About_Version" xml:space="preserve"><value>版本 {0}</value></data>
+  <data name="About_Links" xml:space="preserve"><value>项目</value></data>
+  <data name="About_Homepage" xml:space="preserve"><value>项目主页</value></data>
+  <data name="About_ReportIssue" xml:space="preserve"><value>反馈问题</value></data>
+  <data name="About_Legal" xml:space="preserve"><value>法律信息</value></data>
+  <data name="About_License" xml:space="preserve"><value>许可证（MIT）</value></data>
+  <data name="About_ThirdParty" xml:space="preserve"><value>第三方组件声明</value></data>
+  <data name="About_Privacy" xml:space="preserve"><value>隐私政策</value></data>
+  <data name="About_Terms" xml:space="preserve"><value>使用条款</value></data>
+  <data name="About_Troubleshooting" xml:space="preserve"><value>故障排查</value></data>
+  <data name="About_OpenLogs" xml:space="preserve"><value>打开日志目录</value></data>
+  <data name="About_OpenData" xml:space="preserve"><value>打开数据目录</value></data>
+  <data name="About_OpenFolderFailed" xml:space="preserve"><value>无法打开目录：{0}</value></data>
 </root>

@@ -1,11 +1,12 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:settings="using:Swiftlet.Desktop.ViewModels.Settings"
+        xmlns:pages="using:Swiftlet.Desktop.Views.SettingsPages"
         xmlns:loc="using:Swiftlet.Desktop.Localization"
         x:Class="Swiftlet.Desktop.Views.SettingsWindow"
         Icon="avares://Swiftlet.Desktop/Assets/swiftlet.ico"
         x:DataType="settings:SettingsViewModel"
-        Title="{loc:Loc Settings_Title}" Width="520" Height="640" CanResize="False"
+        Title="{loc:Loc Settings_Title}" Width="720" Height="560" MinWidth="640" MinHeight="480"
         WindowStartupLocation="CenterOwner">
   <DockPanel>
     <Border DockPanel.Dock="Bottom" Padding="16,12" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Brush.Border}">
@@ -14,87 +15,44 @@
     </Border>
     <TextBlock DockPanel.Dock="Bottom" Classes="error" Margin="16,0,16,8" Text="{Binding ErrorText}" TextWrapping="Wrap"
                IsVisible="{Binding ErrorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-      <StackPanel Margin="16" Spacing="12">
-        <Border Classes="card">
-          <StackPanel Spacing="12">
-            <TextBlock Classes="section" Text="{loc:Loc Settings_SectionGeneral}" />
-            <Grid ColumnDefinitions="120,*" IsVisible="{Binding LanguageSelector, Converter={x:Static ObjectConverters.IsNotNull}}">
-              <TextBlock Text="{loc:Loc Toolbar_Language}" VerticalAlignment="Center" />
-              <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding LanguageSelector.Options}"
-                        SelectedItem="{Binding LanguageSelector.SelectedOption}">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate DataType="settings:LanguageOptionViewModel">
-                    <TextBlock Text="{Binding DisplayName}" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-            </Grid>
-            <Grid ColumnDefinitions="120,*">
-              <TextBlock Text="{loc:Loc Settings_Theme}" VerticalAlignment="Center" />
-              <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding ThemeOptions}"
-                        SelectedItem="{Binding SelectedTheme}">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate DataType="settings:ChoiceOptionViewModel">
-                    <TextBlock Text="{Binding DisplayName}" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-            </Grid>
-            <Grid ColumnDefinitions="120,*">
-              <TextBlock Text="{loc:Loc Settings_TrayUnread}" VerticalAlignment="Center" TextWrapping="Wrap" />
-              <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding TrayUnreadStyleOptions}"
-                        SelectedItem="{Binding SelectedTrayUnreadStyle}">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate DataType="settings:ChoiceOptionViewModel">
-                    <TextBlock Text="{Binding DisplayName}" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-            </Grid>
-            <StackPanel Spacing="8">
-              <CheckBox Content="{loc:Loc Settings_CloseToTray}" IsChecked="{Binding CloseToTray}" />
-              <TextBlock Classes="caption" Text="{loc:Loc Settings_CloseToTrayHint}" TextWrapping="Wrap" Margin="28,0,0,0" />
-              <CheckBox Content="{loc:Loc Settings_NewMailNotifications}" IsChecked="{Binding ShowNewMailNotifications}" Margin="0,8,0,0" />
-              <TextBlock Classes="caption" Text="{loc:Loc Settings_NewMailNotificationsHint}" TextWrapping="Wrap" Margin="28,0,0,0" />
-            </StackPanel>
+    <TabControl Classes="nav" TabStripPlacement="Left">
+      <TabItem AutomationProperties.Name="{loc:Loc Settings_SectionGeneral}">
+        <TabItem.Header>
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <PathIcon Data="{StaticResource Icon.Settings}" />
+            <TextBlock Text="{loc:Loc Settings_SectionGeneral}" VerticalAlignment="Center" />
           </StackPanel>
-        </Border>
-
-        <Border Classes="card">
-          <StackPanel Spacing="8">
-            <TextBlock Classes="section" Text="{loc:Loc Settings_SectionSync}" />
-            <CheckBox Content="{loc:Loc Settings_DownloadHistory}" IsChecked="{Binding DownloadFullHistory}" />
-            <TextBlock Classes="caption" Text="{loc:Loc Settings_DownloadHistoryHint}" TextWrapping="Wrap" Margin="28,0,0,0" />
-            <CheckBox Content="{loc:Loc Settings_DownloadAllMail}" IsChecked="{Binding DownloadAllMail}" Margin="28,0,0,0" />
-            <TextBlock Classes="caption" Text="{loc:Loc Settings_DownloadAllMailHint}" TextWrapping="Wrap" Margin="56,0,0,0" />
-            <CheckBox Content="{loc:Loc Settings_RemoveServerDeleted}" IsChecked="{Binding RemoveServerDeletedMessages}" Margin="0,8,0,0" />
-            <TextBlock Classes="caption" Text="{loc:Loc Settings_RemoveServerDeletedHint}" TextWrapping="Wrap" Margin="28,0,0,0" />
+        </TabItem.Header>
+        <pages:GeneralPage />
+      </TabItem>
+      <TabItem AutomationProperties.Name="{loc:Loc Settings_SectionSync}">
+        <TabItem.Header>
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <PathIcon Data="{StaticResource Icon.Sync}" />
+            <TextBlock Text="{loc:Loc Settings_SectionSync}" VerticalAlignment="Center" />
           </StackPanel>
-        </Border>
-
-        <Border Classes="card">
-          <StackPanel Spacing="8">
-            <TextBlock Classes="section" Text="{loc:Loc Settings_RemoteImages}" />
-            <TextBlock Classes="caption" Text="{loc:Loc Settings_RemoteImagesHint}" TextWrapping="Wrap" />
-            <TextBox Text="{Binding RemoteImageFilter}" PlaceholderText="{loc:Loc Settings_RemoteImagesFilter}" />
-            <ListBox ItemsSource="{Binding RemoteImageRules}" SelectedItem="{Binding SelectedRemoteImageRule}" MaxHeight="160" MinHeight="80" />
-            <TextBlock Classes="caption" Text="{Binding RemoteImageRuleCountText}" />
-            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-              <TextBox Text="{Binding NewRemoteImageRule}" PlaceholderText="{loc:Loc Settings_RemoteImagesPlaceholder}" />
-              <Button Grid.Column="1" Content="{loc:Loc Settings_RemoteImagesAdd}" Command="{Binding AddRemoteImageRuleCommand}" />
-              <Button Grid.Column="2" Content="{loc:Loc Settings_RemoteImagesRemove}" Command="{Binding RemoveRemoteImageRuleCommand}" />
-            </Grid>
+        </TabItem.Header>
+        <pages:SyncPage />
+      </TabItem>
+      <TabItem AutomationProperties.Name="{loc:Loc Settings_PagePrivacy}">
+        <TabItem.Header>
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <PathIcon Data="{StaticResource Icon.Shield}" />
+            <TextBlock Text="{loc:Loc Settings_PagePrivacy}" VerticalAlignment="Center" />
           </StackPanel>
-        </Border>
-
-        <Border Classes="card" IsVisible="{Binding DatabaseStatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-          <StackPanel Spacing="8">
-            <TextBlock Classes="section" Text="{loc:Loc Settings_SectionData}" />
-            <TextBlock Classes="secondary" Text="{Binding DatabaseStatusText}" TextWrapping="Wrap" />
+        </TabItem.Header>
+        <pages:PrivacyPage />
+      </TabItem>
+      <TabItem AutomationProperties.Name="{loc:Loc Settings_PageAbout}"
+               IsVisible="{Binding About, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <TabItem.Header>
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <PathIcon Data="{StaticResource Icon.Info}" />
+            <TextBlock Text="{loc:Loc Settings_PageAbout}" VerticalAlignment="Center" />
           </StackPanel>
-        </Border>
-      </StackPanel>
-    </ScrollViewer>
+        </TabItem.Header>
+        <pages:AboutPage DataContext="{Binding About}" />
+      </TabItem>
+    </TabControl>
   </DockPanel>
 </Window>

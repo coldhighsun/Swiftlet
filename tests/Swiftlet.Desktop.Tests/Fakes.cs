@@ -276,6 +276,28 @@ internal sealed class FakeDialogService : IDialogService
     {
         BrowserHtml.Add(html);
     }
+
+    /// <summary>
+    /// Gets the folders that were asked to be opened.
+    /// </summary>
+    public List<string> OpenedFolders { get; } = [];
+
+    /// <summary>
+    /// Gets or sets a value indicating whether opening a folder works.
+    /// </summary>
+    public bool OpenFolderResult { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the exception thrown when a folder is opened.
+    /// </summary>
+    public Exception? OpenFolderError { get; set; }
+
+    /// <inheritdoc />
+    public Task<bool> OpenFolderAsync(string path)
+    {
+        OpenedFolders.Add(path);
+        return OpenFolderError is null ? Task.FromResult(OpenFolderResult) : Task.FromException<bool>(OpenFolderError);
+    }
 }
 
 /// <summary>

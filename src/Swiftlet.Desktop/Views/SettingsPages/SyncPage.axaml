@@ -1,0 +1,22 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:settings="using:Swiftlet.Desktop.ViewModels.Settings"
+             xmlns:loc="using:Swiftlet.Desktop.Localization"
+             x:Class="Swiftlet.Desktop.Views.SettingsPages.SyncPage"
+             x:DataType="settings:SettingsViewModel">
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="16" Spacing="12">
+      <TextBlock Classes="title" Text="{loc:Loc Settings_SectionSync}" />
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <CheckBox Content="{loc:Loc Settings_DownloadHistory}" IsChecked="{Binding DownloadFullHistory}" />
+          <TextBlock Classes="caption" Text="{loc:Loc Settings_DownloadHistoryHint}" TextWrapping="Wrap" Margin="28,0,0,0" />
+          <CheckBox Content="{loc:Loc Settings_DownloadAllMail}" IsChecked="{Binding DownloadAllMail}" Margin="28,0,0,0" />
+          <TextBlock Classes="caption" Text="{loc:Loc Settings_DownloadAllMailHint}" TextWrapping="Wrap" Margin="56,0,0,0" />
+          <CheckBox Content="{loc:Loc Settings_RemoveServerDeleted}" IsChecked="{Binding RemoveServerDeletedMessages}" Margin="0,8,0,0" />
+          <TextBlock Classes="caption" Text="{loc:Loc Settings_RemoveServerDeletedHint}" TextWrapping="Wrap" Margin="28,0,0,0" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

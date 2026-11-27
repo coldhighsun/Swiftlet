@@ -108,4 +108,11 @@ public interface IDialogService
     /// </summary>
     /// <param name="html">The HTML body.</param>
     void ShowHtmlInBrowser(string html);
+
+    /// <summary>
+    /// Opens a folder in the file manager of the system.
+    /// </summary>
+    /// <param name="path">The folder.</param>
+    /// <returns><see langword="true"/> if the system accepted the request.</returns>
+    Task<bool> OpenFolderAsync(string path);
 }

@@ -52,7 +52,8 @@ internal static class Program
         }
 
         var builder = Host.CreateApplicationBuilder(args);
-        var logger = LogSetup.Create(Path.Combine(dataDirectory, "logs"));
+        var paths = new AppPaths(dataDirectory);
+        var logger = LogSetup.Create(paths.LogDirectory);
         builder.Services.AddSerilog(logger, dispose: true);
         LogProcessWideFailures(logger);
         logger.Information(
@@ -63,6 +64,7 @@ internal static class Program
         ProtectDataDirectory(dataDirectory, logger);
         singleInstance.Logger = new Serilog.Extensions.Logging.SerilogLoggerFactory(logger).CreateLogger(typeof(SingleInstance).FullName!);
         builder.Services.AddSingleton(singleInstance);
+        builder.Services.AddSingleton(paths);
         builder.Services.AddApplication();
         builder.Services.AddInfrastructure(dataDirectory);
         var settings = builder.Services.AddAppSettings(Path.Combine(dataDirectory, "settings.json"));
@@ -79,6 +81,7 @@ internal static class Program
         builder.Services.AddTransient<EditAccountViewModel>();
         builder.Services.AddTransient<LabelManagerViewModel>();
         builder.Services.AddTransient<SettingsViewModel>();
+        builder.Services.AddTransient<AboutViewModel>();
         builder.Services.ConfigureHostShutdown();
 
         using var host = builder.Build();

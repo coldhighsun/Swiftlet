@@ -1,0 +1,55 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:settings="using:Swiftlet.Desktop.ViewModels.Settings"
+             xmlns:loc="using:Swiftlet.Desktop.Localization"
+             x:Class="Swiftlet.Desktop.Views.SettingsPages.GeneralPage"
+             x:DataType="settings:SettingsViewModel">
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="16" Spacing="12">
+      <TextBlock Classes="title" Text="{loc:Loc Settings_SectionGeneral}" />
+      <Border Classes="card">
+        <StackPanel Spacing="12">
+          <Grid ColumnDefinitions="120,*" IsVisible="{Binding LanguageSelector, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TextBlock Text="{loc:Loc Toolbar_Language}" VerticalAlignment="Center" />
+            <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding LanguageSelector.Options}"
+                      SelectedItem="{Binding LanguageSelector.SelectedOption}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate DataType="settings:LanguageOptionViewModel">
+                  <TextBlock Text="{Binding DisplayName}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+          </Grid>
+          <Grid ColumnDefinitions="120,*">
+            <TextBlock Text="{loc:Loc Settings_Theme}" VerticalAlignment="Center" />
+            <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding ThemeOptions}"
+                      SelectedItem="{Binding SelectedTheme}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate DataType="settings:ChoiceOptionViewModel">
+                  <TextBlock Text="{Binding DisplayName}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+          </Grid>
+          <Grid ColumnDefinitions="120,*">
+            <TextBlock Text="{loc:Loc Settings_TrayUnread}" VerticalAlignment="Center" TextWrapping="Wrap" />
+            <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding TrayUnreadStyleOptions}"
+                      SelectedItem="{Binding SelectedTrayUnreadStyle}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate DataType="settings:ChoiceOptionViewModel">
+                  <TextBlock Text="{Binding DisplayName}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+          </Grid>
+          <StackPanel Spacing="8">
+            <CheckBox Content="{loc:Loc Settings_CloseToTray}" IsChecked="{Binding CloseToTray}" />
+            <TextBlock Classes="caption" Text="{loc:Loc Settings_CloseToTrayHint}" TextWrapping="Wrap" Margin="28,0,0,0" />
+            <CheckBox Content="{loc:Loc Settings_NewMailNotifications}" IsChecked="{Binding ShowNewMailNotifications}" Margin="0,8,0,0" />
+            <TextBlock Classes="caption" Text="{loc:Loc Settings_NewMailNotificationsHint}" TextWrapping="Wrap" Margin="28,0,0,0" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

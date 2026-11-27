@@ -207,4 +207,17 @@ public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogSe
         var path = services.GetRequiredService<HtmlPreviewStore>().Write(html);
         Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
     }
+
+    /// <inheritdoc />
+    public async Task<bool> OpenFolderAsync(string path)
+    {
+        var window = ActiveWindow ?? _settingsWindow;
+        var directory = new DirectoryInfo(path);
+        if (window is null || !directory.Exists)
+        {
+            return false;
+        }
+
+        return await window.Launcher.LaunchDirectoryInfoAsync(directory);
+    }
 }
