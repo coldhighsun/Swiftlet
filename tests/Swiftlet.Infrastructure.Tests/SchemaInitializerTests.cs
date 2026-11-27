@@ -169,6 +169,37 @@ public class SchemaInitializerTests
     }
 
     /// <summary>
+    /// Verifies a global store of an earlier version gains the archive folder column once, with no folder chosen.
+    /// </summary>
+    [Fact]
+    public async Task InitializeGlobal_AccountsWithoutArchiveFolderColumn_AddsColumnIdempotently()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var connection = new SqliteConnection("DataSource=:memory:");
+        await connection.OpenAsync(ct);
+        await using (var setup = connection.CreateCommand())
+        {
+            setup.CommandText =
+                """
+                CREATE TABLE Accounts (Id TEXT NOT NULL PRIMARY KEY, DisplayName TEXT, EmailAddress TEXT, AuthMethod INTEGER);
+                INSERT INTO Accounts (Id, DisplayName, EmailAddress, AuthMethod) VALUES ('a', 'me', 'me@example.com', 0);
+                """;
+            await setup.ExecuteNonQueryAsync(ct);
+        }
+
+        var options = new DbContextOptionsBuilder<GlobalDbContext>().UseSqlite(connection).Options;
+        await using var context = new GlobalDbContext(options);
+
+        await SqliteSchemaInitializer.InitializeGlobalAsync(context, ct);
+        await SqliteSchemaInitializer.InitializeGlobalAsync(context, ct);
+
+        var unchosen = await context.Database
+            .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM Accounts WHERE ArchiveFolderName IS NULL")
+            .SingleAsync(ct);
+        unchosen.Should().Be(1);
+    }
+
+    /// <summary>
     /// Verifies accounts of an earlier version count as named by the user only for a password account whose name is not
     /// the local part of its address, and that a second run leaves the marks alone.
     /// </summary>

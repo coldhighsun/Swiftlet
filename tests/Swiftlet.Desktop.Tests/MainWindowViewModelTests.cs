@@ -1803,6 +1803,148 @@ public class MainWindowViewModelTests
     }
 
     /// <summary>
+    /// Verifies archiving asks nothing, queues the move to the archive folder, removes the message and selects the next one.
+    /// </summary>
+    [Fact]
+    public async Task ArchiveSelected_ArchiveFolder_SendsMoveRemovesAndSelectsNext()
+    {
+        var scenario = new Scenario();
+        var archive = TestData.Folder(scenario.Account, "Archive", FolderRole.Archive);
+        scenario.Dispatcher.On<GetFoldersQuery>(_ => new List<MailFolder> { scenario.Inbox, archive });
+        scenario.Dispatcher.On<MoveMessagesCommand>(c =>
+        {
+            scenario.Messages.RemoveAll(m => c.MessageIds.Contains(m.Id));
+            return c.MessageIds.Count;
+        });
+        await scenario.StartAsync();
+        var item = scenario.ViewModel.Messages[0];
+        var next = scenario.ViewModel.Messages[1];
+        scenario.ViewModel.ArchiveSelectedCommand.CanExecute(null).Should().BeFalse();
+        scenario.ViewModel.SelectedMessage = item;
+        scenario.ViewModel.ArchiveSelectedCommand.CanExecute(null).Should().BeTrue();
+
+        await scenario.ViewModel.ArchiveSelectedCommand.ExecuteAsync(null);
+
+        var sent = scenario.Dispatcher.Sent<MoveMessagesCommand>().Should().ContainSingle().Which;
+        sent.AccountId.Should().Be(scenario.Account.Id);
+        sent.MessageIds.Should().Equal(item.Id);
+        sent.TargetFolderId.Should().Be(archive.Id);
+        scenario.Dialogs.Confirmations.Should().BeEmpty();
+        scenario.ViewModel.Messages.Should().Equal(next);
+        scenario.ViewModel.SelectedMessage.Should().BeSameAs(next);
+        scenario.ViewModel.StatusText.Should().Be("正在后台归档 1 封邮件");
+    }
+
+    /// <summary>
+    /// Verifies a selection spanning accounts goes to the archive folder of each, leaving out messages already there.
+    /// </summary>
+    [Fact]
+    public async Task ArchiveSelected_SeveralAccounts_MovesEachToItsOwnArchive()
+    {
+        var scenario = new Scenario();
+        var other = TestData.Account("other@example.com");
+        other.ChangeArchiveFolder("Done");
+        var archive = TestData.Folder(scenario.Account, "Archive", FolderRole.Archive);
+        var otherInbox = TestData.Folder(other, "INBOX", FolderRole.Inbox);
+        var done = TestData.Folder(other, "Done", FolderRole.Other);
+        scenario.Dispatcher.On<GetAccountsQuery>(_ => new List<MailAccount> { scenario.Account, other });
+        scenario.Dispatcher.On<GetFoldersQuery>(q => q.AccountId == other.Id
+            ? new List<MailFolder> { otherInbox, done }
+            : new List<MailFolder> { scenario.Inbox, archive });
+        scenario.Messages.Add(TestData.Message(other, otherInbox, 3, "Elsewhere"));
+        scenario.Messages.Add(TestData.Message(other, done, 4, "Already archived"));
+        scenario.Dispatcher.On<GetUnifiedInboxQuery>(_ => scenario.Messages.ToList());
+        scenario.Dispatcher.On<MoveMessagesCommand>(c => c.MessageIds.Count);
+        await scenario.StartAsync();
+        foreach (var item in scenario.ViewModel.Messages)
+        {
+            scenario.ViewModel.SelectedMessages.Add(item);
+        }
+
+        await scenario.ViewModel.ArchiveSelectedCommand.ExecuteAsync(null);
+
+        var sent = scenario.Dispatcher.Sent<MoveMessagesCommand>();
+        sent.Should().HaveCount(2);
+        var first = sent.Single(c => c.AccountId == scenario.Account.Id);
+        first.TargetFolderId.Should().Be(archive.Id);
+        first.MessageIds.Should().HaveCount(2);
+        var second = sent.Single(c => c.AccountId == other.Id);
+        second.TargetFolderId.Should().Be(done.Id);
+        second.MessageIds.Should().ContainSingle();
+        scenario.ViewModel.StatusText.Should().Be("正在后台归档 3 封邮件");
+    }
+
+    /// <summary>
+    /// Verifies archive is unavailable without an archive folder, also when the chosen one is gone.
+    /// </summary>
+    /// <param name="chosen">The folder chosen in the account settings.</param>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("Gone")]
+    public async Task ArchiveSelected_NoArchiveFolder_CannotExecute(string? chosen)
+    {
+        var scenario = new Scenario();
+        scenario.Account.ChangeArchiveFolder(chosen);
+        var folders = new List<MailFolder> { scenario.Inbox };
+        if (chosen is not null)
+        {
+            folders.Add(TestData.Folder(scenario.Account, "Archive", FolderRole.Archive));
+        }
+
+        scenario.Dispatcher.On<GetFoldersQuery>(_ => folders);
+        await scenario.StartAsync();
+
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+
+        scenario.ViewModel.ArchiveSelectedCommand.CanExecute(null).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies choosing an archive folder in the account settings enables archiving, and the dialog gets the folders.
+    /// </summary>
+    [Fact]
+    public async Task EditAccount_ArchiveFolderChosen_EnablesArchive()
+    {
+        var scenario = new Scenario();
+        var done = TestData.Folder(scenario.Account, "Done", FolderRole.Other);
+        scenario.Dispatcher.On<GetFoldersQuery>(_ => new List<MailFolder> { scenario.Inbox, done });
+        scenario.Dialogs.EditAccountResult = new UpdateAccountResult(false);
+        scenario.Dialogs.OnEditAccount = () => scenario.Account.ChangeArchiveFolder("Done");
+        await scenario.StartAsync();
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+        scenario.ViewModel.ArchiveSelectedCommand.CanExecute(null).Should().BeFalse();
+        var notified = false;
+        scenario.ViewModel.ArchiveSelectedCommand.CanExecuteChanged += (_, _) => notified = true;
+
+        await scenario.ViewModel.EditAccountCommand.ExecuteAsync(scenario.ViewModel.Accounts[0]);
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.Dialogs.EditedFolders.Select(f => f.Id).Should().BeEquivalentTo([scenario.Inbox.Id, done.Id]);
+        notified.Should().BeTrue();
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+        scenario.ViewModel.ArchiveSelectedCommand.CanExecute(null).Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies that when archiving cannot be queued the message comes back and the error is shown.
+    /// </summary>
+    [Fact]
+    public async Task ArchiveSelected_QueueingFails_RestoresMessageAndShowsError()
+    {
+        var scenario = new Scenario();
+        var archive = TestData.Folder(scenario.Account, "Archive", FolderRole.Archive);
+        scenario.Dispatcher.On<GetFoldersQuery>(_ => new List<MailFolder> { scenario.Inbox, archive });
+        scenario.Dispatcher.On<MoveMessagesCommand>(_ => throw new IOException("disk full"));
+        await scenario.StartAsync();
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+
+        await scenario.ViewModel.ArchiveSelectedCommand.ExecuteAsync(null);
+
+        scenario.ViewModel.Messages.Should().HaveCount(2);
+        scenario.ViewModel.StatusText.Should().Contain("disk full").And.Contain("归档邮件失败");
+    }
+
+    /// <summary>
     /// Verifies emptying a folder confirms with the folder and the kind of deletion, then queues it.
     /// </summary>
     /// <param name="hasTrash">Whether the account has a Trash folder.</param>

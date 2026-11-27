@@ -1,5 +1,6 @@
 using Swiftlet.Application.Accounts;
 using Swiftlet.Domain.Accounts;
+using Swiftlet.Domain.Folders;
 
 namespace Swiftlet.Desktop.Services;
 
@@ -65,8 +66,9 @@ public interface IDialogService
     /// Shows the settings dialog of an account.
     /// </summary>
     /// <param name="account">The account to edit.</param>
+    /// <param name="folders">The cached folders of the account.</param>
     /// <returns>What was saved, or <see langword="null"/> if the dialog was cancelled.</returns>
-    Task<UpdateAccountResult?> ShowEditAccountAsync(MailAccount account);
+    Task<UpdateAccountResult?> ShowEditAccountAsync(MailAccount account, IReadOnlyList<MailFolder> folders);
 
     /// <summary>
     /// Shows the settings dialog.

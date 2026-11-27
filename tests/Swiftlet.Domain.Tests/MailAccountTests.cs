@@ -152,4 +152,24 @@ public class MailAccountTests
 
         act.Should().Throw<ArgumentOutOfRangeException>();
     }
+
+    /// <summary>
+    /// Verifies the archive folder name is kept exactly, and a blank one means automatic.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    /// <param name="expected">The stored value.</param>
+    [Theory]
+    [InlineData("Archive/2026 ", "Archive/2026 ")]
+    [InlineData("  ", null)]
+    [InlineData("", null)]
+    [InlineData(null, null)]
+    public void ChangeArchiveFolder_Value_KeepsNameOrMeansAutomatic(string? value, string? expected)
+    {
+        var account = MailAccount.Create("Me", "me@example.com", AuthMethod.Password, Imap, Smtp, DateTimeOffset.UtcNow);
+        account.ChangeArchiveFolder("Old");
+
+        account.ChangeArchiveFolder(value);
+
+        account.ArchiveFolderName.Should().Be(expected);
+    }
 }

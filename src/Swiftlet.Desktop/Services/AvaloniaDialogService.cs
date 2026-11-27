@@ -11,6 +11,7 @@ using Swiftlet.Desktop.ViewModels.Compose;
 using Swiftlet.Desktop.ViewModels.Settings;
 using Swiftlet.Desktop.Views;
 using Swiftlet.Domain.Accounts;
+using Swiftlet.Domain.Folders;
 
 namespace Swiftlet.Desktop.Services;
 
@@ -69,7 +70,7 @@ public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogSe
     }
 
     /// <inheritdoc />
-    public async Task<UpdateAccountResult?> ShowEditAccountAsync(MailAccount account)
+    public async Task<UpdateAccountResult?> ShowEditAccountAsync(MailAccount account, IReadOnlyList<MailFolder> folders)
     {
         var owner = ActiveWindow;
         if (owner is null)
@@ -78,7 +79,7 @@ public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogSe
         }
 
         var viewModel = services.GetRequiredService<EditAccountViewModel>();
-        viewModel.Load(account);
+        viewModel.Load(account, folders);
         var window = new EditAccountWindow { DataContext = viewModel };
         viewModel.CloseRequested += (_, result) => window.Close(result);
 

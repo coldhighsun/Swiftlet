@@ -10,7 +10,7 @@
   <StackPanel Margin="24" Spacing="12">
     <TextBlock Classes="section" Text="{Binding Email}" TextTrimming="CharacterEllipsis" />
 
-    <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto" RowSpacing="8">
+    <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8">
       <TextBlock Text="{loc:Loc EditAccount_DisplayName}" VerticalAlignment="Center" TextWrapping="Wrap" />
       <TextBox Grid.Column="1" Text="{Binding DisplayName}" PlaceholderText="{Binding DisplayNamePlaceholder}" MaxLength="200"
                AutomationProperties.Name="{loc:Loc EditAccount_DisplayName}" />
@@ -23,8 +23,17 @@
           </DataTemplate>
         </ComboBox.ItemTemplate>
       </ComboBox>
+      <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Classes="caption" Text="{loc:Loc EditAccount_SyncIntervalHint}" TextWrapping="Wrap" />
+      <TextBlock Grid.Row="3" Text="{loc:Loc EditAccount_ArchiveFolder}" VerticalAlignment="Center" TextWrapping="Wrap" />
+      <ComboBox Grid.Row="3" Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding ArchiveFolderOptions}"
+                SelectedItem="{Binding SelectedArchiveFolder}" AutomationProperties.Name="{loc:Loc EditAccount_ArchiveFolder}">
+        <ComboBox.ItemTemplate>
+          <DataTemplate DataType="vm:ArchiveFolderOption">
+            <TextBlock Text="{Binding Text}" TextTrimming="CharacterEllipsis" />
+          </DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
     </Grid>
-    <TextBlock Classes="caption" Text="{loc:Loc EditAccount_SyncIntervalHint}" TextWrapping="Wrap" />
 
     <TextBlock Classes="caption" Text="{loc:Loc EditAccount_OAuthHint}" TextWrapping="Wrap" IsVisible="{Binding !IsPasswordAccount}" />
 

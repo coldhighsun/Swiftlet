@@ -200,6 +200,7 @@
               </ListBox.KeyBindings>
               <ListBox.ContextMenu>
                 <ContextMenu Opening="OnMessageMenuOpening">
+                  <MenuItem Header="{loc:Loc Toolbar_Archive}" Command="{Binding ArchiveSelectedCommand}" />
                   <MenuItem Header="{loc:Loc Toolbar_Delete}" Command="{Binding DeleteSelectedCommand}" />
                   <MenuItem Header="{loc:Loc Menu_Message_MoveTo}" ItemsSource="{Binding MoveTargets}" IsEnabled="{Binding CanMove}">
                     <MenuItem.ItemContainerTheme>
@@ -332,6 +333,10 @@
             <Button Classes="icon" Command="{Binding OpenHtmlCommand}"
                     ToolTip.Tip="{loc:Loc Toolbar_ViewInBrowser}" AutomationProperties.Name="{loc:Loc Toolbar_ViewInBrowser}">
               <PathIcon Data="{StaticResource Icon.Browser}" />
+            </Button>
+            <Button Classes="icon" Command="{Binding ArchiveSelectedCommand}"
+                    ToolTip.Tip="{loc:Loc Toolbar_Archive}" AutomationProperties.Name="{loc:Loc Toolbar_Archive}">
+              <PathIcon Data="{StaticResource Icon.Archive}" />
             </Button>
             <Button Classes="icon" Command="{Binding DeleteSelectedCommand}"
                     ToolTip.Tip="{loc:Loc Toolbar_Delete}" AutomationProperties.Name="{loc:Loc Toolbar_Delete}">

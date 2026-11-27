@@ -477,7 +477,8 @@ public class UiSmokeTests
                 var localizer = language == "en" ? TestLocalizer.English() : TestLocalizer.Chinese();
                 LocalizationManager.Instance.SetPreference(language);
                 var viewModel = new EditAccountViewModel(new FakeDispatcher(), localizer);
-                viewModel.Load(oauth ? TestData.OAuthAccount() : TestData.Account());
+                var account = oauth ? TestData.OAuthAccount() : TestData.Account();
+                viewModel.Load(account, [TestData.Folder(account, "Archive", Swiftlet.Domain.Folders.FolderRole.Archive)]);
                 var window = new EditAccountWindow { DataContext = viewModel };
                 Render(window, $"edit-account-{(oauth ? "oauth" : "password")}-{language}", language);
 
@@ -486,6 +487,9 @@ public class UiSmokeTests
                 visible.Contains("IMAP").Should().Be(!oauth);
                 window.GetVisualDescendants().OfType<TextBox>().Count(t => t.IsEffectivelyVisible).Should().Be(oauth ? 1 : 6);
                 window.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).Should().Contain(save);
+                window.GetVisualDescendants().OfType<ComboBox>().Select(c => c.SelectedItem).Should()
+                    .Contain(viewModel.ArchiveFolderOptions[0]);
+                visible.Should().Contain(localizer["EditAccount_ArchiveFolder"]);
                 window.Close();
             },
             TestContext.Current.CancellationToken);
@@ -961,6 +965,60 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies the message context menu and the reading pane offer archiving, and the menu entry archives the selection.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_MessageContextMenu_ArchivesSelection()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference("en");
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Localizer.SetPreference("en");
+                var archive = TestData.Folder(scenario.Account, "Archive", Swiftlet.Domain.Folders.FolderRole.Archive);
+                scenario.Dispatcher.On<Swiftlet.Application.Queries.GetFoldersQuery>(
+                    _ => new List<Swiftlet.Domain.Folders.MailFolder> { scenario.Inbox, archive });
+                scenario.Dispatcher.On<Swiftlet.Application.Messages.MoveMessagesCommand>(c =>
+                {
+                    scenario.Messages.Clear();
+                    return c.MessageIds.Count;
+                });
+                await scenario.StartAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-archive", "en");
+                var list = window.GetVisualDescendants().OfType<ListBox>().Single();
+                list.SelectAll();
+                Dispatcher.UIThread.RunJobs();
+                Snapshot(window, "main-window-archive-selected");
+                window.GetVisualDescendants().OfType<Button>()
+                    .Single(b => Avalonia.Automation.AutomationProperties.GetName(b) == "Archive")
+                    .IsEffectivelyEnabled.Should().BeTrue();
+
+                var row = list.GetVisualDescendants().OfType<ListBoxItem>().First();
+                var rowPoint = row.TranslatePoint(new Point(10, 10), window)!.Value;
+                window.MouseDown(rowPoint, MouseButton.Right);
+                window.MouseUp(rowPoint, MouseButton.Right);
+                Dispatcher.UIThread.RunJobs();
+                var entry = list.ContextMenu!.Items.OfType<MenuItem>().Single(i => Equals(i.Header, "Archive"));
+                Snapshot(window, "main-window-archive-menu-open");
+                entry.IsEffectivelyEnabled.Should().BeTrue();
+                var point = entry.TranslatePoint(new Point(10, 10), window)!.Value;
+                window.MouseMove(point);
+                window.MouseDown(point, MouseButton.Left);
+                window.MouseUp(point, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+                await scenario.ViewModel.WhenIdleAsync();
+
+                var sent = scenario.Dispatcher.Sent<Swiftlet.Application.Messages.MoveMessagesCommand>().Should().ContainSingle().Which;
+                sent.TargetFolderId.Should().Be(archive.Id);
+                sent.MessageIds.Should().HaveCount(2);
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Verifies folder nodes offer deleting all messages, except for All Mail.
     /// </summary>
     [Fact]
@@ -1082,7 +1140,7 @@ public class UiSmokeTests
                 reader.Bounds.Width.Should().BeGreaterThanOrEqualTo(300);
                 reader.Bounds.Right.Should().BeLessThanOrEqualTo(800);
                 var buttons = window.FindControl<Control>("ReaderActions")!.GetVisualDescendants().OfType<Button>().ToList();
-                buttons.Should().HaveCount(6);
+                buttons.Should().HaveCount(7);
                 foreach (var button in buttons)
                 {
                     button.Bounds.Width.Should().BeGreaterThan(0);
@@ -1142,9 +1200,15 @@ public class UiSmokeTests
                 var layout = row.GetVisualDescendants().OfType<Border>().First(b => b.Name == "PART_LayoutRoot");
                 Color(layout.Background).Should().Be(Token(window, "Brush.AccentSubtle"));
                 var disabled = window.FindControl<Control>("ReaderActions")!.GetVisualDescendants().OfType<Button>()
-                    .Single(b => !b.IsEffectivelyEnabled);
-                var presenter = disabled.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>().First();
-                Color(presenter.Background).A.Should().Be(0);
+                    .Where(b => !b.IsEffectivelyEnabled)
+                    .ToList();
+                disabled.Should().NotBeEmpty();
+                foreach (var button in disabled)
+                {
+                    var presenter = button.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>().First();
+                    Color(presenter.Background).A.Should().Be(0);
+                }
+
                 window.Close();
             },
             TestContext.Current.CancellationToken);
@@ -1382,7 +1446,7 @@ public class UiSmokeTests
                     protection, localizer, new FakeDialogService(), new FakeUiThread(), _ => Task.FromResult<string?>(null));
                 await startup.RunCommand.ExecuteAsync(null);
                 var editAccount = new EditAccountViewModel(new FakeDispatcher(), localizer);
-                editAccount.Load(account);
+                editAccount.Load(account, []);
                 var application = Avalonia.Application.Current!;
                 application.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark;
                 try

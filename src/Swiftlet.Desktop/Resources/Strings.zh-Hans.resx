@@ -80,6 +80,13 @@
   <data name="Error_DeleteRejected" xml:space="preserve"><value>服务器拒绝了操作，邮件已重新显示</value></data>
   <data name="Menu_Message_MoveTo" xml:space="preserve"><value>移动到</value></data>
   <data name="Status_MoveQueued" xml:space="preserve"><value>正在后台将 {0} 封邮件移动到“{1}”</value></data>
+  <data name="Toolbar_Archive" xml:space="preserve"><value>归档</value></data>
+  <data name="Status_ArchiveQueued" xml:space="preserve"><value>正在后台归档 {0} 封邮件</value></data>
+  <data name="Error_ArchiveMessage" xml:space="preserve"><value>归档邮件失败</value></data>
+  <data name="EditAccount_ArchiveFolder" xml:space="preserve"><value>归档文件夹</value></data>
+  <data name="EditAccount_ArchiveAutomatic" xml:space="preserve"><value>自动（{0}）</value></data>
+  <data name="EditAccount_ArchiveAutomaticNone" xml:space="preserve"><value>自动（未找到归档文件夹）</value></data>
+  <data name="EditAccount_ArchiveMissing" xml:space="preserve"><value>{0}（未找到）</value></data>
   <data name="Menu_Folder_Empty" xml:space="preserve"><value>删除全部邮件</value></data>
   <data name="Error_EmptyFolder" xml:space="preserve"><value>删除文件夹内的邮件失败</value></data>
   <data name="Status_EmptyQueued" xml:space="preserve"><value>正在后台删除“{0}”中的全部邮件</value></data>

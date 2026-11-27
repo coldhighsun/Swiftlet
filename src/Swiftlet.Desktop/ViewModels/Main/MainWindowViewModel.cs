@@ -197,7 +197,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _syncEvents.BackfillProgressed += OnBackfillProgressed;
         _syncEvents.DeletionProgressed += OnDeletionProgressed;
         _syncEvents.MessageSent += OnMessageSent;
-        SelectedMessages.CollectionChanged += (_, _) => DeleteSelectedCommand.NotifyCanExecuteChanged();
+        SelectedMessages.CollectionChanged += (_, _) =>
+        {
+            DeleteSelectedCommand.NotifyCanExecuteChanged();
+            ArchiveSelectedCommand.NotifyCanExecuteChanged();
+        };
     }
 
     /// <summary>
@@ -478,6 +482,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(ToggleFlagCommand))]
     [NotifyCanExecuteChangedFor(nameof(OpenHtmlCommand))]
     [NotifyCanExecuteChangedFor(nameof(DeleteSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ArchiveSelectedCommand))]
     [NotifyPropertyChangedFor(nameof(IsNoMessageSelected))]
     public partial MessageItemViewModel? SelectedMessage { get; set; }
 
@@ -734,17 +739,80 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var ids = targets.Select(t => t.Id).ToList();
-        RemoveFromList(targets);
-        await GuardedAsync("Error_MoveMessage", async () =>
+        await QueueMovesAsync(
+            "Error_MoveMessage",
+            [new MoveBatch(accountId, folder.Folder.Id, targets)],
+            () => _localizer.Format("Status_MoveQueued", targets.Count, folder.Name));
+    }
+
+    /// <summary>
+    /// Moves the selected messages to the archive folder of their account; a selection may span accounts. Messages that
+    /// are already there, or whose account has no archive folder, stay. No confirmation is asked, as for any move.
+    /// </summary>
+    /// <returns>A task that completes when the moves have been queued.</returns>
+    [RelayCommand(CanExecute = nameof(CanArchive), AllowConcurrentExecutions = true)]
+    private async Task ArchiveSelectedAsync()
+    {
+        var targets = ActionTargets();
+        var archives = targets
+            .Select(t => t.Message.AccountId)
+            .Distinct()
+            .ToDictionary(id => id, ArchiveFolderOf);
+        var batches = targets
+            .Where(t => archives[t.Message.AccountId] is { } archive && t.Message.FolderId != archive.Id)
+            .GroupBy(t => t.Message.AccountId)
+            .Select(g => new MoveBatch(g.Key, archives[g.Key]!.Id, [.. g]))
+            .ToList();
+        if (batches.Count == 0)
         {
-            await _dispatcher.SendAsync(new MoveMessagesCommand(accountId, ids, folder.Folder.Id));
-            StatusText = _localizer.Format("Status_MoveQueued", ids.Count, folder.Name);
+            return;
+        }
+
+        var count = batches.Sum(b => b.Messages.Count);
+        await QueueMovesAsync("Error_ArchiveMessage", batches, () => _localizer.Format("Status_ArchiveQueued", count));
+    }
+
+    /// <summary>
+    /// Takes messages out of the list and queues their moves.
+    /// </summary>
+    /// <param name="errorKey">The resource key describing the action if queuing fails.</param>
+    /// <param name="batches">The moves, one per account.</param>
+    /// <param name="queuedStatus">Creates the status text shown once everything is queued.</param>
+    /// <returns>A task that completes when the moves have been queued and the view reloaded.</returns>
+    private async Task QueueMovesAsync(string errorKey, IReadOnlyList<MoveBatch> batches, Func<string> queuedStatus)
+    {
+        // The identifiers are read before the list changes.
+        var commands = batches
+            .Select(b => new MoveMessagesCommand(b.AccountId, [.. b.Messages.Select(m => m.Id)], b.TargetFolderId))
+            .ToList();
+        RemoveFromList([.. batches.SelectMany(b => b.Messages)]);
+        await GuardedAsync(errorKey, async () =>
+        {
+            foreach (var command in commands)
+            {
+                await _dispatcher.SendAsync(command);
+            }
+
+            StatusText = queuedStatus();
         });
-        StartUnreadRefresh(accountId);
+        foreach (var command in commands)
+        {
+            StartUnreadRefresh(command.AccountId);
+        }
 
         // Fills the page up again, and brings the messages back if they could not be queued.
         await ReloadViewAsync();
+    }
+
+    /// <summary>
+    /// Gets the folder archived messages of a loaded account are moved to.
+    /// </summary>
+    /// <param name="accountId">The account identifier.</param>
+    /// <returns>The folder, or <see langword="null"/> if the account is not loaded or has no archive folder.</returns>
+    private MailFolder? ArchiveFolderOf(Guid accountId)
+    {
+        var node = Accounts.FirstOrDefault(a => a.Account.Id == accountId);
+        return node is null ? null : ArchiveFolderResolver.Resolve(node.Account, node.Folders.Select(f => f.Folder));
     }
 
     /// <summary>
@@ -969,7 +1037,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         ArgumentNullException.ThrowIfNull(node);
         var id = node.Account.Id;
-        var result = await _dialogs.ShowEditAccountAsync(node.Account);
+        var result = await _dialogs.ShowEditAccountAsync(node.Account, [.. node.Folders.Select(f => f.Folder)]);
 
         // Reload even after a cancel: closing the dialog can race with a save that was already being written.
         await GuardedAsync("Error_LoadAccounts", ReloadAccountsAsync);
@@ -1131,6 +1199,32 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// Gets a value indicating whether there is at least one message to delete.
     /// </summary>
     private bool HasSelection => SelectedMessage is not null || SelectedMessages.Count > 0;
+
+    /// <summary>
+    /// Gets a value indicating whether at least one of the selected messages can be moved to an archive folder.
+    /// </summary>
+    private bool CanArchive
+    {
+        get
+        {
+            IEnumerable<MessageItemViewModel> selected = SelectedMessages.Count > 0
+                ? SelectedMessages
+                : SelectedMessage is { } single ? [single] : [];
+
+            // Looked up once per account, because this runs for every change of a large selection.
+            var archives = new Dictionary<Guid, MailFolder?>();
+            return selected.Any(item =>
+            {
+                var accountId = item.Message.AccountId;
+                if (!archives.TryGetValue(accountId, out var archive))
+                {
+                    archives[accountId] = archive = ArchiveFolderOf(accountId);
+                }
+
+                return archive is not null && item.Message.FolderId != archive.Id;
+            });
+        }
+    }
 
     /// <summary>
     /// Gets a value indicating whether the selected message has an HTML body.
@@ -1541,6 +1635,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         // Also covers removed accounts, for which nothing is queried.
         UpdateInboxUnread();
+
+        // The folders or the chosen archive folder may have changed.
+        ArchiveSelectedCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>

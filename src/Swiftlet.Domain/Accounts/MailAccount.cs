@@ -52,6 +52,12 @@ public sealed class MailAccount
     public TimeSpan SyncInterval { get; private set; } = TimeSpan.FromMinutes(5);
 
     /// <summary>
+    /// Gets the full name of the folder archived messages are moved to, or <see langword="null"/> to pick it from the
+    /// folder roles reported by the server.
+    /// </summary>
+    public string? ArchiveFolderName { get; private set; }
+
+    /// <summary>
     /// Gets the time the account was created.
     /// </summary>
     public DateTimeOffset CreatedAt { get; private set; }
@@ -161,6 +167,15 @@ public sealed class MailAccount
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(interval, TimeSpan.FromMinutes(1));
         SyncInterval = interval;
+    }
+
+    /// <summary>
+    /// Changes the folder archived messages are moved to.
+    /// </summary>
+    /// <param name="folderName">The full name of the folder, kept exactly as the server reports it; blank for automatic.</param>
+    public void ChangeArchiveFolder(string? folderName)
+    {
+        ArchiveFolderName = string.IsNullOrWhiteSpace(folderName) ? null : folderName;
     }
 
     /// <summary>

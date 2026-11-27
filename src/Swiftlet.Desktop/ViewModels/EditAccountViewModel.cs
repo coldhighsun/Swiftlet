@@ -3,9 +3,11 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Swiftlet.Application.Accounts;
+using Swiftlet.Application.Messages;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
 using Swiftlet.Domain.Accounts;
+using Swiftlet.Domain.Folders;
 
 namespace Swiftlet.Desktop.ViewModels;
 
@@ -15,6 +17,13 @@ namespace Swiftlet.Desktop.ViewModels;
 /// <param name="Interval">The interval.</param>
 /// <param name="Text">The text shown in the list.</param>
 public sealed record SyncIntervalOption(TimeSpan Interval, string Text);
+
+/// <summary>
+/// A selectable archive folder.
+/// </summary>
+/// <param name="FullName">The full name of the folder, or <see langword="null"/> for the automatic choice.</param>
+/// <param name="Text">The text shown in the list.</param>
+public sealed record ArchiveFolderOption(string? FullName, string Text);
 
 /// <summary>
 /// The view model of the account settings dialog. <see cref="Load"/> must be called before the dialog is shown.
@@ -59,6 +68,7 @@ public sealed partial class EditAccountViewModel : ObservableObject
         DisplayName = string.Empty;
         DisplayNamePlaceholder = string.Empty;
         IntervalOptions = [];
+        ArchiveFolderOptions = [];
         Password = string.Empty;
         ImapHost = string.Empty;
         ImapPort = string.Empty;
@@ -101,6 +111,18 @@ public sealed partial class EditAccountViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     public partial SyncIntervalOption? SelectedInterval { get; set; }
+
+    /// <summary>
+    /// Gets or sets the selectable archive folders; the first entry is the automatic choice.
+    /// </summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<ArchiveFolderOption> ArchiveFolderOptions { get; set; }
+
+    /// <summary>
+    /// Gets or sets the selected archive folder.
+    /// </summary>
+    [ObservableProperty]
+    public partial ArchiveFolderOption? SelectedArchiveFolder { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether the account signs in with a password, so password and servers can be changed.
@@ -166,9 +188,11 @@ public sealed partial class EditAccountViewModel : ObservableObject
     /// Fills the dialog with the current settings of an account.
     /// </summary>
     /// <param name="account">The account to edit.</param>
-    public void Load(MailAccount account)
+    /// <param name="folders">The cached folders of the account.</param>
+    public void Load(MailAccount account, IReadOnlyList<MailFolder> folders)
     {
         ArgumentNullException.ThrowIfNull(account);
+        ArgumentNullException.ThrowIfNull(folders);
 
         _accountId = account.Id;
         Email = account.EmailAddress;
@@ -178,6 +202,9 @@ public sealed partial class EditAccountViewModel : ObservableObject
         var intervals = IntervalMinutes.Select(m => TimeSpan.FromMinutes(m)).Append(account.SyncInterval).Distinct().Order();
         IntervalOptions = [.. intervals.Select(CreateOption)];
         SelectedInterval = IntervalOptions.First(o => o.Interval == account.SyncInterval);
+
+        ArchiveFolderOptions = CreateArchiveOptions(account.ArchiveFolderName, folders);
+        SelectedArchiveFolder = ArchiveFolderOptions.First(o => o.FullName == account.ArchiveFolderName);
 
         IsPasswordAccount = account.AuthMethod == AuthMethod.Password;
         ImapHost = account.Imap.Host;
@@ -224,7 +251,8 @@ public sealed partial class EditAccountViewModel : ObservableObject
             SelectedInterval!.Interval,
             imap,
             smtp,
-            IsPasswordAccount && Password.Length > 0 ? Password : null);
+            IsPasswordAccount && Password.Length > 0 ? Password : null,
+            SelectedArchiveFolder?.FullName);
         IsBusy = true;
         using var cancellation = new CancellationTokenSource();
         _saveCancellation = cancellation;
@@ -286,6 +314,35 @@ public sealed partial class EditAccountViewModel : ObservableObject
     private static bool TryParsePort(string text, out int port)
     {
         return int.TryParse(text, out port) && port is >= 1 and <= 65535;
+    }
+
+    /// <summary>
+    /// Creates the archive folder list: the automatic choice, then every folder that can serve as an archive. The saved
+    /// folder is always listed, marked if it no longer exists, so saving other settings does not lose it.
+    /// </summary>
+    /// <param name="saved">The saved folder name, or <see langword="null"/> for automatic.</param>
+    /// <param name="folders">The cached folders of the account.</param>
+    /// <returns>The entries.</returns>
+    private List<ArchiveFolderOption> CreateArchiveOptions(string? saved, IReadOnlyList<MailFolder> folders)
+    {
+        var automatic = ArchiveFolderResolver.Automatic(folders);
+        var automaticText = automatic is null
+            ? _localizer["EditAccount_ArchiveAutomaticNone"]
+            : _localizer.Format("EditAccount_ArchiveAutomatic", automatic.FullName);
+
+        List<ArchiveFolderOption> options = [new(null, automaticText)];
+        options.AddRange(folders
+            .Where(f => f.FullName == saved
+                || f.Role is not (FolderRole.Inbox or FolderRole.Drafts or FolderRole.Junk or FolderRole.Trash))
+            .Select(f => f.FullName)
+            .Order(StringComparer.CurrentCultureIgnoreCase)
+            .Select(name => new ArchiveFolderOption(name, name)));
+        if (saved is not null && options.All(o => o.FullName != saved))
+        {
+            options.Add(new ArchiveFolderOption(saved, _localizer.Format("EditAccount_ArchiveMissing", saved)));
+        }
+
+        return options;
     }
 
     /// <summary>

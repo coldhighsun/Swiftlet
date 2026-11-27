@@ -71,6 +71,27 @@ public static class SqliteSchemaInitializer
         // EnsureCreated leaves an existing database untouched, so tables added later are created here (idempotent).
         await context.Database.ExecuteSqlRawAsync(RemoteImageRulesTable, cancellationToken);
         await EnsureCustomDisplayNameColumnAsync(context, cancellationToken);
+        await EnsureArchiveFolderColumnAsync(context, cancellationToken);
+    }
+
+    /// <summary>
+    /// Adds the <c>ArchiveFolderName</c> column to an Accounts table created by an earlier version; does nothing when it
+    /// exists. Existing accounts get no value, so their archive folder is picked automatically.
+    /// </summary>
+    /// <param name="context">The global database context.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the column exists.</returns>
+    private static async Task EnsureArchiveFolderColumnAsync(GlobalDbContext context, CancellationToken cancellationToken)
+    {
+        var existing = await context.Database
+            .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM pragma_table_info('Accounts') WHERE name = 'ArchiveFolderName'")
+            .SingleAsync(cancellationToken);
+        if (existing > 0)
+        {
+            return;
+        }
+
+        await context.Database.ExecuteSqlRawAsync("ALTER TABLE Accounts ADD COLUMN ArchiveFolderName TEXT NULL;", cancellationToken);
     }
 
     /// <summary>

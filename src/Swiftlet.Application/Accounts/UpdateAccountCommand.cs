@@ -16,13 +16,15 @@ namespace Swiftlet.Application.Accounts;
 /// <param name="Imap">The IMAP endpoint; omitted to keep the current one.</param>
 /// <param name="Smtp">The SMTP endpoint; omitted to keep the current one.</param>
 /// <param name="Password">The new password; omitted or empty to keep the current one.</param>
+/// <param name="ArchiveFolderName">The full name of the archive folder; omitted or blank to pick it automatically.</param>
 public sealed record UpdateAccountCommand(
     Guid AccountId,
     string DisplayName,
     TimeSpan SyncInterval,
     ServerEndpoint? Imap = null,
     ServerEndpoint? Smtp = null,
-    string? Password = null) : ICommand<UpdateAccountResult>;
+    string? Password = null,
+    string? ArchiveFolderName = null) : ICommand<UpdateAccountResult>;
 
 /// <summary>
 /// The outcome of <see cref="UpdateAccountCommand"/>.
@@ -66,6 +68,7 @@ public sealed class UpdateAccountCommandHandler(
         // Nothing is saved until the end, so a failed validation or verification leaves the account as it was.
         account.ChangeDisplayName(command.DisplayName);
         account.ChangeSyncInterval(command.SyncInterval);
+        account.ChangeArchiveFolder(command.ArchiveFolderName);
         if (imapChanged || smtpChanged)
         {
             // An unchanged endpoint keeps its instance, so it is not written again.

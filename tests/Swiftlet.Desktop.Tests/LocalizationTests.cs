@@ -340,7 +340,7 @@ public partial class LocalizationTests
     /// Matches resource keys used from C# code.
     /// </summary>
     /// <returns>The compiled regex.</returns>
-    [GeneratedRegex(@"(?:_?localizer(?:\[|\.Format\()|GuardedAsync\()\s*""([A-Za-z]+(?:_[A-Za-z]+)+)""")]
+    [GeneratedRegex(@"(?:_?localizer(?:\[|\.Format\()|(?:GuardedAsync|QueueMovesAsync)\()\s*""([A-Za-z]+(?:_[A-Za-z]+)+)""")]
     private static partial Regex CodeKeys();
 
     /// <summary>

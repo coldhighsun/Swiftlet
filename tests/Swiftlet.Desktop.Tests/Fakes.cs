@@ -161,6 +161,11 @@ internal sealed class FakeDialogService : IDialogService
     public List<MailAccount> EditedAccounts { get; } = [];
 
     /// <summary>
+    /// Gets the folders passed to the account settings dialog the last time it was shown.
+    /// </summary>
+    public IReadOnlyList<Swiftlet.Domain.Folders.MailFolder> EditedFolders { get; private set; } = [];
+
+    /// <summary>
     /// Gets the compose requests received.
     /// </summary>
     public List<ComposeRequest> ComposeRequests { get; } = [];
@@ -216,9 +221,12 @@ internal sealed class FakeDialogService : IDialogService
     }
 
     /// <inheritdoc />
-    public Task<Swiftlet.Application.Accounts.UpdateAccountResult?> ShowEditAccountAsync(MailAccount account)
+    public Task<Swiftlet.Application.Accounts.UpdateAccountResult?> ShowEditAccountAsync(
+        MailAccount account,
+        IReadOnlyList<Swiftlet.Domain.Folders.MailFolder> folders)
     {
         EditedAccounts.Add(account);
+        EditedFolders = folders;
         OnEditAccount?.Invoke();
         return Task.FromResult(EditAccountResult);
     }

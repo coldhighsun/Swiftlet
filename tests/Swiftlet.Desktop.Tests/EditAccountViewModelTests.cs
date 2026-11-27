@@ -2,6 +2,7 @@ using AwesomeAssertions;
 using Swiftlet.Application.Accounts;
 using Swiftlet.Desktop.ViewModels;
 using Swiftlet.Domain.Accounts;
+using Swiftlet.Domain.Folders;
 
 namespace Swiftlet.Desktop.Tests;
 
@@ -161,16 +162,82 @@ public class EditAccountViewModelTests
         viewModel.SaveCommand.CanExecute(null).Should().BeFalse();
     }
 
+    [Fact]
+    public void Load_NoArchiveChosen_SelectsAutomaticAndOffersSuitableFolders()
+    {
+        var account = TestData.Account();
+        MailFolder[] folders =
+        [
+            TestData.Folder(account, "INBOX", FolderRole.Inbox),
+            TestData.Folder(account, "Sent", FolderRole.Sent),
+            TestData.Folder(account, "Drafts", FolderRole.Drafts),
+            TestData.Folder(account, "Trash", FolderRole.Trash),
+            TestData.Folder(account, "Spam", FolderRole.Junk),
+            TestData.Folder(account, "Old", FolderRole.Archive),
+            TestData.Folder(account, "Done", FolderRole.Other),
+        ];
+
+        var viewModel = Create(new FakeDispatcher(), account, folders);
+
+        viewModel.ArchiveFolderOptions.Select(o => o.FullName).Should().Equal(null, "Done", "Old", "Sent");
+        viewModel.SelectedArchiveFolder.Should().BeSameAs(viewModel.ArchiveFolderOptions[0]);
+        viewModel.SelectedArchiveFolder!.Text.Should().Be("自动（Old）");
+    }
+
+    [Fact]
+    public void Load_NoArchiveFolderOnServer_SaysSo()
+    {
+        var viewModel = Create(new FakeDispatcher(), TestData.Account());
+
+        viewModel.ArchiveFolderOptions.Should().ContainSingle().Which.Text.Should().Be("自动（未找到归档文件夹）");
+    }
+
+    [Fact]
+    public async Task SaveAsync_ChosenFolderMissing_KeepsTheChoice()
+    {
+        var dispatcher = new FakeDispatcher();
+        dispatcher.On<UpdateAccountCommand>(_ => new UpdateAccountResult(false));
+        var account = TestData.Account();
+        account.ChangeArchiveFolder("Gone");
+        var viewModel = Create(dispatcher, account);
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        viewModel.SelectedArchiveFolder!.Text.Should().Be("Gone（未找到）");
+        dispatcher.Sent<UpdateAccountCommand>().Single().ArchiveFolderName.Should().Be("Gone");
+    }
+
+    [Theory]
+    [InlineData("Done")]
+    [InlineData(null)]
+    public async Task SaveAsync_ArchiveSelection_IsSent(string? selected)
+    {
+        var dispatcher = new FakeDispatcher();
+        dispatcher.On<UpdateAccountCommand>(_ => new UpdateAccountResult(false));
+        var account = TestData.Account();
+        account.ChangeArchiveFolder("Done");
+        var viewModel = Create(dispatcher, account, [TestData.Folder(account, "Done", FolderRole.Other)]);
+        viewModel.SelectedArchiveFolder = viewModel.ArchiveFolderOptions.Single(o => o.FullName == selected);
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        dispatcher.Sent<UpdateAccountCommand>().Single().ArchiveFolderName.Should().Be(selected);
+    }
+
     /// <summary>
     /// Creates a Chinese view model loaded with an account.
     /// </summary>
     /// <param name="dispatcher">The request dispatcher.</param>
     /// <param name="account">The account.</param>
+    /// <param name="folders">The cached folders; none by default.</param>
     /// <returns>The view model.</returns>
-    private static EditAccountViewModel Create(FakeDispatcher dispatcher, MailAccount account)
+    private static EditAccountViewModel Create(
+        FakeDispatcher dispatcher,
+        MailAccount account,
+        IReadOnlyList<MailFolder>? folders = null)
     {
         var viewModel = new EditAccountViewModel(dispatcher, TestLocalizer.Chinese());
-        viewModel.Load(account);
+        viewModel.Load(account, folders ?? []);
         return viewModel;
     }
 }
