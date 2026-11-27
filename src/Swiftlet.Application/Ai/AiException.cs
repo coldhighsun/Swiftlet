@@ -49,6 +49,11 @@ public enum AiFailure
     /// AI is switched off or not set up, so nothing was sent.
     /// </summary>
     NotConfigured,
+
+    /// <summary>
+    /// The user's text is longer than the input limit, so nothing was sent.
+    /// </summary>
+    TooLong,
 }
 
 /// <summary>

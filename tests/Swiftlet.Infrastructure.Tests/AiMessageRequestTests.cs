@@ -197,6 +197,95 @@ public sealed class AiMessageRequestTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A rewrite sends only the given text between delimiters, and nothing of it is logged.
+    /// </summary>
+    /// <returns>A task that completes when the test finished.</returns>
+    [Fact]
+    public async Task Rewrite_Text_SendsItDelimitedWithoutLoggingIt()
+    {
+        _model.Pieces = ["private-answer"];
+
+        var parts = await StreamAsync(new RewriteTextQuery("private-draft", AiWritingAction.Formal));
+
+        parts.Should().Equal(new AiOutput(AiOutputKind.Text, "private-answer"));
+        var prompt = _model.Prompts.Should().ContainSingle().Subject;
+        prompt[0].Text.Should().Contain("formal");
+        prompt[1].Text.Should().StartWith("<draft-").And.Contain("private-draft").And.NotContain("private-body");
+        _log.Messages.Should().Contain(m => m.Contains("RewriteTextQuery", StringComparison.Ordinal))
+            .And.NotContain(m => m.Contains("private-", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A draft sends the replied message and the notes, each in its own delimiters.
+    /// </summary>
+    /// <returns>A task that completes when the test finished.</returns>
+    [Fact]
+    public async Task DraftReply_Notes_SendsMailAndNotesWithoutLoggingThem()
+    {
+        _model.Pieces = ["private-answer"];
+
+        await StreamAsync(new DraftReplyQuery(_message.AccountId, _message.Id, "private-notes"));
+
+        var content = _model.Prompts.Should().ContainSingle().Subject[1].Text;
+        content.Should().StartWith("<email-").And.Contain("private-body").And.Contain("<notes-").And.Contain("private-notes");
+        _log.Messages.Should().NotContain(m => m.Contains("private-", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A text of the user above the limit is refused instead of being cut, because the answer would replace it.
+    /// </summary>
+    /// <param name="draft">Whether a reply is drafted rather than a text rewritten.</param>
+    /// <returns>A task that completes when the test finished.</returns>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Writing_TextAboveTheLimit_SendsNothing(bool draft)
+    {
+        _settings.SetAi(_settings.Ai with { MaxInputCharacters = 3 });
+        IStreamQuery<AiOutput> query = draft
+            ? new DraftReplyQuery(_message.AccountId, _message.Id, "long notes")
+            : new RewriteTextQuery("long text", AiWritingAction.Polish);
+
+        var act = () => StreamAsync(query);
+
+        (await act.Should().ThrowAsync<AiException>()).Which.Failure.Should().Be(AiFailure.TooLong);
+        _model.Prompts.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Writing help sends nothing while AI is off.
+    /// </summary>
+    /// <returns>A task that completes when the test finished.</returns>
+    [Fact]
+    public async Task Rewrite_NotReady_SendsNothing()
+    {
+        _settings.SetAi(_settings.Ai with { IsEnabled = false });
+
+        var act = () => StreamAsync(new RewriteTextQuery("text", AiWritingAction.Polish));
+
+        (await act.Should().ThrowAsync<AiException>()).Which.Failure.Should().Be(AiFailure.NotConfigured);
+        _model.Prompts.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Runs a streamed request through Mediator.
+    /// </summary>
+    /// <param name="query">The request.</param>
+    /// <returns>The parts of the answer.</returns>
+    private async Task<List<AiOutput>> StreamAsync(IStreamQuery<AiOutput> query)
+    {
+        await using var scope = _services.CreateAsyncScope();
+        var parts = new List<AiOutput>();
+        await foreach (var part in scope.ServiceProvider.GetRequiredService<ISender>()
+            .CreateStream(query, TestContext.Current.CancellationToken))
+        {
+            parts.Add(part);
+        }
+
+        return parts;
+    }
+
+    /// <summary>
     /// Runs a summary request.
     /// </summary>
     /// <param name="fresh">Whether to ignore the kept answer.</param>

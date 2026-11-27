@@ -14,7 +14,14 @@ namespace Swiftlet.Application.Ai;
 public sealed record AiMailContent(string Text, string Tag, bool IsTruncated);
 
 /// <summary>
-/// Puts together what is sent about a message: subject, sender, date and plain-text body, nothing else.
+/// A text between delimiters.
+/// </summary>
+/// <param name="Text">The text with its delimiters.</param>
+/// <param name="Tag">The name of the delimiting tag.</param>
+public sealed record AiDelimitedText(string Text, string Tag);
+
+/// <summary>
+/// Puts together what is sent: for a message its subject, sender, date and plain-text body, nothing else.
 /// </summary>
 public static partial class AiContentBuilder
 {
@@ -22,6 +29,19 @@ public static partial class AiContentBuilder
     /// The largest number of characters of the subject and of the sender that are sent.
     /// </summary>
     private const int MaxHeaderLength = 500;
+
+    /// <summary>
+    /// Puts a text between delimiters with a random name, so the text cannot close them.
+    /// </summary>
+    /// <param name="kind">What the text is, the start of the tag name.</param>
+    /// <param name="text">The text.</param>
+    /// <returns>The delimited text.</returns>
+    public static AiDelimitedText Wrap(string kind, string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var tag = $"{kind}-{Guid.NewGuid():N}";
+        return new AiDelimitedText($"<{tag}>\n{text.ReplaceLineEndings("\n")}\n</{tag}>", tag);
+    }
 
     /// <summary>
     /// Prepares a message. The delimiting tag is random, so mail text cannot close it and pose as instructions.
