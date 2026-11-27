@@ -99,7 +99,7 @@
                     Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <TreeView.DataTemplates>
               <TreeDataTemplate DataType="main:AccountNodeViewModel" ItemsSource="{Binding Folders}">
-                <Grid Classes="node" ColumnDefinitions="Auto,*" Background="Transparent" ToolTip.Tip="{Binding DisplayName}">
+                <Grid Classes="node" ColumnDefinitions="Auto,*" Background="Transparent" ToolTip.Tip="{Binding Account.EmailAddress}">
                   <Grid.ContextMenu>
                     <ContextMenu>
                       <MenuItem Header="{loc:Loc Menu_Account_Delete}"

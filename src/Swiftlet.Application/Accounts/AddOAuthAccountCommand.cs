@@ -9,7 +9,7 @@ namespace Swiftlet.Application.Accounts;
 /// Adds an account after signing in with an OAuth 2.0 provider in the browser.
 /// </summary>
 /// <param name="Provider">The identity provider.</param>
-/// <param name="DisplayName">The display name; defaults to the name reported by the provider.</param>
+/// <param name="DisplayName">The name typed by the user; defaults to the name reported by the provider.</param>
 public sealed record AddOAuthAccountCommand(OAuthProvider Provider, string? DisplayName = null) : ICommand<Guid>;
 
 /// <summary>
@@ -43,8 +43,9 @@ public sealed class AddOAuthAccountCommandHandler(
         }
 
         var preset = ProviderPresets.For(command.Provider);
-        var displayName = !string.IsNullOrWhiteSpace(command.DisplayName)
-            ? command.DisplayName
+        var hasCustomName = !string.IsNullOrWhiteSpace(command.DisplayName);
+        var displayName = hasCustomName
+            ? command.DisplayName!
             : !string.IsNullOrWhiteSpace(authorization.DisplayName) ? authorization.DisplayName : email[..email.IndexOf('@')];
         var account = MailAccount.Create(
             displayName,
@@ -53,7 +54,8 @@ public sealed class AddOAuthAccountCommandHandler(
             preset.Imap,
             preset.Smtp,
             timeProvider.GetUtcNow(),
-            command.Provider);
+            command.Provider,
+            hasCustomName);
 
         await OAuthTokenStorage.SaveAsync(secrets, account.Id, authorization.Tokens, cancellationToken);
         try

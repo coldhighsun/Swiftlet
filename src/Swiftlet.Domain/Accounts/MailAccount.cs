@@ -11,9 +11,15 @@ public sealed class MailAccount
     public Guid Id { get; private set; } = Guid.NewGuid();
 
     /// <summary>
-    /// Gets the display name shown in the UI.
+    /// Gets the name used as the sender of outgoing mail.
     /// </summary>
     public string DisplayName { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// Gets a value indicating whether the user typed <see cref="DisplayName"/>, rather than it being filled in from the
+    /// address or the identity provider. Only a typed name replaces the address in the folder tree.
+    /// </summary>
+    public bool HasCustomDisplayName { get; private set; }
 
     /// <summary>
     /// Gets the email address of the account.
@@ -67,6 +73,7 @@ public sealed class MailAccount
     /// <param name="smtp">The SMTP server settings.</param>
     /// <param name="now">The creation time.</param>
     /// <param name="oauthProvider">The token issuer; required when <paramref name="authMethod"/> is OAuth 2.0.</param>
+    /// <param name="hasCustomDisplayName">Whether the user typed <paramref name="displayName"/>.</param>
     /// <returns>The created account.</returns>
     public static MailAccount Create(
         string displayName,
@@ -75,7 +82,8 @@ public sealed class MailAccount
         ServerEndpoint imap,
         ServerEndpoint smtp,
         DateTimeOffset now,
-        OAuthProvider? oauthProvider = null)
+        OAuthProvider? oauthProvider = null,
+        bool hasCustomDisplayName = false)
     {
         if (authMethod == AuthMethod.OAuth2 && oauthProvider is null)
         {
@@ -97,6 +105,7 @@ public sealed class MailAccount
         return new MailAccount
         {
             DisplayName = displayName.Trim(),
+            HasCustomDisplayName = hasCustomDisplayName,
             EmailAddress = trimmed,
             AuthMethod = authMethod,
             OAuthProvider = authMethod == AuthMethod.OAuth2 ? oauthProvider : null,

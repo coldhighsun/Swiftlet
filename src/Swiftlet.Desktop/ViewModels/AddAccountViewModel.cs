@@ -158,9 +158,8 @@ public sealed partial class AddAccountViewModel : ObservableObject
         try
         {
             var email = Email.Trim();
-            var name = string.IsNullOrWhiteSpace(DisplayName) ? email[..email.IndexOf('@')] : DisplayName.Trim();
             var command = new AddAccountCommand(
-                name,
+                DisplayName.Trim(),
                 email,
                 Password,
                 new ServerEndpoint(ImapHost.Trim(), imapPort, ImapUseSsl),
@@ -223,7 +222,8 @@ public sealed partial class AddAccountViewModel : ObservableObject
         _signInCancellation = cancellation;
         try
         {
-            await _dispatcher.SendAsync(new AddOAuthAccountCommand(provider), cancellation.Token);
+            var name = string.IsNullOrWhiteSpace(DisplayName) ? null : DisplayName.Trim();
+            await _dispatcher.SendAsync(new AddOAuthAccountCommand(provider, name), cancellation.Token);
             CloseRequested?.Invoke(this, true);
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)

@@ -38,6 +38,31 @@ public class AccountAndSendCommandTests
     }
 
     /// <summary>
+    /// Verifies only a typed name is marked as the user's own, and a blank one falls back to the local part.
+    /// </summary>
+    /// <param name="typed">The name sent with the command.</param>
+    /// <param name="expected">The stored name.</param>
+    /// <param name="custom">Whether the stored name counts as typed by the user.</param>
+    [Theory]
+    [InlineData("Work", "Work", true)]
+    [InlineData("", "me", false)]
+    [InlineData("   ", "me", false)]
+    public async Task AddAccount_DisplayName_RemembersWhetherItWasTyped(string typed, string expected, bool custom)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var handler = new AddAccountCommandHandler(
+            db.CreateAccountRepository(), new InMemorySecretStore(), new FakeImapSessionFactory(), TimeProvider.System);
+
+        var id = await handler.Handle(new AddAccountCommand(typed, "me@gmail.com", "pw"), ct);
+
+        await using var verify = db.CreateVerifier();
+        var saved = await verify.Accounts().GetAsync(id, ct);
+        saved!.DisplayName.Should().Be(expected);
+        saved.HasCustomDisplayName.Should().Be(custom);
+    }
+
+    /// <summary>
     /// Verifies an unknown provider requires explicit server settings.
     /// </summary>
     [Fact]

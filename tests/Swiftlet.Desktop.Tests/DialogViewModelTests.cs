@@ -82,7 +82,7 @@ public class DialogViewModelTests
 
         closed.Should().BeTrue();
         var command = dispatcher.Sent<AddAccountCommand>().Should().ContainSingle().Subject;
-        command.DisplayName.Should().Be("me");
+        command.DisplayName.Should().BeEmpty("the handler fills in a name and knows that none was typed");
         command.Imap!.Host.Should().Be("imap.gmail.com");
         command.Smtp!.Port.Should().Be(465);
         command.Password.Should().Be("secret");

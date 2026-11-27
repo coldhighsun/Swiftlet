@@ -39,6 +39,7 @@ public class AddOAuthAccountTests
         saved!.AuthMethod.Should().Be(AuthMethod.OAuth2);
         saved.OAuthProvider.Should().Be(OAuthProvider.Google);
         saved.DisplayName.Should().Be("Me Myself");
+        saved.HasCustomDisplayName.Should().BeFalse();
         saved.Imap.Host.Should().Be("imap.gmail.com");
         (await OAuthTokenStorage.LoadAsync(secrets, id, ct)).Should().Be(SignedIn.Tokens);
         authorizer.Requested.Should().Equal(OAuthProvider.Google);
@@ -62,6 +63,7 @@ public class AddOAuthAccountTests
         var saved = await db.CreateAccountRepository().GetAsync(id, ct);
         saved!.OAuthProvider.Should().Be(OAuthProvider.Microsoft);
         saved.DisplayName.Should().Be("Work");
+        saved.HasCustomDisplayName.Should().BeTrue();
         saved.Imap.Host.Should().Be("outlook.office365.com");
         saved.Smtp.Port.Should().Be(587);
     }

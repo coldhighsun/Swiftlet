@@ -21,14 +21,14 @@ public sealed class AccountNodeViewModel(MailAccount account)
     public MailAccount Account { get; } = account;
 
     /// <summary>
-    /// Gets the text shown in the tree.
+    /// Gets the text shown in the tree: the name the user gave the account, otherwise its address.
     /// </summary>
-    public string DisplayName => Account.EmailAddress;
+    public string DisplayName => Account.HasCustomDisplayName ? Account.DisplayName : Account.EmailAddress;
 
     /// <summary>
-    /// Gets the initial shown in the account's avatar; taken from the address, which is what the tree shows.
+    /// Gets the initial shown in the account's avatar; taken from the text the tree shows.
     /// </summary>
-    public string Initial => Avatar.Initial(null, Account.EmailAddress);
+    public string Initial => Avatar.Initial(DisplayName, Account.EmailAddress);
 
     /// <summary>
     /// Gets the avatar color; created on first use so view models stay creatable off the UI thread.

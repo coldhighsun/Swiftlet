@@ -36,6 +36,25 @@ public class SignInViewModelTests
     }
 
     /// <summary>
+    /// Verifies the browser sign-in passes a typed name on, and none when the field is blank.
+    /// </summary>
+    /// <param name="typed">The content of the name field.</param>
+    /// <param name="expected">The name sent with the command.</param>
+    [Theory]
+    [InlineData("  Work  ", "Work")]
+    [InlineData("   ", null)]
+    public async Task SignInCommand_DisplayName_IsSentOnlyWhenTyped(string typed, string? expected)
+    {
+        var dispatcher = new FakeDispatcher();
+        dispatcher.On<AddOAuthAccountCommand>(_ => Guid.NewGuid());
+        var viewModel = new AddAccountViewModel(dispatcher, TestLocalizer.Chinese()) { DisplayName = typed };
+
+        await viewModel.SignInWithGoogleCommand.ExecuteAsync(null);
+
+        dispatcher.Sent<AddOAuthAccountCommand>().Should().ContainSingle().Which.DisplayName.Should().Be(expected);
+    }
+
+    /// <summary>
     /// Verifies a missing client id is explained in the current language and keeps the dialog open.
     /// </summary>
     [Fact]

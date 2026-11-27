@@ -8,7 +8,7 @@ namespace Swiftlet.Application.Accounts;
 /// <summary>
 /// Adds a password-authenticated IMAP/SMTP account after verifying the IMAP login.
 /// </summary>
-/// <param name="DisplayName">The display name.</param>
+/// <param name="DisplayName">The name typed by the user; blank to use the local part of the address.</param>
 /// <param name="EmailAddress">The email address, also used as the login name.</param>
 /// <param name="Password">The password or app-specific password.</param>
 /// <param name="Imap">The IMAP endpoint; omitted to use the provider preset.</param>
@@ -63,13 +63,15 @@ public sealed class AddAccountCommandHandler(
             throw new InvalidOperationException($"Account {email} already exists.");
         }
 
+        var hasCustomName = !string.IsNullOrWhiteSpace(command.DisplayName);
         var account = MailAccount.Create(
-            command.DisplayName,
+            hasCustomName ? command.DisplayName : email.Split('@')[0],
             email,
             AuthMethod.Password,
             imap,
             smtp,
-            timeProvider.GetUtcNow());
+            timeProvider.GetUtcNow(),
+            hasCustomDisplayName: hasCustomName);
 
         var key = AccountSecrets.PasswordKey(account.Id);
         await secrets.SetAsync(key, command.Password, cancellationToken);

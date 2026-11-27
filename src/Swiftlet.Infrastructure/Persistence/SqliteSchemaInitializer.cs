@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using Swiftlet.Domain.Accounts;
 
 namespace Swiftlet.Infrastructure.Persistence;
 
@@ -69,6 +70,41 @@ public static class SqliteSchemaInitializer
 
         // EnsureCreated leaves an existing database untouched, so tables added later are created here (idempotent).
         await context.Database.ExecuteSqlRawAsync(RemoteImageRulesTable, cancellationToken);
+        await EnsureCustomDisplayNameColumnAsync(context, cancellationToken);
+    }
+
+    /// <summary>
+    /// Adds the <c>HasCustomDisplayName</c> column to an Accounts table created by an earlier version; does nothing when it
+    /// exists. Those versions filled a missing name of a password account with the local part of the address, so any other
+    /// name was typed by the user. Their OAuth sign-in never passed a typed name on.
+    /// </summary>
+    /// <param name="context">The global database context.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the column exists.</returns>
+    private static async Task EnsureCustomDisplayNameColumnAsync(GlobalDbContext context, CancellationToken cancellationToken)
+    {
+        var existing = await context.Database
+            .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM pragma_table_info('Accounts') WHERE name = 'HasCustomDisplayName'")
+            .SingleAsync(cancellationToken);
+        if (existing > 0)
+        {
+            return;
+        }
+
+        // One transaction: the names are classified exactly when the column appears.
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        await context.Database.ExecuteSqlRawAsync(
+            "ALTER TABLE Accounts ADD COLUMN HasCustomDisplayName INTEGER NOT NULL DEFAULT 0;",
+            cancellationToken);
+        var password = (int)AuthMethod.Password;
+        await context.Database.ExecuteSqlAsync(
+            $"""
+            UPDATE Accounts SET HasCustomDisplayName = 1
+            WHERE AuthMethod = {password}
+                AND DisplayName <> substr(EmailAddress, 1, instr(EmailAddress, '@') - 1);
+            """,
+            cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     /// <summary>

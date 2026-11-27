@@ -2,6 +2,7 @@ using AwesomeAssertions;
 using Avalonia.Media;
 using Swiftlet.Desktop.Formatting;
 using Swiftlet.Desktop.ViewModels.Main;
+using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Folders;
 using Swiftlet.Domain.Messages;
 
@@ -181,13 +182,39 @@ public class PresentationTests
             () =>
             {
                 var node = new AccountNodeViewModel(TestData.Account("zed@example.com"));
-                node.Initial.Should().Be("Z", "the tree shows the address, and display names often repeat across accounts");
+                node.Initial.Should().Be("Z", "the tree shows the address when the user gave the account no name");
                 ((ISolidColorBrush)node.AvatarBrush).Color.Should().Be(Color.Parse(Avatar.Color("zed@example.com")));
 
                 var chip = new LabelChipViewModel("Work", "#E53935");
                 ((ISolidColorBrush)chip.TintBrush).Color.Should().Be(Color.Parse("#26E53935"));
             },
             TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the tree shows a name the user typed, and the address instead of one that was filled in.
+    /// </summary>
+    /// <param name="custom">Whether the user typed the name.</param>
+    /// <param name="expected">The text shown in the tree.</param>
+    /// <param name="initial">The avatar initial.</param>
+    [Theory]
+    [InlineData(true, "Work", "W")]
+    [InlineData(false, "zed@example.com", "Z")]
+    public void AccountNode_DisplayName_PrefersTheTypedName(bool custom, string expected, string initial)
+    {
+        var account = MailAccount.Create(
+            "Work",
+            "zed@example.com",
+            AuthMethod.Password,
+            new ServerEndpoint("imap.example.com", 993, true),
+            new ServerEndpoint("smtp.example.com", 465, true),
+            DateTimeOffset.UtcNow,
+            hasCustomDisplayName: custom);
+
+        var node = new AccountNodeViewModel(account);
+
+        node.DisplayName.Should().Be(expected);
+        node.Initial.Should().Be(initial);
     }
 
     /// <summary>

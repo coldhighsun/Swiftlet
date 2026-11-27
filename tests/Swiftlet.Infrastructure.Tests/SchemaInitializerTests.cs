@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Swiftlet.Domain.Accounts;
 using Swiftlet.Infrastructure.Persistence;
 
 namespace Swiftlet.Infrastructure.Tests;
@@ -143,7 +144,8 @@ public class SchemaInitializerTests
         await connection.OpenAsync(ct);
         await using (var setup = connection.CreateCommand())
         {
-            setup.CommandText = "CREATE TABLE Accounts (Id TEXT NOT NULL PRIMARY KEY);";
+            setup.CommandText =
+                "CREATE TABLE Accounts (Id TEXT NOT NULL PRIMARY KEY, DisplayName TEXT, EmailAddress TEXT, AuthMethod INTEGER);";
             await setup.ExecuteNonQueryAsync(ct);
         }
 
@@ -160,6 +162,42 @@ public class SchemaInitializerTests
 
         var rows = await context.Database.SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM RemoteImageRules").SingleAsync(ct);
         rows.Should().Be(1);
+    }
+
+    /// <summary>
+    /// Verifies accounts of an earlier version count as named by the user only for a password account whose name is not
+    /// the local part of its address, and that a second run leaves the marks alone.
+    /// </summary>
+    [Fact]
+    public async Task InitializeGlobal_AccountsWithoutCustomNameColumn_MarksOnlyTypedNames()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var connection = new SqliteConnection("DataSource=:memory:");
+        await connection.OpenAsync(ct);
+        await using (var setup = connection.CreateCommand())
+        {
+            setup.CommandText = string.Create(
+                System.Globalization.CultureInfo.InvariantCulture,
+                $"""
+                CREATE TABLE Accounts (Id TEXT NOT NULL PRIMARY KEY, DisplayName TEXT, EmailAddress TEXT, AuthMethod INTEGER);
+                INSERT INTO Accounts VALUES ('typed', 'Work', 'me@example.com', {(int)AuthMethod.Password});
+                INSERT INTO Accounts VALUES ('filled', 'me', 'me@example.org', {(int)AuthMethod.Password});
+                INSERT INTO Accounts VALUES ('oauth', 'Me Myself', 'me@gmail.com', {(int)AuthMethod.OAuth2});
+                """);
+            await setup.ExecuteNonQueryAsync(ct);
+        }
+
+        var options = new DbContextOptionsBuilder<GlobalDbContext>().UseSqlite(connection).Options;
+        await using var context = new GlobalDbContext(options);
+
+        await SqliteSchemaInitializer.InitializeGlobalAsync(context, ct);
+        await context.Database.ExecuteSqlRawAsync("UPDATE Accounts SET DisplayName = 'Other' WHERE Id = 'filled'", ct);
+        await SqliteSchemaInitializer.InitializeGlobalAsync(context, ct);
+
+        var marked = await context.Database
+            .SqlQueryRaw<string>("SELECT Id AS Value FROM Accounts WHERE HasCustomDisplayName = 1")
+            .ToListAsync(ct);
+        marked.Should().Equal("typed");
     }
 
     /// <summary>
