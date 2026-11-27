@@ -146,6 +146,21 @@ internal sealed class FakeDialogService : IDialogService
     public int AddAccountCalls { get; private set; }
 
     /// <summary>
+    /// Gets or sets the result of the account settings dialog.
+    /// </summary>
+    public Swiftlet.Application.Accounts.UpdateAccountResult? EditAccountResult { get; set; }
+
+    /// <summary>
+    /// Gets or sets an action run when the account settings dialog is shown (for example to change the stored account).
+    /// </summary>
+    public Action? OnEditAccount { get; set; }
+
+    /// <summary>
+    /// Gets the accounts the settings dialog was shown for.
+    /// </summary>
+    public List<MailAccount> EditedAccounts { get; } = [];
+
+    /// <summary>
     /// Gets the compose requests received.
     /// </summary>
     public List<ComposeRequest> ComposeRequests { get; } = [];
@@ -198,6 +213,14 @@ internal sealed class FakeDialogService : IDialogService
         AddAccountCalls++;
         OnAddAccount?.Invoke();
         return Task.FromResult(AddAccountResult);
+    }
+
+    /// <inheritdoc />
+    public Task<Swiftlet.Application.Accounts.UpdateAccountResult?> ShowEditAccountAsync(MailAccount account)
+    {
+        EditedAccounts.Add(account);
+        OnEditAccount?.Invoke();
+        return Task.FromResult(EditAccountResult);
     }
 
     /// <summary>

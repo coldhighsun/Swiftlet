@@ -960,6 +960,32 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Opens the settings dialog of an account and synchronizes the account if its server or password changed.
+    /// </summary>
+    /// <param name="node">The account node the menu was opened on.</param>
+    /// <returns>A task that completes when the dialog was closed and the follow-up sync is done.</returns>
+    [RelayCommand]
+    private async Task EditAccountAsync(AccountNodeViewModel? node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        var id = node.Account.Id;
+        var result = await _dialogs.ShowEditAccountAsync(node.Account);
+
+        // Reload even after a cancel: closing the dialog can race with a save that was already being written.
+        await GuardedAsync("Error_LoadAccounts", ReloadAccountsAsync);
+        if (result is null || _accounts.FirstOrDefault(a => a.Id == id) is not { } account)
+        {
+            return;
+        }
+
+        StatusText = _localizer.Format("Status_AccountUpdated", account.EmailAddress);
+        if (result.ConnectionChanged)
+        {
+            await SyncAccountsAsync([account]);
+        }
+    }
+
+    /// <summary>
     /// Signs an OAuth account in again in the browser, then synchronizes it.
     /// </summary>
     /// <param name="node">The account node the menu was opened on.</param>
@@ -1459,6 +1485,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 node = new AccountNodeViewModel(account);
                 TreeRoots.Insert(1 + Accounts.Count, node);
                 Accounts.Add(node);
+            }
+            else
+            {
+                // The newest read wins, also when this reload started before a newer one.
+                node.Update(_accounts.FirstOrDefault(a => a.Id == account.Id) ?? account);
             }
 
             var folders = await _dispatcher.SendAsync(new GetFoldersQuery(account.Id));

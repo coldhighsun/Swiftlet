@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Swiftlet.Application.Accounts;
 using Swiftlet.Desktop.Html;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.ViewModels;
@@ -65,6 +66,25 @@ public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogSe
         var window = new AddAccountWindow { DataContext = viewModel };
         viewModel.CloseRequested += (_, added) => window.Close(added);
         return await window.ShowDialog<bool>(owner);
+    }
+
+    /// <inheritdoc />
+    public async Task<UpdateAccountResult?> ShowEditAccountAsync(MailAccount account)
+    {
+        var owner = ActiveWindow;
+        if (owner is null)
+        {
+            return null;
+        }
+
+        var viewModel = services.GetRequiredService<EditAccountViewModel>();
+        viewModel.Load(account);
+        var window = new EditAccountWindow { DataContext = viewModel };
+        viewModel.CloseRequested += (_, result) => window.Close(result);
+
+        // Closing through the title bar must stop a running verification just like the Cancel button.
+        window.Closed += (_, _) => viewModel.CancelPendingSave();
+        return await window.ShowDialog<UpdateAccountResult?>(owner);
     }
 
     /// <inheritdoc />

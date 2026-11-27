@@ -57,9 +57,11 @@
   <data name="Error_Reauthenticate" xml:space="preserve"><value>重新登录失败</value></data>
   <data name="Menu_Account_Delete" xml:space="preserve"><value>移除账号</value></data>
   <data name="Menu_Account_Reauthenticate" xml:space="preserve"><value>重新登录</value></data>
+  <data name="Menu_Account_Settings" xml:space="preserve"><value>账号设置…</value></data>
   <data name="Confirm_DeleteAccount_Title" xml:space="preserve"><value>移除账号</value></data>
   <data name="Confirm_DeleteAccount_Text" xml:space="preserve"><value>将从 Swiftlet 中移除账号 {0}，以及本地缓存的邮件、文件夹和已保存的登录信息。&#10;服务器上的邮箱不受影响，邮件仍保留在服务器上。&#10;是否继续？</value></data>
   <data name="Status_AccountDeleted" xml:space="preserve"><value>已移除账号 {0}</value></data>
+  <data name="Status_AccountUpdated" xml:space="preserve"><value>已保存 {0} 的设置</value></data>
   <data name="Status_Reauthenticating" xml:space="preserve"><value>正在浏览器中等待 {0} 登录…</value></data>
   <data name="Status_ReauthenticationRequired" xml:space="preserve"><value>{0} 需要重新登录：请在文件夹列表中右键点击该账号，选择“重新登录”</value></data>
 
@@ -107,6 +109,17 @@
   <data name="AddAccount_OAuthNotConfigured" xml:space="preserve"><value>尚未配置 {0} 登录。{1}</value></data>
   <data name="AddAccount_SignInFailed" xml:space="preserve"><value>登录失败：{0}</value></data>
   <data name="AddAccount_HintUnknown" xml:space="preserve"><value>未识别的邮箱服务商，请填写服务器设置。</value></data>
+  <data name="EditAccount_Title" xml:space="preserve"><value>账号设置</value></data>
+  <data name="EditAccount_DisplayName" xml:space="preserve"><value>显示名称</value></data>
+  <data name="EditAccount_SyncInterval" xml:space="preserve"><value>同步间隔</value></data>
+  <data name="EditAccount_SyncIntervalHint" xml:space="preserve"><value>服务器支持推送时，收件箱的新邮件通常即时到达；其他情况按此间隔同步。</value></data>
+  <data name="EditAccount_IntervalOneMinute" xml:space="preserve"><value>每 1 分钟</value></data>
+  <data name="EditAccount_IntervalMinutes" xml:space="preserve"><value>每 {0} 分钟</value></data>
+  <data name="EditAccount_NewPassword" xml:space="preserve"><value>新密码或授权码（留空保持不变）</value></data>
+  <data name="EditAccount_OAuthHint" xml:space="preserve"><value>此账号通过浏览器登录，服务器设置固定。登录出现问题时，请右键账号选择“重新登录”。</value></data>
+  <data name="EditAccount_PortInvalid" xml:space="preserve"><value>端口必须是 1 到 65535 之间的数字</value></data>
+  <data name="EditAccount_Save" xml:space="preserve"><value>保存</value></data>
+  <data name="EditAccount_SaveFailed" xml:space="preserve"><value>设置未保存：{0}</value></data>
 
   <data name="Compose_TitleNew" xml:space="preserve"><value>写邮件</value></data>
   <data name="Compose_TitleReply" xml:space="preserve"><value>回复</value></data>

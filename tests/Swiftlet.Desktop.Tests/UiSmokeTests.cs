@@ -426,6 +426,33 @@ public class UiSmokeTests
             TestContext.Current.CancellationToken);
     }
 
+    [Theory]
+    [InlineData("en", false, "Save")]
+    [InlineData("zh-Hans", false, "保存")]
+    [InlineData("en", true, "Save")]
+    [InlineData("zh-Hans", true, "保存")]
+    public async Task EditAccountWindow_ShowsServerSettingsOnlyForPasswordAccounts(string language, bool oauth, string save)
+    {
+        await Session.Dispatch(
+            () =>
+            {
+                var localizer = language == "en" ? TestLocalizer.English() : TestLocalizer.Chinese();
+                LocalizationManager.Instance.SetPreference(language);
+                var viewModel = new EditAccountViewModel(new FakeDispatcher(), localizer);
+                viewModel.Load(oauth ? TestData.OAuthAccount() : TestData.Account());
+                var window = new EditAccountWindow { DataContext = viewModel };
+                Render(window, $"edit-account-{(oauth ? "oauth" : "password")}-{language}", language);
+
+                var visible = window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible).Select(t => t.Text).ToList();
+                visible.Should().Contain(viewModel.Email);
+                visible.Contains("IMAP").Should().Be(!oauth);
+                window.GetVisualDescendants().OfType<TextBox>().Count(t => t.IsEffectivelyVisible).Should().Be(oauth ? 1 : 6);
+                window.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).Should().Contain(save);
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
     /// <summary>
     /// Verifies the compose window renders a reply with its fields filled.
     /// </summary>
@@ -731,7 +758,7 @@ public class UiSmokeTests
     /// Verifies account nodes carry a context menu whose commands reach the window view model, offering re-sign-in for OAuth accounts only.
     /// </summary>
     [Fact]
-    public async Task MainWindow_AccountNodeContextMenu_OffersDeleteAndOAuthOnlyReauthenticate()
+    public async Task MainWindow_AccountNodeContextMenu_OffersSettingsDeleteAndOAuthOnlyReauthenticate()
     {
         await DispatchAsync(
             async () =>
@@ -747,13 +774,13 @@ public class UiSmokeTests
                 Render(window, "main-window-account-menu", "en");
 
                 var passwordMenu = OpenAccountMenu(window, scenario.ViewModel.Accounts[0]);
-                passwordMenu.Items.OfType<MenuItem>().Where(i => i.IsVisible).Select(i => i.Header).Should().Equal("Remove account");
+                passwordMenu.Items.OfType<MenuItem>().Where(i => i.IsVisible).Select(i => i.Header).Should().Equal("Account settings…", "Remove account");
                 passwordMenu.Close();
                 var oauthMenu = OpenAccountMenu(window, scenario.ViewModel.Accounts[1]);
                 var items = oauthMenu.Items.OfType<MenuItem>().Where(i => i.IsVisible).ToList();
-                items.Select(i => i.Header).Should().Equal("Remove account", "Re-sign in");
+                items.Select(i => i.Header).Should().Equal("Account settings…", "Remove account", "Re-sign in");
                 items.Should().OnlyContain(i => i.Command != null && i.CommandParameter != null);
-                items[1].Command!.Execute(items[1].CommandParameter);
+                items[2].Command!.Execute(items[2].CommandParameter);
                 await scenario.ViewModel.WhenIdleAsync();
 
                 scenario.Dispatcher.Sent<Swiftlet.Application.Accounts.ReauthenticateOAuthAccountCommand>()
@@ -1316,6 +1343,8 @@ public class UiSmokeTests
                 var startup = new StartupViewModel(
                     protection, localizer, new FakeDialogService(), new FakeUiThread(), _ => Task.FromResult<string?>(null));
                 await startup.RunCommand.ExecuteAsync(null);
+                var editAccount = new EditAccountViewModel(new FakeDispatcher(), localizer);
+                editAccount.Load(account);
                 var application = Avalonia.Application.Current!;
                 application.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark;
                 try
@@ -1325,6 +1354,7 @@ public class UiSmokeTests
                         ("main", new MainWindow { DataContext = scenario.ViewModel }),
                         ("compose", new ComposeWindow { DataContext = compose }),
                         ("add-account", new AddAccountWindow { DataContext = new AddAccountViewModel(new FakeDispatcher(), localizer) { Email = "me@corp.example", Password = "x" } }),
+                        ("edit-account", new EditAccountWindow { DataContext = editAccount }),
                         ("settings", new SettingsWindow { DataContext = new SettingsViewModel(new FakeAppSettings(), localizer, new FakeRemoteImageRules()) }),
                         ("labels", new LabelManagerWindow { DataContext = labels }),
                         ("startup", new StartupWindow { DataContext = startup }),

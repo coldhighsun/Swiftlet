@@ -36,7 +36,7 @@ public sealed partial class AccountNodeViewModel(MailAccount account) : Observab
     /// <summary>
     /// Gets the account.
     /// </summary>
-    public MailAccount Account { get; } = account;
+    public MailAccount Account { get; private set; } = account;
 
     /// <summary>
     /// Gets the text shown in the tree: the name the user gave the account, otherwise its address.
@@ -62,6 +62,19 @@ public sealed partial class AccountNodeViewModel(MailAccount account) : Observab
     /// Gets the folders of the account.
     /// </summary>
     public ObservableCollection<FolderNodeViewModel> Folders { get; } = [];
+
+    /// <summary>
+    /// Replaces the account with a newer read of the same account, so changed settings show in the tree.
+    /// </summary>
+    /// <param name="updated">The account as currently stored.</param>
+    public void Update(MailAccount updated)
+    {
+        ArgumentNullException.ThrowIfNull(updated);
+        Account = updated;
+        OnPropertyChanged(nameof(Account));
+        OnPropertyChanged(nameof(DisplayName));
+        OnPropertyChanged(nameof(Initial));
+    }
 }
 
 /// <summary>

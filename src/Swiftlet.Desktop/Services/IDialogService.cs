@@ -1,3 +1,4 @@
+using Swiftlet.Application.Accounts;
 using Swiftlet.Domain.Accounts;
 
 namespace Swiftlet.Desktop.Services;
@@ -59,6 +60,13 @@ public interface IDialogService
     /// </summary>
     /// <returns><see langword="true"/> if an account was added.</returns>
     Task<bool> ShowAddAccountAsync();
+
+    /// <summary>
+    /// Shows the settings dialog of an account.
+    /// </summary>
+    /// <param name="account">The account to edit.</param>
+    /// <returns>What was saved, or <see langword="null"/> if the dialog was cancelled.</returns>
+    Task<UpdateAccountResult?> ShowEditAccountAsync(MailAccount account);
 
     /// <summary>
     /// Shows the settings dialog.

@@ -535,6 +535,47 @@ public class MainWindowViewModelTests
         scenario.Dispatcher.Sent<GetAccountsQuery>().Count.Should().Be(before);
     }
 
+    [Theory]
+    [InlineData(true, 1)]
+    [InlineData(false, 0)]
+    public async Task EditAccount_Saved_UpdatesTheNodeAndSyncsOnlyForConnectionChanges(bool connectionChanged, int syncs)
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        var node = scenario.ViewModel.Accounts[0];
+        var changed = new List<string?>();
+        node.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+        scenario.Dialogs.EditAccountResult = new UpdateAccountResult(connectionChanged);
+        scenario.Dialogs.OnEditAccount = () => scenario.Account.ChangeDisplayName("Work");
+        var before = scenario.Dispatcher.Sent<SyncAccountCommand>().Count;
+
+        await scenario.ViewModel.EditAccountCommand.ExecuteAsync(node);
+
+        scenario.Dialogs.EditedAccounts.Should().ContainSingle().Which.Id.Should().Be(scenario.Account.Id);
+        scenario.ViewModel.Accounts.Should().ContainSingle().Which.Should().BeSameAs(node);
+        node.DisplayName.Should().Be("Work");
+        node.Initial.Should().Be("W");
+        changed.Should().Contain(["Account", "DisplayName", "Initial"]);
+        (scenario.Dispatcher.Sent<SyncAccountCommand>().Count - before).Should().Be(syncs);
+        if (!connectionChanged)
+        {
+            scenario.ViewModel.StatusText.Should().Contain("已保存").And.Contain(scenario.Account.EmailAddress);
+        }
+    }
+
+    [Fact]
+    public async Task EditAccount_Cancelled_DoesNotSyncOrReportSaving()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        var before = scenario.Dispatcher.Sent<SyncAccountCommand>().Count;
+
+        await scenario.ViewModel.EditAccountCommand.ExecuteAsync(scenario.ViewModel.Accounts[0]);
+
+        scenario.Dispatcher.Sent<SyncAccountCommand>().Count.Should().Be(before);
+        scenario.ViewModel.StatusText.Should().NotContain("已保存");
+    }
+
     /// <summary>
     /// Verifies the add-account dialog opens when no account exists.
     /// </summary>

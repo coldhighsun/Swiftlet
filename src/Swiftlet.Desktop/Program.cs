@@ -76,6 +76,7 @@ internal static class Program
         builder.Services.AddSingleton(sp => new HtmlPreviewStore(Path.GetTempPath(), sp.GetService<ILogger<HtmlPreviewStore>>()));
         builder.Services.AddSingleton<MainWindowViewModel>();
         builder.Services.AddTransient<AddAccountViewModel>();
+        builder.Services.AddTransient<EditAccountViewModel>();
         builder.Services.AddTransient<LabelManagerViewModel>();
         builder.Services.AddTransient<SettingsViewModel>();
         builder.Services.ConfigureHostShutdown();

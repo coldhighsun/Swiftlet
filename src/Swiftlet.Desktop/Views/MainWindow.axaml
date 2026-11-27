@@ -107,6 +107,9 @@
                 <Grid Classes="node" ColumnDefinitions="Auto,*" Background="Transparent" ToolTip.Tip="{Binding Account.EmailAddress}">
                   <Grid.ContextMenu>
                     <ContextMenu>
+                      <MenuItem Header="{loc:Loc Menu_Account_Settings}"
+                                Command="{Binding $parent[TreeView].((main:MainWindowViewModel)DataContext).EditAccountCommand}"
+                                CommandParameter="{Binding}" />
                       <MenuItem Header="{loc:Loc Menu_Account_Delete}"
                                 Command="{Binding $parent[TreeView].((main:MainWindowViewModel)DataContext).DeleteAccountCommand}"
                                 CommandParameter="{Binding}" />

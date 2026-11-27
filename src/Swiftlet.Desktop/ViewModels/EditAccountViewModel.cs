@@ -1,0 +1,303 @@
+using System.ComponentModel;
+using System.Globalization;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Swiftlet.Application.Accounts;
+using Swiftlet.Desktop.Localization;
+using Swiftlet.Desktop.Services;
+using Swiftlet.Domain.Accounts;
+
+namespace Swiftlet.Desktop.ViewModels;
+
+/// <summary>
+/// A selectable synchronization interval.
+/// </summary>
+/// <param name="Interval">The interval.</param>
+/// <param name="Text">The text shown in the list.</param>
+public sealed record SyncIntervalOption(TimeSpan Interval, string Text);
+
+/// <summary>
+/// The view model of the account settings dialog. <see cref="Load"/> must be called before the dialog is shown.
+/// </summary>
+public sealed partial class EditAccountViewModel : ObservableObject
+{
+    /// <summary>
+    /// The intervals offered in the list, in minutes.
+    /// </summary>
+    private static readonly int[] IntervalMinutes = [1, 2, 5, 10, 15, 30, 60];
+
+    /// <summary>
+    /// The request dispatcher.
+    /// </summary>
+    private readonly IRequestDispatcher _dispatcher;
+
+    /// <summary>
+    /// The localizer.
+    /// </summary>
+    private readonly ILocalizer _localizer;
+
+    /// <summary>
+    /// The identifier of the edited account.
+    /// </summary>
+    private Guid _accountId;
+
+    /// <summary>
+    /// Cancels the pending save, if any.
+    /// </summary>
+    private CancellationTokenSource? _saveCancellation;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="EditAccountViewModel"/> class.
+    /// </summary>
+    /// <param name="dispatcher">The request dispatcher.</param>
+    /// <param name="localizer">The localizer.</param>
+    public EditAccountViewModel(IRequestDispatcher dispatcher, ILocalizer localizer)
+    {
+        _dispatcher = dispatcher;
+        _localizer = localizer;
+        Email = string.Empty;
+        DisplayName = string.Empty;
+        DisplayNamePlaceholder = string.Empty;
+        IntervalOptions = [];
+        Password = string.Empty;
+        ImapHost = string.Empty;
+        ImapPort = string.Empty;
+        SmtpHost = string.Empty;
+        SmtpPort = string.Empty;
+        ErrorMessage = string.Empty;
+    }
+
+    /// <summary>
+    /// Raised when the dialog should close; the argument is <see langword="null"/> if nothing was saved.
+    /// </summary>
+    public event EventHandler<UpdateAccountResult?>? CloseRequested;
+
+    /// <summary>
+    /// Gets or sets the address of the account, which cannot be changed.
+    /// </summary>
+    [ObservableProperty]
+    public partial string Email { get; set; }
+
+    /// <summary>
+    /// Gets or sets the name typed by the user; empty if the account has none.
+    /// </summary>
+    [ObservableProperty]
+    public partial string DisplayName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the sender name used while the name box is empty.
+    /// </summary>
+    [ObservableProperty]
+    public partial string DisplayNamePlaceholder { get; set; }
+
+    /// <summary>
+    /// Gets or sets the selectable synchronization intervals.
+    /// </summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<SyncIntervalOption> IntervalOptions { get; set; }
+
+    /// <summary>
+    /// Gets or sets the selected synchronization interval.
+    /// </summary>
+    [ObservableProperty]
+    public partial SyncIntervalOption? SelectedInterval { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the account signs in with a password, so password and servers can be changed.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsPasswordAccount { get; set; }
+
+    /// <summary>
+    /// Gets or sets the new password; empty to keep the current one.
+    /// </summary>
+    [ObservableProperty]
+    public partial string Password { get; set; }
+
+    /// <summary>
+    /// Gets or sets the IMAP host.
+    /// </summary>
+    [ObservableProperty]
+    public partial string ImapHost { get; set; }
+
+    /// <summary>
+    /// Gets or sets the IMAP port as text.
+    /// </summary>
+    [ObservableProperty]
+    public partial string ImapPort { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether IMAP uses implicit TLS (otherwise STARTTLS).
+    /// </summary>
+    [ObservableProperty]
+    public partial bool ImapUseSsl { get; set; }
+
+    /// <summary>
+    /// Gets or sets the SMTP host.
+    /// </summary>
+    [ObservableProperty]
+    public partial string SmtpHost { get; set; }
+
+    /// <summary>
+    /// Gets or sets the SMTP port as text.
+    /// </summary>
+    [ObservableProperty]
+    public partial string SmtpPort { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether SMTP uses implicit TLS (otherwise STARTTLS).
+    /// </summary>
+    [ObservableProperty]
+    public partial bool SmtpUseSsl { get; set; }
+
+    /// <summary>
+    /// Gets or sets the last error to show to the user.
+    /// </summary>
+    [ObservableProperty]
+    public partial string ErrorMessage { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the settings are being verified and saved.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsBusy { get; set; }
+
+    /// <summary>
+    /// Fills the dialog with the current settings of an account.
+    /// </summary>
+    /// <param name="account">The account to edit.</param>
+    public void Load(MailAccount account)
+    {
+        ArgumentNullException.ThrowIfNull(account);
+
+        _accountId = account.Id;
+        Email = account.EmailAddress;
+        DisplayName = account.HasCustomDisplayName ? account.DisplayName : string.Empty;
+        DisplayNamePlaceholder = account.HasCustomDisplayName ? account.EmailAddress.Split('@')[0] : account.DisplayName;
+
+        var intervals = IntervalMinutes.Select(m => TimeSpan.FromMinutes(m)).Append(account.SyncInterval).Distinct().Order();
+        IntervalOptions = [.. intervals.Select(CreateOption)];
+        SelectedInterval = IntervalOptions.First(o => o.Interval == account.SyncInterval);
+
+        IsPasswordAccount = account.AuthMethod == AuthMethod.Password;
+        ImapHost = account.Imap.Host;
+        ImapPort = account.Imap.Port.ToString(CultureInfo.InvariantCulture);
+        ImapUseSsl = account.Imap.UseSsl;
+        SmtpHost = account.Smtp.Host;
+        SmtpPort = account.Smtp.Port.ToString(CultureInfo.InvariantCulture);
+        SmtpUseSsl = account.Smtp.UseSsl;
+    }
+
+    /// <summary>
+    /// Abandons a save that is still verifying the sign-in; called when the dialog closes.
+    /// </summary>
+    public void CancelPendingSave()
+    {
+        _saveCancellation?.Cancel();
+    }
+
+    /// <summary>
+    /// Verifies changed connection settings and saves the account.
+    /// </summary>
+    /// <returns>A task that completes when the account was saved or the attempt failed.</returns>
+    [RelayCommand(CanExecute = nameof(CanSave))]
+    private async Task SaveAsync()
+    {
+        ErrorMessage = string.Empty;
+        ServerEndpoint? imap = null;
+        ServerEndpoint? smtp = null;
+        if (IsPasswordAccount)
+        {
+            if (!TryParsePort(ImapPort, out var imapPort) || !TryParsePort(SmtpPort, out var smtpPort))
+            {
+                ErrorMessage = _localizer["EditAccount_PortInvalid"];
+                return;
+            }
+
+            imap = new ServerEndpoint(ImapHost.Trim(), imapPort, ImapUseSsl);
+            smtp = new ServerEndpoint(SmtpHost.Trim(), smtpPort, SmtpUseSsl);
+        }
+
+        var command = new UpdateAccountCommand(
+            _accountId,
+            DisplayName.Trim(),
+            SelectedInterval!.Interval,
+            imap,
+            smtp,
+            IsPasswordAccount && Password.Length > 0 ? Password : null);
+        IsBusy = true;
+        using var cancellation = new CancellationTokenSource();
+        _saveCancellation = cancellation;
+        try
+        {
+            var result = await _dispatcher.SendAsync(command, cancellation.Token);
+            CloseRequested?.Invoke(this, result);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            // The user closed the dialog while the sign-in was being verified; nothing to report.
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Verification or saving failed; show the reason inside the dialog so the user can correct the input.
+            ErrorMessage = _localizer.Format("EditAccount_SaveFailed", ex.Message);
+        }
+        finally
+        {
+            _saveCancellation = null;
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// Closes the dialog without saving.
+    /// </summary>
+    [RelayCommand]
+    private void Cancel()
+    {
+        CancelPendingSave();
+        CloseRequested?.Invoke(this, null);
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether the entered data is sufficient to attempt saving.
+    /// </summary>
+    private bool CanSave =>
+        !IsBusy
+        && SelectedInterval is not null
+        && (!IsPasswordAccount || (!string.IsNullOrWhiteSpace(ImapHost) && !string.IsNullOrWhiteSpace(SmtpHost)));
+
+    /// <summary>
+    /// Re-evaluates the save command whenever an input changes.
+    /// </summary>
+    /// <param name="e">The change details.</param>
+    protected override void OnPropertyChanged(PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        SaveCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// Parses a TCP port.
+    /// </summary>
+    /// <param name="text">The typed text.</param>
+    /// <param name="port">The port, if the text is a valid one.</param>
+    /// <returns><see langword="true"/> if the text is a number from 1 to 65535.</returns>
+    private static bool TryParsePort(string text, out int port)
+    {
+        return int.TryParse(text, out port) && port is >= 1 and <= 65535;
+    }
+
+    /// <summary>
+    /// Creates the list entry of an interval.
+    /// </summary>
+    /// <param name="interval">The interval.</param>
+    /// <returns>The entry.</returns>
+    private SyncIntervalOption CreateOption(TimeSpan interval)
+    {
+        var text = interval == TimeSpan.FromMinutes(1)
+            ? _localizer["EditAccount_IntervalOneMinute"]
+            : _localizer.Format("EditAccount_IntervalMinutes", interval.TotalMinutes);
+        return new SyncIntervalOption(interval, text);
+    }
+}
