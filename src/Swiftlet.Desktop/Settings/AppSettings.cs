@@ -28,6 +28,17 @@ public interface IAppSettings : ISyncSettings
     void SetDownloadAllMail(bool value);
 
     /// <summary>
+    /// Gets a value indicating whether closing the main window hides it in the tray instead of quitting.
+    /// </summary>
+    bool CloseToTray { get; }
+
+    /// <summary>
+    /// Changes what closing the main window does, and saves the choice.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    void SetCloseToTray(bool value);
+
+    /// <summary>
     /// Gets the saved theme preference, one of the <see cref="ThemePreference"/> values.
     /// </summary>
     string Theme { get; }
@@ -70,6 +81,11 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     private volatile bool _downloadAllMail;
 
     /// <summary>
+    /// The in-memory value, read when the main window is closed.
+    /// </summary>
+    private volatile bool _closeToTray;
+
+    /// <summary>
     /// The in-memory language preference, guarded by <see cref="_gate"/>; kept so a corrupt file never resets it.
     /// </summary>
     private string? _language;
@@ -91,6 +107,7 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
         _removeServerDeletedMessages = file.SyncServerDeletions ?? true;
         _downloadFullHistory = file.DownloadFullHistory ?? true;
         _downloadAllMail = file.DownloadAllMail ?? true;
+        _closeToTray = file.CloseToTray ?? true;
         _theme = ThemePreference.Normalize(
             file.Theme is { ValueKind: JsonValueKind.String } theme ? theme.GetString() : null);
     }
@@ -103,12 +120,14 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     /// <param name="DownloadFullHistory">Whether the full message history is downloaded in the background.</param>
     /// <param name="DownloadAllMail">Whether the "All Mail" folder is downloaded too.</param>
     /// <param name="Theme">The theme preference; read as raw JSON so a wrongly typed value does not discard the whole file.</param>
+    /// <param name="CloseToTray">Whether closing the main window hides it in the tray.</param>
     private sealed record SettingsFile(
         string? Language,
         bool? SyncServerDeletions,
         bool? DownloadFullHistory = null,
         bool? DownloadAllMail = null,
-        JsonElement? Theme = null);
+        JsonElement? Theme = null,
+        bool? CloseToTray = null);
 
     /// <inheritdoc />
     public bool RemoveServerDeletedMessages => _removeServerDeletedMessages;
@@ -121,6 +140,9 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
 
     /// <inheritdoc />
     public string Theme => _theme;
+
+    /// <inheritdoc />
+    public bool CloseToTray => _closeToTray;
 
     /// <inheritdoc />
     public string Load()
@@ -172,6 +194,16 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
     }
 
     /// <inheritdoc />
+    public void SetCloseToTray(bool value)
+    {
+        lock (_gate)
+        {
+            Write(Snapshot() with { CloseToTray = value });
+            _closeToTray = value;
+        }
+    }
+
+    /// <inheritdoc />
     public void SetTheme(string value)
     {
         var theme = ThemePreference.Normalize(value);
@@ -193,7 +225,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings
             _removeServerDeletedMessages,
             _downloadFullHistory,
             _downloadAllMail,
-            JsonSerializer.SerializeToElement(_theme));
+            JsonSerializer.SerializeToElement(_theme),
+            _closeToTray);
     }
 
     /// <summary>

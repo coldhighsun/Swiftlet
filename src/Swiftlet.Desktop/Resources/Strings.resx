@@ -190,4 +190,16 @@
   <data name="Empty_View" xml:space="preserve"><value>No messages here</value></data>
   <data name="Empty_Search" xml:space="preserve"><value>No messages match your search</value></data>
   <data name="Compose_RemoveAttachment" xml:space="preserve"><value>Remove attachment</value></data>
+  <data name="Settings_CloseToTray" xml:space="preserve"><value>Keep running in the tray when the window is closed</value></data>
+  <data name="Settings_CloseToTrayHint" xml:space="preserve"><value>Mail keeps synchronizing. Quit from the menu of the tray icon. Turn this off if your desktop shows no tray icons.</value></data>
+  <data name="Tray_Open" xml:space="preserve"><value>Open Swiftlet</value></data>
+  <data name="Tray_Compose" xml:space="preserve"><value>Compose</value></data>
+  <data name="Tray_SyncAll" xml:space="preserve"><value>Sync all accounts</value></data>
+  <data name="Tray_Settings" xml:space="preserve"><value>Settings</value></data>
+  <data name="Tray_Exit" xml:space="preserve"><value>Quit</value></data>
+  <data name="Tray_SummaryUnread" xml:space="preserve"><value>Swiftlet - Unread: {0}</value></data>
+  <data name="Tray_SummaryNoUnread" xml:space="preserve"><value>Swiftlet - No unread mail</value></data>
+  <data name="Tray_SummaryNoAccounts" xml:space="preserve"><value>Swiftlet - No accounts</value></data>
+  <data name="Tray_SummaryAccount" xml:space="preserve"><value>{0}: {1}</value></data>
+  <data name="Tray_SummaryMore" xml:space="preserve"><value>More accounts: {0}</value></data>
 </root>

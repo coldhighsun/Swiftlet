@@ -6,6 +6,7 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Microsoft.Extensions.DependencyInjection;
+using Swiftlet.Desktop.Hosting;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
 using Swiftlet.Desktop.ViewModels;
@@ -92,6 +93,137 @@ public class UiSmokeTests
             Directory.CreateDirectory(directory);
             window.CaptureRenderedFrame()?.Save(Path.Combine(directory, $"{name}.png"), Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
         }
+    }
+
+    /// <summary>
+    /// Verifies showing a window that was hidden in the tray does not load the data again.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_HiddenAndShownAgain_InitializesOnce()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var scenario = new MainWindowViewModelTests.Scenario(hasAccount: false);
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                var activator = new WindowActivator(window);
+                window.Show();
+                await scenario.ViewModel.WhenIdleAsync();
+
+                window.Hide();
+                window.WindowState = WindowState.Minimized;
+                activator.BringToFront();
+                Dispatcher.UIThread.RunJobs();
+
+                window.IsVisible.Should().BeTrue();
+                window.WindowState.Should().Be(WindowState.Normal);
+                scenario.Dialogs.AddAccountCalls.Should().Be(1);
+                window.Close();
+
+                // A closed window cannot be shown again, so a late request is ignored.
+                activator.BringToFront();
+                window.IsVisible.Should().BeFalse();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies closing from code ends the window even while it is set to stay in the tray.
+    /// </summary>
+    [Fact]
+    public async Task CloseToTray_ClosedByCode_Closes()
+    {
+        await DispatchAsync(
+            () =>
+            {
+                var window = new Window();
+                var closed = false;
+                window.Closed += (_, _) => closed = true;
+                CloseToTray.Attach(window, () => true);
+                window.Show();
+
+                window.Close();
+
+                closed.Should().BeTrue();
+                return Task.CompletedTask;
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the tray icon carries the menu and follows the language.
+    /// </summary>
+    [Fact]
+    public async Task TrayIcon_Created_HasMenuInTheCurrentLanguage()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var scenario = new MainWindowViewModelTests.Scenario();
+                await scenario.StartAsync();
+                using var viewModel = new TrayViewModel(scenario.ViewModel, scenario.Localizer, () => { }, () => { });
+                using var tray = new AvaloniaTrayIcon(Avalonia.Application.Current!, viewModel);
+                var items = tray.Icon.Menu!.Items.OfType<NativeMenuItem>().Where(i => i is not NativeMenuItemSeparator).ToList();
+
+                items.Select(i => i.Header).Should().Equal("打开 Swiftlet", "写邮件", "同步全部账户", "设置", "退出");
+                tray.Icon.ToolTipText.Should().Be(viewModel.ToolTipText);
+                tray.Icon.Command.Should().BeSameAs(viewModel.OpenCommand);
+
+                scenario.Localizer.SetPreference("en");
+
+                items.Select(i => i.Header).Should().Equal("Open Swiftlet", "Compose", "Sync all accounts", "Settings", "Quit");
+                tray.Icon.ToolTipText.Should().StartWith("Swiftlet - Unread: 2");
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the settings open on their own while the main window is not on screen, only once, and again after closing.
+    /// </summary>
+    /// <param name="minimized">Whether the main window is minimized rather than hidden.</param>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShowSettings_MainWindowNotOnScreen_OpensOneStandaloneWindow(bool minimized)
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var created = new List<SettingsViewModel>();
+                var services = new ServiceCollection()
+                    .AddTransient(_ =>
+                    {
+                        var viewModel = new SettingsViewModel(new FakeAppSettings(), TestLocalizer.English(), new FakeRemoteImageRules());
+                        created.Add(viewModel);
+                        return viewModel;
+                    })
+                    .BuildServiceProvider();
+                var dialogs = new AvaloniaDialogService(services);
+                var main = new Window();
+                if (minimized)
+                {
+                    main.Show();
+                    main.WindowState = WindowState.Minimized;
+                }
+
+                var first = dialogs.ShowSettingsAsync(main);
+                var again = dialogs.ShowSettingsAsync(main);
+
+                again.IsCompletedSuccessfully.Should().BeTrue("the open window is only brought to the front");
+                first.IsCompleted.Should().BeFalse();
+                created.Should().ContainSingle();
+                main.IsVisible.Should().Be(minimized);
+
+                created[0].CloseCommand.Execute(null);
+                await first;
+                var next = dialogs.ShowSettingsAsync(main);
+
+                created.Should().HaveCount(2);
+                created[1].CloseCommand.Execute(null);
+                await next;
+                main.Close();
+            },
+            TestContext.Current.CancellationToken);
     }
 
     /// <summary>
@@ -545,12 +677,12 @@ public class UiSmokeTests
 
                 window.Title.Should().Be(title);
                 var boxes = window.GetVisualDescendants().OfType<CheckBox>().ToList();
-                boxes.Should().HaveCount(3);
+                boxes.Should().HaveCount(4);
                 window.GetVisualDescendants().OfType<ComboBox>().Where(c => c.IsEffectivelyVisible)
                     .Select(c => c.SelectedItem).Should().Equal(selector.SelectedOption, viewModel.SelectedTheme);
                 var box = boxes.Single(b => b.Content as string == checkbox);
                 box.IsChecked.Should().BeFalse();
-                boxes.Where(b => b != box).Should().OnlyContain(b => b.IsChecked == true, "the history downloads are on by default");
+                boxes.Where(b => b != box).Should().OnlyContain(b => b.IsChecked == true, "the tray setting and the history downloads are on by default");
                 window.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).Should().Contain(close);
                 window.GetVisualDescendants().OfType<TextBlock>().Count(t => !string.IsNullOrEmpty(t.Text) && t.Text.Length > 40).Should().BeGreaterThan(0);
                 window.Close();

@@ -211,6 +211,21 @@ public class SettingsStoreTests : IDisposable
     }
 
     /// <summary>
+    /// Verifies staying in the tray is on by default and the choice survives a restart and later saves.
+    /// </summary>
+    [Fact]
+    public void SetCloseToTray_Off_DefaultsOnAndPersists()
+    {
+        var store = new AppSettings(StorePath);
+        store.CloseToTray.Should().BeTrue();
+
+        store.SetCloseToTray(false);
+        new AppSettings(StorePath).SetDownloadAllMail(false);
+
+        new AppSettings(StorePath).CloseToTray.Should().BeFalse();
+    }
+
+    /// <summary>
     /// Verifies the "off" that earlier versions wrote while saving any other setting does not keep the new default off.
     /// </summary>
     [Fact]

@@ -344,6 +344,36 @@ public class SettingsViewModelTests
     }
 
     /// <summary>
+    /// Verifies toggling the tray setting saves the choice and starts from the stored value.
+    /// </summary>
+    [Fact]
+    public void CloseToTray_Toggle_SavesValue()
+    {
+        var settings = new FakeAppSettings();
+        var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules());
+        viewModel.CloseToTray.Should().BeTrue();
+
+        viewModel.CloseToTray = false;
+
+        settings.CloseToTray.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies a failed save of the tray setting is reported and the checkbox returns to the stored value.
+    /// </summary>
+    [Fact]
+    public void CloseToTray_SaveFails_ShowsErrorAndRevertsValue()
+    {
+        var settings = new FakeAppSettings { Failure = new IOException("disk full") };
+        var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules());
+
+        viewModel.CloseToTray = false;
+
+        viewModel.CloseToTray.Should().BeTrue();
+        viewModel.ErrorText.Should().Contain("disk full");
+    }
+
+    /// <summary>
     /// Verifies a settings file without a theme follows the system.
     /// </summary>
     [Fact]

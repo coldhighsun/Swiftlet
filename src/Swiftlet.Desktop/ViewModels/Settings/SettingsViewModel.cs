@@ -62,6 +62,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         RemoveServerDeletedMessages = settings.RemoveServerDeletedMessages;
         DownloadFullHistory = settings.DownloadFullHistory;
         DownloadAllMail = settings.DownloadAllMail;
+        CloseToTray = settings.CloseToTray;
         RefreshRemoteImageRules();
         _protection = protection;
         _themeApplier = themeApplier;
@@ -188,6 +189,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     public partial bool DownloadAllMail { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether closing the main window hides it in the tray instead of quitting.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool CloseToTray { get; set; }
+
+    /// <summary>
     /// Gets or sets the localized error of the last failed save, or <see langword="null"/>.
     /// </summary>
     [ObservableProperty]
@@ -262,6 +269,30 @@ public sealed partial class SettingsViewModel : ObservableObject
             // The file could not be written; show it and put the checkbox back so it matches what is stored.
             ErrorText = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
             DownloadAllMail = _settings.DownloadAllMail;
+        }
+    }
+
+    /// <summary>
+    /// Saves the new value as soon as the checkbox changes.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    partial void OnCloseToTrayChanged(bool value)
+    {
+        if (value == _settings.CloseToTray)
+        {
+            return;
+        }
+
+        ErrorText = null;
+        try
+        {
+            _settings.SetCloseToTray(value);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The file could not be written; show it and put the checkbox back so it matches what is stored.
+            ErrorText = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
+            CloseToTray = _settings.CloseToTray;
         }
     }
 

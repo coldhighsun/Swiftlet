@@ -418,6 +418,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Raised after the unread counts shown in the tree, or the accounts they belong to, may have changed.
+    /// </summary>
+    public event EventHandler? UnreadChanged;
+
+    /// <summary>
     /// Gets the unified inbox node.
     /// </summary>
     public UnifiedInboxNodeViewModel UnifiedInbox { get; }
@@ -549,6 +554,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         var scope = ScopeAccountId(SelectedNode);
         var targets = scope is { } id ? _accounts.Where(a => a.Id == id).ToList() : _accounts.ToList();
         await SyncAccountsAsync(targets);
+    }
+
+    /// <summary>
+    /// Synchronizes every account, whatever is selected; used by the tray menu.
+    /// </summary>
+    /// <returns>A task that completes when the sync is done.</returns>
+    [RelayCommand]
+    private async Task SyncAllAsync()
+    {
+        _logger.LogInformation("Manual sync of all accounts requested");
+        await SyncAccountsAsync(_accounts.ToList());
     }
 
     /// <summary>
@@ -928,10 +944,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Opens the settings dialog.
+    /// Opens the settings window, or brings the open one to the front.
     /// </summary>
-    /// <returns>A task that completes when the dialog has been closed.</returns>
-    [RelayCommand]
+    /// <returns>A task that completes when the dialog service is done with the request.</returns>
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task OpenSettingsAsync()
     {
         await _dialogs.ShowSettingsAsync();
@@ -1482,6 +1498,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             .SelectMany(a => a.Folders)
             .Where(f => f.Folder.Role == FolderRole.Inbox)
             .Sum(f => f.UnreadCount);
+
+        // Raised even when the total is unchanged, because the counts of the single accounts may differ.
+        UnreadChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>

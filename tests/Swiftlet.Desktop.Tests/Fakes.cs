@@ -379,6 +379,20 @@ internal sealed class FakeAppSettings : IAppSettings
     public string Theme { get; set; } = ThemePreference.System;
 
     /// <inheritdoc />
+    public bool CloseToTray { get; set; } = true;
+
+    /// <inheritdoc />
+    public void SetCloseToTray(bool value)
+    {
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+
+        CloseToTray = value;
+    }
+
+    /// <inheritdoc />
     public void SetTheme(string value)
     {
         if (Failure is not null)

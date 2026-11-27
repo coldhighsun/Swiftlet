@@ -34,6 +34,11 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
     }
 
     /// <summary>
+    /// Brings the current main window to the front.
+    /// </summary>
+    private WindowActivator? _activator;
+
+    /// <summary>
     /// Loads the application XAML.
     /// </summary>
     public override void Initialize()
@@ -57,9 +62,18 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
                 services.GetService<IThemeApplier>()?.Apply(settings.Theme);
             }
 
-            desktop.MainWindow = startup is null || startup.IsStarted
-                ? CreateMainWindow()
-                : CreateStartupWindow(desktop, startup);
+            if (startup is null || startup.IsStarted)
+            {
+                var main = CreateMainWindow();
+                Adopt(desktop, main);
+                KeepInTray(desktop, main);
+            }
+            else
+            {
+                Adopt(desktop, CreateStartupWindow(desktop, startup));
+            }
+
+            ShowWindowOnRequest();
         }
 
         base.OnFrameworkInitializationCompleted();
@@ -75,6 +89,60 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
         {
             DataContext = services.GetRequiredService<MainWindowViewModel>(),
         };
+    }
+
+    /// <summary>
+    /// Makes a window the main window and the one shown on request.
+    /// </summary>
+    /// <param name="desktop">The desktop lifetime.</param>
+    /// <param name="window">The window.</param>
+    private void Adopt(IClassicDesktopStyleApplicationLifetime desktop, Window window)
+    {
+        desktop.MainWindow = window;
+        _activator = new WindowActivator(window);
+    }
+
+    /// <summary>
+    /// Shows the current window when the macOS Dock icon is clicked.
+    /// </summary>
+    private void ShowWindowOnRequest()
+    {
+        if (TryGetFeature(typeof(IActivatableLifetime)) is IActivatableLifetime activatable)
+        {
+            activatable.Activated += (_, e) =>
+            {
+                if (e.Kind == ActivationKind.Reopen)
+                {
+                    _activator?.BringToFront();
+                }
+            };
+        }
+    }
+
+    /// <summary>
+    /// Adds the tray icon and lets closing the main window hide it, as long as the setting says so.
+    /// </summary>
+    /// <param name="desktop">The desktop lifetime.</param>
+    /// <param name="window">The main window.</param>
+    private void KeepInTray(IClassicDesktopStyleApplicationLifetime desktop, MainWindow window)
+    {
+        if (services.GetService<IAppSettings>() is not { } settings || window.DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        var tray = new TrayViewModel(
+            viewModel,
+            services.GetRequiredService<ILocalizer>(),
+            () => _activator?.BringToFront(),
+            () => desktop.Shutdown());
+        var icon = new AvaloniaTrayIcon(this, tray);
+        desktop.Exit += (_, _) =>
+        {
+            icon.Dispose();
+            tray.Dispose();
+        };
+        CloseToTray.Attach(window, () => settings.CloseToTray);
     }
 
     /// <summary>
@@ -102,7 +170,8 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
                 var main = CreateMainWindow();
 
                 // The main window takes over first, so closing the startup window does not end the application.
-                desktop.MainWindow = main;
+                Adopt(desktop, main);
+                KeepInTray(desktop, main);
                 main.Show();
                 window.Close();
             }

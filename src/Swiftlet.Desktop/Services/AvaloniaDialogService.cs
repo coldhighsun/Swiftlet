@@ -20,15 +20,23 @@ namespace Swiftlet.Desktop.Services;
 public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogService
 {
     /// <summary>
+    /// The open settings window, if any.
+    /// </summary>
+    private SettingsWindow? _settingsWindow;
+
+    /// <summary>
     /// Gets the classic desktop lifetime of the running application.
     /// </summary>
     private static IClassicDesktopStyleApplicationLifetime? Lifetime =>
         Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
 
     /// <summary>
-    /// Gets the active window, falling back to the main window.
+    /// Gets the active window, falling back to the main window unless it is hidden in the tray: a hidden window cannot own
+    /// a dialog.
     /// </summary>
-    private static Window? ActiveWindow => Lifetime?.Windows.FirstOrDefault(w => w.IsActive) ?? Lifetime?.MainWindow;
+    private static Window? ActiveWindow =>
+        Lifetime?.Windows.FirstOrDefault(w => w.IsActive)
+        ?? (Lifetime?.MainWindow is { IsVisible: true } main ? main : null);
 
     /// <inheritdoc />
     public async Task<bool> ConfirmAsync(string title, string message, string okText)
@@ -60,23 +68,54 @@ public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogSe
     }
 
     /// <inheritdoc />
-    public async Task ShowSettingsAsync()
+    public Task ShowSettingsAsync()
     {
-        var owner = ActiveWindow;
-        if (owner is null)
+        return ShowSettingsAsync(Lifetime?.MainWindow);
+    }
+
+    /// <summary>
+    /// Shows the settings window: as a dialog of the main window when that is on screen, otherwise on its own, so the
+    /// tray menu does not have to bring up the main window. An open settings window is brought to the front instead of
+    /// opening a second one.
+    /// </summary>
+    /// <param name="mainWindow">The main window, if there is one.</param>
+    /// <returns>A task that completes when the window has been closed, or at once when it was already open.</returns>
+    internal async Task ShowSettingsAsync(Window? mainWindow)
+    {
+        if (_settingsWindow is { } open)
         {
+            if (open.WindowState == WindowState.Minimized)
+            {
+                open.WindowState = WindowState.Normal;
+            }
+
+            open.Activate();
             return;
         }
 
         var viewModel = services.GetRequiredService<SettingsViewModel>();
         var window = new SettingsWindow { DataContext = viewModel };
         viewModel.CloseRequested += (_, _) => window.Close();
+        _settingsWindow = window;
         try
         {
-            await window.ShowDialog(owner);
+            // A dialog of a minimized window would stay out of sight with it.
+            if (mainWindow is { IsVisible: true, WindowState: not WindowState.Minimized })
+            {
+                await window.ShowDialog(mainWindow);
+                return;
+            }
+
+            var closed = new TaskCompletionSource();
+            window.Closed += (_, _) => closed.TrySetResult();
+            window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            window.Show();
+            window.Activate();
+            await closed.Task;
         }
         finally
         {
+            _settingsWindow = null;
             viewModel.Detach();
         }
     }

@@ -190,4 +190,16 @@
   <data name="Empty_View" xml:space="preserve"><value>这里没有邮件</value></data>
   <data name="Empty_Search" xml:space="preserve"><value>没有符合搜索条件的邮件</value></data>
   <data name="Compose_RemoveAttachment" xml:space="preserve"><value>移除附件</value></data>
+  <data name="Settings_CloseToTray" xml:space="preserve"><value>关闭窗口后缩到托盘继续运行</value></data>
+  <data name="Settings_CloseToTrayHint" xml:space="preserve"><value>邮件会继续同步，可从托盘图标的菜单退出。如果你的桌面环境不显示托盘图标，请关闭此项。</value></data>
+  <data name="Tray_Open" xml:space="preserve"><value>打开 Swiftlet</value></data>
+  <data name="Tray_Compose" xml:space="preserve"><value>写邮件</value></data>
+  <data name="Tray_SyncAll" xml:space="preserve"><value>同步全部账户</value></data>
+  <data name="Tray_Settings" xml:space="preserve"><value>设置</value></data>
+  <data name="Tray_Exit" xml:space="preserve"><value>退出</value></data>
+  <data name="Tray_SummaryUnread" xml:space="preserve"><value>Swiftlet - {0} 封未读</value></data>
+  <data name="Tray_SummaryNoUnread" xml:space="preserve"><value>Swiftlet - 没有未读邮件</value></data>
+  <data name="Tray_SummaryNoAccounts" xml:space="preserve"><value>Swiftlet - 尚未添加账户</value></data>
+  <data name="Tray_SummaryAccount" xml:space="preserve"><value>{0}：{1}</value></data>
+  <data name="Tray_SummaryMore" xml:space="preserve"><value>另有 {0} 个账户</value></data>
 </root>

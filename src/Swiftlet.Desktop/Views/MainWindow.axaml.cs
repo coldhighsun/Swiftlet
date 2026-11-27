@@ -36,6 +36,8 @@ public partial class MainWindow : Window
     /// <param name="e">The event arguments.</param>
     private async void OnOpenedAsync(object? sender, EventArgs e)
     {
+        // Opened is raised again whenever a window hidden in the tray is shown, but loading happens only once.
+        Opened -= OnOpenedAsync;
         if (DataContext is not MainWindowViewModel viewModel)
         {
             return;
