@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Swiftlet.Application.Abstractions;
 using Swiftlet.Application.Sync;
 using Swiftlet.Domain.Folders;
 using Swiftlet.Infrastructure.Persistence.Repositories;
@@ -18,14 +19,17 @@ public class SyncAccountCommandTests
     /// <param name="factory">The IMAP factory.</param>
     /// <param name="coordinator">The shared coordinator.</param>
     /// <param name="events">The event source.</param>
+    /// <param name="statuses">The status record; a new one if omitted.</param>
     /// <returns>The handler.</returns>
     private static SyncAccountCommandHandler CreateHandler(
         TestDatabase db,
         FakeImapSessionFactory factory,
         SyncCoordinator coordinator,
-        SyncEvents events)
+        SyncEvents events,
+        AccountSyncStatusTracker? statuses = null)
     {
-        return new SyncAccountCommandHandler(CreateService(db, factory), coordinator, events);
+        return new SyncAccountCommandHandler(
+            CreateService(db, factory), coordinator, events, statuses ?? new AccountSyncStatusTracker(TimeProvider.System));
     }
 
     /// <summary>
@@ -275,6 +279,104 @@ public class SyncAccountCommandTests
 
         await act.Should().ThrowAsync<IOException>();
         raised.Should().Be(0);
+    }
+
+    /// <summary>
+    /// A sync is reported as running and then as succeeded.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Handle_SuccessfulSync_RecordsRunningThenSucceeded()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, _) = await db.SeedAccountAsync(ct);
+        var factory = new FakeImapSessionFactory();
+        factory.Session.Folders.Add(TestData.Folder("INBOX", FolderRole.Inbox));
+        var events = new SyncEvents();
+        var statuses = new AccountSyncStatusTracker(TimeProvider.System);
+        var seen = new List<AccountSyncStatus>();
+        events.SyncStatusChanged += (_, e) => seen.Add(statuses.Get(e.AccountId));
+        var handler = CreateHandler(db, factory, new SyncCoordinator(), events, statuses);
+
+        // Act
+        await handler.Handle(new SyncAccountCommand(account.Id), ct);
+
+        // Assert
+        seen.Select(s => s.IsSyncing).Should().Equal(true, false);
+        seen[1].LastSucceededAt.Should().NotBeNull();
+        seen[1].Error.Should().BeNull();
+        seen[1].FailedFolders.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// A failed sync records the reason and keeps the time of the last success.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Handle_FailureAfterSuccess_RecordsErrorAndKeepsLastSuccess()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, _) = await db.SeedAccountAsync(ct);
+        var factory = new FakeImapSessionFactory();
+        var events = new SyncEvents();
+        var statuses = new AccountSyncStatusTracker(TimeProvider.System);
+        var handler = CreateHandler(db, factory, new SyncCoordinator(), events, statuses);
+        await handler.Handle(new SyncAccountCommand(account.Id), ct);
+        var succeededAt = statuses.Get(account.Id).LastSucceededAt;
+        factory.Failure = new IOException("offline");
+
+        // Act
+        var act = async () => await handler.Handle(new SyncAccountCommand(account.Id), ct);
+
+        // Assert
+        await act.Should().ThrowAsync<IOException>();
+        var status = statuses.Get(account.Id);
+        status.IsSyncing.Should().BeFalse();
+        status.Error.Should().Be("offline");
+        status.LastFailedAt.Should().NotBeNull();
+        status.LastSucceededAt.Should().Be(succeededAt);
+        status.RequiresSignIn.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// An expired sign-in is recorded as such.
+    /// </summary>
+    [Fact]
+    public void Failed_SignInExpired_RequiresSignIn()
+    {
+        // Arrange
+        var statuses = new AccountSyncStatusTracker(TimeProvider.System);
+        var id = Guid.NewGuid();
+
+        // Act
+        statuses.Failed(id, new OAuthReauthenticationRequiredException("expired"));
+
+        // Assert
+        statuses.Get(id).RequiresSignIn.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// A cancelled sync records no outcome.
+    /// </summary>
+    [Fact]
+    public void Cancelled_RunningSync_KeepsPreviousOutcome()
+    {
+        // Arrange
+        var statuses = new AccountSyncStatusTracker(TimeProvider.System);
+        var id = Guid.NewGuid();
+        statuses.Succeeded(id, ["Other"]);
+        var before = statuses.Get(id);
+        statuses.Started(id);
+
+        // Act
+        statuses.Cancelled(id);
+
+        // Assert
+        statuses.Get(id).Should().Be(before);
     }
 
     /// <summary>

@@ -1362,6 +1362,71 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies selecting an account replaces the message list and reader with the account page, which fits the narrowest
+    /// window in both themes.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    /// <param name="sync">The caption of the sync button.</param>
+    /// <param name="dark">Whether the dark theme is used.</param>
+    [Theory]
+    [InlineData("zh-Hans", "立即同步", false)]
+    [InlineData("en", "Sync now", false)]
+    [InlineData("zh-Hans", "立即同步", true)]
+    public async Task MainWindow_AccountSelected_ShowsAccountPage(string language, string sync, bool dark)
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference(language);
+                var scenario = new MainWindowViewModelTests.Scenario
+                {
+                    SyncStatus = new Swiftlet.Application.Sync.AccountSyncStatus(
+                        false, DateTimeOffset.UnixEpoch, ["Projects"], DateTimeOffset.UnixEpoch.AddDays(1), "The server is not reachable.", false),
+                };
+                scenario.Localizer.SetPreference(language);
+                await scenario.StartAsync();
+                var application = Avalonia.Application.Current!;
+                application.RequestedThemeVariant = dark ? Avalonia.Styling.ThemeVariant.Dark : Avalonia.Styling.ThemeVariant.Light;
+                try
+                {
+                    var window = new MainWindow { DataContext = scenario.ViewModel };
+                    Render(window, "main-window-account-before", language);
+                    scenario.ViewModel.SelectedNode = scenario.ViewModel.Accounts[0];
+                    await scenario.ViewModel.WhenIdleAsync();
+                    var suffix = $"{language}-{(dark ? "dark" : "light")}";
+                    Snapshot(window, $"main-window-account-{suffix}");
+
+                    window.FindControl<Control>("MessagePane")!.IsVisible.Should().BeFalse();
+                    window.FindControl<Control>("ReaderPane")!.IsVisible.Should().BeFalse();
+                    var pane = window.FindControl<Control>("AccountPane")!;
+                    pane.IsVisible.Should().BeTrue();
+                    var captions = pane.GetVisualDescendants().OfType<Button>()
+                        .Where(b => b.IsEffectivelyVisible)
+                        .Select(UiQueries.Caption)
+                        .ToList();
+                    captions.Should().Contain(sync).And.HaveCount(3, "the password account cannot sign in again in the browser");
+
+                    window.Width = 800;
+                    window.Height = 480;
+                    Snapshot(window, $"main-window-account-narrow-{suffix}");
+                    foreach (var button in pane.GetVisualDescendants().OfType<Button>().Where(b => b.IsEffectivelyVisible))
+                    {
+                        button.Bounds.Width.Should().BeGreaterThan(0);
+                        button.TranslatePoint(new Point(button.Bounds.Width, 0), window)!.Value.X
+                            .Should().BeLessThanOrEqualTo(800, UiQueries.Caption(button));
+                    }
+
+                    window.Close();
+                }
+                finally
+                {
+                    application.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Default;
+                }
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Verifies every button showing only an icon says what it does, both in a tooltip and to assistive technology.
     /// </summary>
     [Fact]

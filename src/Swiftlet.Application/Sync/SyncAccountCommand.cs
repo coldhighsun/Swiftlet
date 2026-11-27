@@ -15,7 +15,12 @@ public sealed record SyncAccountCommand(Guid AccountId) : ICommand<SyncResult>, 
 /// <param name="syncService">The synchronization service.</param>
 /// <param name="coordinator">Serializes syncs per account.</param>
 /// <param name="events">Receives the completion notification.</param>
-public sealed class SyncAccountCommandHandler(MailSyncService syncService, SyncCoordinator coordinator, SyncEvents events)
+/// <param name="statuses">Records how the sync went.</param>
+public sealed class SyncAccountCommandHandler(
+    MailSyncService syncService,
+    SyncCoordinator coordinator,
+    SyncEvents events,
+    AccountSyncStatusTracker statuses)
     : ICommandHandler<SyncAccountCommand, SyncResult>
 {
     /// <inheritdoc />
@@ -26,7 +31,7 @@ public sealed class SyncAccountCommandHandler(MailSyncService syncService, SyncC
         var announced = 0;
         var result = await coordinator.RunExclusiveAsync(
             command.AccountId,
-            () => syncService.SyncAsync(
+            () => SyncRecordedAsync(
                 command.AccountId,
                 newMessages =>
                 {
@@ -42,5 +47,41 @@ public sealed class SyncAccountCommandHandler(MailSyncService syncService, SyncC
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Synchronizes an account and records the status; called while the account is locked, so only a sync that is really
+    /// running is reported as running.
+    /// </summary>
+    /// <param name="accountId">The account.</param>
+    /// <param name="inboxSynced">Called when the INBOX changed and further folders follow.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The result of the sync.</returns>
+    private async Task<SyncResult> SyncRecordedAsync(Guid accountId, Action<int> inboxSynced, CancellationToken cancellationToken)
+    {
+        statuses.Started(accountId);
+        events.RaiseSyncStatusChanged(accountId);
+        try
+        {
+            var result = await syncService.SyncAsync(accountId, inboxSynced, cancellationToken);
+            statuses.Succeeded(accountId, result.FailedFolders);
+            return result;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Abandoned by the caller, so there is no outcome to record.
+            statuses.Cancelled(accountId);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Recorded for the account page only; the caller still handles the failure.
+            statuses.Failed(accountId, ex);
+            throw;
+        }
+        finally
+        {
+            events.RaiseSyncStatusChanged(accountId);
+        }
     }
 }

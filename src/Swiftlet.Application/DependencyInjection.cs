@@ -33,6 +33,7 @@ public static class DependencyInjection
         services.AddSingleton<SyncSchedule>();
         services.TryAddSingleton<ISyncSettings, DefaultSyncSettings>();
         services.AddSingleton<SyncCoordinator>();
+        services.AddSingleton<AccountSyncStatusTracker>();
         services.AddSingleton<AccountConnectionRevisions>();
         services.AddSingleton<SyncEvents>();
         services.AddSingleton<ISyncEvents>(static sp => sp.GetRequiredService<SyncEvents>());

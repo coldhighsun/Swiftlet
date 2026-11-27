@@ -250,4 +250,28 @@
   <data name="About_OpenLogs" xml:space="preserve"><value>打开日志目录</value></data>
   <data name="About_OpenData" xml:space="preserve"><value>打开数据目录</value></data>
   <data name="About_OpenFolderFailed" xml:space="preserve"><value>无法打开目录：{0}</value></data>
+  <data name="Error_AccountPage" xml:space="preserve"><value>加载账号信息失败</value></data>
+  <data name="AccountPage_SyncNow" xml:space="preserve"><value>立即同步</value></data>
+  <data name="AccountPage_SyncStatus" xml:space="preserve"><value>同步状态</value></data>
+  <data name="AccountPage_Syncing" xml:space="preserve"><value>正在同步…</value></data>
+  <data name="AccountPage_NotSynced" xml:space="preserve"><value>本次启动后尚未同步</value></data>
+  <data name="AccountPage_SyncSucceeded" xml:space="preserve"><value>上次同步成功：{0}</value></data>
+  <data name="AccountPage_SyncFailed" xml:space="preserve"><value>同步失败：{0}</value></data>
+  <data name="AccountPage_SignInRequired" xml:space="preserve"><value>登录已过期或被撤销，请点击“重新登录”。</value></data>
+  <data name="AccountPage_FailedFolders" xml:space="preserve"><value>同步失败的文件夹：{0}</value></data>
+  <data name="AccountPage_Statistics" xml:space="preserve"><value>邮件统计</value></data>
+  <data name="AccountPage_InboxUnread" xml:space="preserve"><value>收件箱未读</value></data>
+  <data name="AccountPage_Messages" xml:space="preserve"><value>邮件数</value></data>
+  <data name="AccountPage_Folders" xml:space="preserve"><value>文件夹数</value></data>
+  <data name="AccountPage_ColumnFolder" xml:space="preserve"><value>文件夹</value></data>
+  <data name="AccountPage_ColumnMessages" xml:space="preserve"><value>总数</value></data>
+  <data name="AccountPage_ColumnUnread" xml:space="preserve"><value>未读</value></data>
+  <data name="AccountPage_StatisticsHint" xml:space="preserve"><value>仅统计已下载的邮件；同一封邮件在多个文件夹中会分别计数。</value></data>
+  <data name="AccountPage_Details" xml:space="preserve"><value>账号与同步</value></data>
+  <data name="AccountPage_SignInMethod" xml:space="preserve"><value>登录方式</value></data>
+  <data name="AccountPage_SignInPassword" xml:space="preserve"><value>密码</value></data>
+  <data name="AccountPage_SignInBrowser" xml:space="preserve"><value>{0}（浏览器登录）</value></data>
+  <data name="AccountPage_SenderName" xml:space="preserve"><value>发件人名称</value></data>
+  <data name="AccountPage_AddedAt" xml:space="preserve"><value>添加时间</value></data>
+  <data name="AccountPage_Servers" xml:space="preserve"><value>服务器</value></data>
 </root>

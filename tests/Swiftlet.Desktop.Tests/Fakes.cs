@@ -716,7 +716,20 @@ internal sealed class FakeSyncEvents : ISyncEvents
     /// <summary>
     /// Gets a value indicating whether anyone is subscribed.
     /// </summary>
-    public bool HasSubscribers => AccountSynced is not null || BackfillProgressed is not null || MessageSent is not null;
+    public bool HasSubscribers => AccountSynced is not null || BackfillProgressed is not null || MessageSent is not null
+        || SyncStatusChanged is not null;
+
+    /// <inheritdoc />
+    public event EventHandler<SyncStatusChangedEventArgs>? SyncStatusChanged;
+
+    /// <summary>
+    /// Raises <see cref="SyncStatusChanged"/> on the calling thread.
+    /// </summary>
+    /// <param name="accountId">The account identifier.</param>
+    public void RaiseSyncStatus(Guid accountId)
+    {
+        SyncStatusChanged?.Invoke(this, new SyncStatusChangedEventArgs(accountId));
+    }
 
     /// <inheritdoc />
     public event EventHandler<NewMailEventArgs>? NewMailArrived;

@@ -164,6 +164,14 @@ public interface IMessageRepository
     Task<IReadOnlyDictionary<Guid, int>> CountUnreadByFolderAsync(Guid accountId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Counts the cached messages of an account per folder, leaving out those queued for deletion or a move.
+    /// </summary>
+    /// <param name="accountId">The account.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The counts of every folder that has cached messages.</returns>
+    Task<IReadOnlyList<FolderMessageCount>> CountByFolderAsync(Guid accountId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Deletes one cached message with its attachments and label links; does nothing if it does not exist.
     /// </summary>
     /// <param name="accountId">The owning account.</param>

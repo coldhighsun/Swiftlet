@@ -198,6 +198,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _syncEvents.BackfillProgressed += OnBackfillProgressed;
         _syncEvents.DeletionProgressed += OnDeletionProgressed;
         _syncEvents.MessageSent += OnMessageSent;
+        _syncEvents.SyncStatusChanged += OnSyncStatusChanged;
         SelectedMessages.CollectionChanged += (_, _) =>
         {
             DeleteSelectedCommand.NotifyCanExecuteChanged();
@@ -219,6 +220,31 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _syncEvents.BackfillProgressed -= OnBackfillProgressed;
         _syncEvents.DeletionProgressed -= OnDeletionProgressed;
         _syncEvents.MessageSent -= OnMessageSent;
+        _syncEvents.SyncStatusChanged -= OnSyncStatusChanged;
+    }
+
+    /// <summary>
+    /// Updates the account page when a sync of the shown account starts or ends; may be called from any thread.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OnSyncStatusChanged(object? sender, SyncStatusChangedEventArgs e)
+    {
+        lock (_refreshGate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+        }
+
+        _ = ObserveAsync(_uiThread.InvokeAsync(async () =>
+        {
+            if (AccountPage is { } page && page.Node.Account.Id == e.AccountId)
+            {
+                await GuardedAsync("Error_AccountPage", () => LoadSyncStatusAsync(page));
+            }
+        }));
     }
 
     /// <summary>
@@ -473,6 +499,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// </summary>
     [ObservableProperty]
     public partial object? SelectedNode { get; set; }
+
+    /// <summary>
+    /// Gets or sets the information page of the selected account, which takes the place of the message list and the
+    /// reading pane; <see langword="null"/> unless an account is selected.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsAccountPageShown))]
+    public partial AccountPageViewModel? AccountPage { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the account page is shown.
+    /// </summary>
+    public bool IsAccountPageShown => AccountPage is not null;
 
     /// <summary>
     /// Gets or sets the selected message.
@@ -1311,6 +1350,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             message.RefreshLanguage();
         }
+
+        AccountPage?.Refresh();
     }
 
     /// <summary>
@@ -1649,6 +1690,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // Also covers removed accounts, for which nothing is queried.
         UpdateInboxUnread();
 
+        // The settings or folders shown on the account page may have changed.
+        AccountPage?.Refresh();
+
         // The folders or the chosen archive folder may have changed.
         ArchiveSelectedCommand.NotifyCanExecuteChanged();
     }
@@ -1770,11 +1814,21 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         var version = ++_loadVersion;
         _shownSearchText = null;
+        if (node is not AccountNodeViewModel)
+        {
+            AccountPage = null;
+        }
+
         if (node is not (FolderNodeViewModel or UnifiedInboxNodeViewModel or LabelNodeViewModel))
         {
             _hasMore = false;
             ReplaceMessages([]);
             ListEmptyState = Accounts.Count == 0 ? EmptyState.NoAccounts : EmptyState.None;
+            if (node is AccountNodeViewModel account)
+            {
+                await ShowAccountPageAsync(account);
+            }
+
             return;
         }
 
@@ -1794,6 +1848,45 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 ShowEmptyState();
             }
         });
+    }
+
+    /// <summary>
+    /// Shows the page of an account, keeping it when it is already shown, and loads what it displays.
+    /// </summary>
+    /// <param name="node">The account node.</param>
+    /// <returns>A task that completes when the page is up to date or the failure is reported.</returns>
+    private async Task ShowAccountPageAsync(AccountNodeViewModel node)
+    {
+        var page = AccountPage;
+        if (page?.Node != node)
+        {
+            page = new AccountPageViewModel(node, _localizer, SyncCommand, EditAccountCommand, ReauthenticateAccountCommand, DeleteAccountCommand);
+            AccountPage = page;
+        }
+
+        var version = _loadVersion;
+        await GuardedAsync("Error_AccountPage", async () =>
+        {
+            await LoadSyncStatusAsync(page);
+
+            // Database calls complete synchronously, so they are moved off the UI thread.
+            var counts = await Task.Run(() => _dispatcher.SendAsync(new GetFolderMessageCountsQuery(node.Account.Id)));
+            if (version == _loadVersion)
+            {
+                // Otherwise a newer load asked again, or another node was selected meanwhile.
+                page.SetCounts(counts);
+            }
+        });
+    }
+
+    /// <summary>
+    /// Reads the sync status of the account of a page and shows it.
+    /// </summary>
+    /// <param name="page">The page.</param>
+    /// <returns>A task that completes when the status is shown.</returns>
+    private async Task LoadSyncStatusAsync(AccountPageViewModel page)
+    {
+        page.SetStatus(await _dispatcher.SendAsync(new GetAccountSyncStatusQuery(page.Node.Account.Id)));
     }
 
     /// <summary>

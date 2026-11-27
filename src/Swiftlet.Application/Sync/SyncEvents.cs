@@ -143,6 +143,18 @@ public sealed class DeletionProgressEventArgs(Guid accountId, int deleted, int r
 }
 
 /// <summary>
+/// Event data raised when the synchronization status of an account changed.
+/// </summary>
+/// <param name="accountId">The account identifier.</param>
+public sealed class SyncStatusChangedEventArgs(Guid accountId) : EventArgs
+{
+    /// <summary>
+    /// Gets the account identifier.
+    /// </summary>
+    public Guid AccountId { get; } = accountId;
+}
+
+/// <summary>
 /// Notifies subscribers about completed synchronizations.
 /// </summary>
 public interface ISyncEvents
@@ -171,6 +183,11 @@ public interface ISyncEvents
     /// Raised when a sync stored unread mail that newly arrived in an inbox. May be raised on a background thread.
     /// </summary>
     event EventHandler<NewMailEventArgs>? NewMailArrived;
+
+    /// <summary>
+    /// Raised when a sync of an account started or ended, successfully or not. May be raised on a background thread.
+    /// </summary>
+    event EventHandler<SyncStatusChangedEventArgs>? SyncStatusChanged;
 }
 
 /// <summary>
@@ -192,6 +209,37 @@ public sealed class SyncEvents : ISyncEvents
 
     /// <inheritdoc />
     public event EventHandler<NewMailEventArgs>? NewMailArrived;
+
+    /// <inheritdoc />
+    public event EventHandler<SyncStatusChangedEventArgs>? SyncStatusChanged;
+
+    /// <summary>
+    /// Raises <see cref="SyncStatusChanged"/>; a failing subscriber never affects the sync or the other subscribers.
+    /// </summary>
+    /// <param name="accountId">The account identifier.</param>
+    public void RaiseSyncStatusChanged(Guid accountId)
+    {
+        var handlers = SyncStatusChanged;
+        if (handlers is null)
+        {
+            return;
+        }
+
+        var args = new SyncStatusChangedEventArgs(accountId);
+        foreach (var handler in handlers.GetInvocationList().Cast<EventHandler<SyncStatusChangedEventArgs>>())
+        {
+            try
+            {
+                handler(this, args);
+            }
+#pragma warning disable CA1031 // Subscribers are arbitrary UI code; one failing must not break the sync or the other subscribers.
+            catch (Exception)
+#pragma warning restore CA1031
+            {
+                // Intentionally ignored, as in RaiseAccountSynced.
+            }
+        }
+    }
 
     /// <summary>
     /// Raises <see cref="NewMailArrived"/>; a failing subscriber never affects the sync or the other subscribers.

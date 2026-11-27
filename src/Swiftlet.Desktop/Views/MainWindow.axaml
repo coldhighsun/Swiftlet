@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:main="using:Swiftlet.Desktop.ViewModels.Main"
+        xmlns:views="using:Swiftlet.Desktop.Views"
         xmlns:loc="using:Swiftlet.Desktop.Localization"
         xmlns:ctl="using:Swiftlet.Desktop.Controls"
         xmlns:conv="using:Swiftlet.Desktop.Converters"
@@ -172,7 +173,7 @@
       <GridSplitter Grid.Column="1" Width="4" />
 
       <Border x:Name="MessagePane" Grid.Column="2" Background="{DynamicResource Brush.Surface}" BorderThickness="1,0"
-              BorderBrush="{DynamicResource Brush.Border}">
+              BorderBrush="{DynamicResource Brush.Border}" IsVisible="{Binding !IsAccountPageShown}">
         <DockPanel>
           <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" ColumnSpacing="4" Margin="8">
             <TextBox PlaceholderText="{loc:Loc Search_Placeholder}" Text="{Binding SearchText}">
@@ -283,10 +284,10 @@
         </DockPanel>
       </Border>
 
-      <GridSplitter Grid.Column="3" Width="4" />
+      <GridSplitter Grid.Column="3" Width="4" IsVisible="{Binding !IsAccountPageShown}" />
 
       <Border x:Name="ReaderPane" Grid.Column="4" Background="{DynamicResource Brush.Surface}" BorderThickness="1,0,0,0"
-              BorderBrush="{DynamicResource Brush.Border}">
+              BorderBrush="{DynamicResource Brush.Border}" IsVisible="{Binding !IsAccountPageShown}">
         <DockPanel>
           <WrapPanel x:Name="ReaderActions" DockPanel.Dock="Top" Margin="8" IsVisible="{Binding !IsNoMessageSelected}">
             <Button Classes="icon" Command="{Binding ReplyCommand}"
@@ -424,6 +425,17 @@
           </Grid>
         </DockPanel>
       </Border>
+
+      <!-- Takes the place of the message list and the reading pane while an account is selected. -->
+      <ContentControl x:Name="AccountPane" Grid.Column="2" Grid.ColumnSpan="3" Content="{Binding AccountPage}"
+                      IsVisible="{Binding IsAccountPageShown}" HorizontalContentAlignment="Stretch"
+                      VerticalContentAlignment="Stretch">
+        <ContentControl.ContentTemplate>
+          <DataTemplate DataType="main:AccountPageViewModel">
+            <views:AccountPage />
+          </DataTemplate>
+        </ContentControl.ContentTemplate>
+      </ContentControl>
     </Grid>
   </DockPanel>
 </Window>

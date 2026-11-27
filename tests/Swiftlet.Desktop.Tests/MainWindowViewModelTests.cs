@@ -50,6 +50,11 @@ public class MainWindowViewModelTests
                 .Where(m => !m.IsRead)
                 .GroupBy(m => m.FolderId)
                 .ToDictionary(g => g.Key, g => g.Count()));
+            Dispatcher.On<GetFolderMessageCountsQuery>(_ => (IReadOnlyList<FolderMessageCount>)Messages
+                .GroupBy(m => m.FolderId)
+                .Select(g => new FolderMessageCount(g.Key, g.Count(), g.Count(m => !m.IsRead)))
+                .ToList());
+            Dispatcher.On<GetAccountSyncStatusQuery>(_ => SyncStatus);
             Dispatcher.On<GetMessagesQuery>(q => q.FolderId == Inbox.Id ? Messages.OrderByDescending(m => m.SentAt).ToList() : []);
             Dispatcher.On<SearchMessagesQuery>(q => Messages.Where(m => m.Subject.Contains(q.Text, StringComparison.Ordinal)).ToList());
             Dispatcher.On<SetMessageReadCommand>(_ => Unit.Value);
@@ -88,6 +93,11 @@ public class MainWindowViewModelTests
         /// Gets the dispatcher.
         /// </summary>
         public FakeDispatcher Dispatcher { get; } = new();
+
+        /// <summary>
+        /// Gets or sets the sync status of the account.
+        /// </summary>
+        public AccountSyncStatus SyncStatus { get; set; } = AccountSyncStatus.Unknown;
 
         /// <summary>
         /// Gets the sync notification source.

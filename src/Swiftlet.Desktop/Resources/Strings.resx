@@ -250,4 +250,28 @@
   <data name="About_OpenLogs" xml:space="preserve"><value>Open log folder</value></data>
   <data name="About_OpenData" xml:space="preserve"><value>Open data folder</value></data>
   <data name="About_OpenFolderFailed" xml:space="preserve"><value>Could not open the folder: {0}</value></data>
+  <data name="Error_AccountPage" xml:space="preserve"><value>Failed to load the account information</value></data>
+  <data name="AccountPage_SyncNow" xml:space="preserve"><value>Sync now</value></data>
+  <data name="AccountPage_SyncStatus" xml:space="preserve"><value>Sync status</value></data>
+  <data name="AccountPage_Syncing" xml:space="preserve"><value>Syncing…</value></data>
+  <data name="AccountPage_NotSynced" xml:space="preserve"><value>Not synced since Swiftlet started</value></data>
+  <data name="AccountPage_SyncSucceeded" xml:space="preserve"><value>Last successful sync: {0}</value></data>
+  <data name="AccountPage_SyncFailed" xml:space="preserve"><value>Sync failed: {0}</value></data>
+  <data name="AccountPage_SignInRequired" xml:space="preserve"><value>The sign-in has expired or was revoked. Choose Re-sign in.</value></data>
+  <data name="AccountPage_FailedFolders" xml:space="preserve"><value>Folders that failed to sync: {0}</value></data>
+  <data name="AccountPage_Statistics" xml:space="preserve"><value>Mail</value></data>
+  <data name="AccountPage_InboxUnread" xml:space="preserve"><value>Unread in inbox</value></data>
+  <data name="AccountPage_Messages" xml:space="preserve"><value>Messages</value></data>
+  <data name="AccountPage_Folders" xml:space="preserve"><value>Folders</value></data>
+  <data name="AccountPage_ColumnFolder" xml:space="preserve"><value>Folder</value></data>
+  <data name="AccountPage_ColumnMessages" xml:space="preserve"><value>Total</value></data>
+  <data name="AccountPage_ColumnUnread" xml:space="preserve"><value>Unread</value></data>
+  <data name="AccountPage_StatisticsHint" xml:space="preserve"><value>Downloaded mail only. A message in several folders is counted in each.</value></data>
+  <data name="AccountPage_Details" xml:space="preserve"><value>Account and sync</value></data>
+  <data name="AccountPage_SignInMethod" xml:space="preserve"><value>Sign-in</value></data>
+  <data name="AccountPage_SignInPassword" xml:space="preserve"><value>Password</value></data>
+  <data name="AccountPage_SignInBrowser" xml:space="preserve"><value>{0} (browser sign-in)</value></data>
+  <data name="AccountPage_SenderName" xml:space="preserve"><value>Sender name</value></data>
+  <data name="AccountPage_AddedAt" xml:space="preserve"><value>Added</value></data>
+  <data name="AccountPage_Servers" xml:space="preserve"><value>Servers</value></data>
 </root>

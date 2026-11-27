@@ -179,6 +179,19 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
         return await UnreadCounts(context).ToDictionaryAsync(c => c.FolderId, c => c.Count, cancellationToken);
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<FolderMessageCount>> CountByFolderAsync(Guid accountId, CancellationToken cancellationToken = default)
+    {
+        var context = await contexts.GetAsync(accountId, cancellationToken);
+
+        // Only indexed columns are read (IX_Messages_Unread), so no message body is touched.
+        return await context.Messages
+            .Where(m => !m.IsDeletePending)
+            .GroupBy(m => m.FolderId)
+            .Select(g => new FolderMessageCount(g.Key, g.Count(), g.Count(m => !m.IsRead)))
+            .ToListAsync(cancellationToken);
+    }
+
     /// <summary>
     /// Builds the query counting unread messages per folder; <c>IX_Messages_Unread</c> covers it, so no row is read.
     /// </summary>

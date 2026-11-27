@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Swiftlet.Application.Accounts;
 using Swiftlet.Application.Messages;
+using Swiftlet.Desktop.Formatting;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
 using Swiftlet.Domain.Accounts;
@@ -352,9 +353,6 @@ public sealed partial class EditAccountViewModel : ObservableObject
     /// <returns>The entry.</returns>
     private SyncIntervalOption CreateOption(TimeSpan interval)
     {
-        var text = interval == TimeSpan.FromMinutes(1)
-            ? _localizer["EditAccount_IntervalOneMinute"]
-            : _localizer.Format("EditAccount_IntervalMinutes", interval.TotalMinutes);
-        return new SyncIntervalOption(interval, text);
+        return new SyncIntervalOption(interval, SyncIntervalText.Format(_localizer, interval));
     }
 }
