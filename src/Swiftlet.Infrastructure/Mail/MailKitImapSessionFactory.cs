@@ -2,6 +2,7 @@ using MailKit;
 using MailKit.Net.Imap;
 using MailKit.Security;
 using Microsoft.Extensions.Logging;
+using Swiftlet.Application;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Domain.Accounts;
 
@@ -63,7 +64,7 @@ internal sealed class MailKitImapSessionFactory(
             // Some providers (notably NetEase 163/126) reject login unless the client identifies itself first.
             if (client.Capabilities.Contains(ImapCapability.Id))
             {
-                await client.IdentifyAsync(new ImapImplementation { Name = "Swiftlet", Version = "1.0" }, cancellationToken);
+                await client.IdentifyAsync(new ImapImplementation { Name = "Swiftlet", Version = AppVersion.Display }, cancellationToken);
             }
 
             await MailAuthentication.AuthenticateAsync(client, account, secrets, accessTokens, cancellationToken, password);

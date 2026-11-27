@@ -14,6 +14,8 @@
     <ArtifactsPath>$(MSBuildThisFileDirectory)artifacts</ArtifactsPath>
     <SatelliteResourceLanguages>en;zh-Hans</SatelliteResourceLanguages>
     <DebugType>embedded</DebugType>
+    <!-- MinVer: release tags look like v1.2.3. -->
+    <MinVerTagPrefix>v</MinVerTagPrefix>
   </PropertyGroup>
 
   <Import Project="Directory.Build.user" Condition="Exists('Directory.Build.user')" />

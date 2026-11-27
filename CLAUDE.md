@@ -6,7 +6,7 @@ This file lets Claude Code pick the project up in a fresh session; it also holds
 ## First steps when taking over
 
 1. Run `git log --oneline` and `git status` to see where the project stands and whether anything is uncommitted.
-2. Run `dotnet build Swiftlet.slnx`, then run the tests project by project (see below). The baseline is **1142 tests** (Domain 58 / Application 84 / Infrastructure 508 / Desktop 492, the totals reported by the runner) with a 0-warning build; on Windows one Unix-only test is skipped.
+2. Run `dotnet build Swiftlet.slnx`, then run the tests project by project (see below). The baseline is **1147 tests** (Domain 58 / Application 89 / Infrastructure 508 / Desktop 492, the totals reported by the runner) with a 0-warning build; on Windows one Unix-only test is skipped.
 3. Read "Remaining work" at the end of this file. **M5a (unified inbox + labels + server-side delete) and M5.5 (read/starred flag sync) are done.** **Account management (account settings, delete, OAuth re-sign-in), IMAP IDLE, history backfill, parallel sync and the immediate flag push are implemented.** The next step is not chosen yet; candidates are verifying against real providers or M6. Ask the user before starting. The rules feature and the local trash were cancelled by the user: do not build them.
 4. Storage is split per account (see **Database** below). There are no EF migrations and no code that moves data out of an old single-file database: the local dev database `%LocalAppData%\Swiftlet\swiftlet.db` created by an earlier version must be deleted once and the accounts added again, otherwise the global store has the wrong schema. Inside an account database, `SqliteSchemaInitializer` still adds the column `Messages.IsFlagSyncPending` in place, and in the global store it adds `Accounts.HasCustomDisplayName` and `Accounts.ArchiveFolderName`.
 
@@ -24,6 +24,10 @@ dotnet run --project src/Swiftlet.Desktop
 - `global.json` enables Microsoft.Testing.Platform and pins SDK 11.0.100 (preview). `dotnet test --solution` is confirmed not to work here (MSBuild reports an unknown switch); run each project with `--project`.
 - When using the Bash tool, `cd` into a subdirectory can change the working directory; prefer paths relative to the repo root or absolute paths.
 - To iterate on the UI, set the environment variable `SWIFTLET_UI_SNAPSHOT_DIR=<dir>` and run `Swiftlet.Desktop.Tests`; the UI smoke tests render windows to PNG, which you can view with the Read tool. `.ui-snapshots/` is git-ignored. Delete the directory when done.
+
+## Versioning
+
+MinVer (a `GlobalPackageReference` in `Directory.Packages.props`) sets the version of every project from the git tags; never set `<Version>` by hand. Release tags are `v1.2.3` (`MinVerTagPrefix` = `v`). Without any tag a build is `0.0.0-alpha.0.<height>` (the number of commits on top of the first one); after a tag it is the next patch, `x.y.(z+1)-alpha.0.<commits since the tag>`. Code reads it through `AppVersion` (Application): `Display` for the IMAP ID, `Full` (with the commit hash) for the startup log. `AssemblyVersion` is only `major.0.0.0`, so do not show it. A build needs git and the history: a shallow clone (for example a CI checkout without `fetch-depth: 0`) or a source archive gets a wrong version.
 
 ## Architecture
 

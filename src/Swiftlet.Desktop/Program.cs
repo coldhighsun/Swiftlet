@@ -57,7 +57,7 @@ internal static class Program
         LogProcessWideFailures(logger);
         logger.Information(
             "Swiftlet starting: version {Version}, {OS}, data directory {DataDirectory}",
-            typeof(Program).Assembly.GetName().Version,
+            AppVersion.Full,
             System.Runtime.InteropServices.RuntimeInformation.OSDescription,
             dataDirectory);
         ProtectDataDirectory(dataDirectory, logger);
