@@ -180,6 +180,7 @@
             <WrapPanel ItemSpacing="8" LineSpacing="8">
               <Button Classes="accent" Content="{loc:Loc Contacts_Add}" Command="{Binding AddSelectedCollectedCommand}" />
               <Button Content="{loc:Loc Contacts_Write}" Command="{Binding WriteCollectedCommand}" />
+              <Button Content="{loc:Loc Contacts_Correspondence}" Command="{Binding ShowCollectedCorrespondenceCommand}" />
               <Button Classes="icon danger" Command="{Binding RemoveSelectedCollectedCommand}"
                       ToolTip.Tip="{loc:Loc Contacts_Remove}" AutomationProperties.Name="{loc:Loc Contacts_Remove}">
                 <PathIcon Data="{StaticResource Icon.Delete}" />

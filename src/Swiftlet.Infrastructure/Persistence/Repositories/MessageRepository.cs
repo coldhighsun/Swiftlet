@@ -665,14 +665,12 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
         CancellationToken cancellationToken)
     {
         var textTerms = SplitTerms(criteria.Text);
-        var fromTerms = SplitTerms(criteria.From);
         var subjectTerms = SplitTerms(criteria.Subject);
 
         // Every term long enough for the trigram index goes into one MATCH expression, limited to its columns.
         var match = string.Join(
             " AND ",
             textTerms.Where(IsIndexable).Select(Quote)
-                .Concat(fromTerms.Where(IsIndexable).Select(t => $"{{FromName FromAddress}} : {Quote(t)}"))
                 .Concat(subjectTerms.Where(IsIndexable).Select(t => $"Subject : {Quote(t)}")));
         var source = match.Length == 0
             ? context.Messages
@@ -693,21 +691,15 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
                 || EF.Functions.Like(m.BodyText, pattern, "\\"));
         }
 
-        foreach (var pattern in fromTerms.Where(t => !IsIndexable(t)).Select(ToLikePattern))
-        {
-            source = source.Where(m =>
-                EF.Functions.Like(m.FromName, pattern, "\\") || EF.Functions.Like(m.FromAddress, pattern, "\\"));
-        }
-
         foreach (var pattern in subjectTerms.Where(t => !IsIndexable(t)).Select(ToLikePattern))
         {
             source = source.Where(m => EF.Functions.Like(m.Subject, pattern, "\\"));
         }
 
-        // Recipients are not part of the FTS index.
-        foreach (var pattern in SplitTerms(criteria.To).Select(ToLikePattern))
+        // Recipients are not part of the FTS index, so the participants are matched without it.
+        if (!string.IsNullOrWhiteSpace(criteria.Participants))
         {
-            source = source.Where(m => EF.Functions.Like(m.Recipients, pattern, "\\"));
+            source = source.Where(ParticipantFilter.Create(criteria.Participants));
         }
 
         if (criteria.SentFrom is { } sentFrom)
@@ -826,7 +818,7 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
     /// </summary>
     /// <param name="text">The entered text.</param>
     /// <returns>The space-separated terms.</returns>
-    private static string[] SplitTerms(string text)
+    internal static string[] SplitTerms(string text)
     {
         return text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
@@ -856,7 +848,7 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
     /// </summary>
     /// <param name="term">The raw term.</param>
     /// <returns>The pattern, using backslash as the escape character.</returns>
-    private static string ToLikePattern(string term)
+    internal static string ToLikePattern(string term)
     {
         return $"%{EscapeLike(term)}%";
     }
@@ -866,7 +858,7 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
     /// </summary>
     /// <param name="term">The raw term.</param>
     /// <returns>The escaped term.</returns>
-    private static string EscapeLike(string term)
+    internal static string EscapeLike(string term)
     {
         return term
             .Replace("\\", "\\\\", StringComparison.Ordinal)

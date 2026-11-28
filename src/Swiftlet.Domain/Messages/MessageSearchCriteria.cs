@@ -11,14 +11,11 @@ public sealed record MessageSearchCriteria
     public string Text { get; init; } = string.Empty;
 
     /// <summary>
-    /// Gets the terms matched against the sender's name or address; every term must match.
+    /// Gets the people matched against the sender and the recipients (To and Cc). Entries separated by commas or semicolons
+    /// are alternatives; every space-separated term of an entry must match. A complete address matches only that address,
+    /// any other term a part of an address or of the sender's name.
     /// </summary>
-    public string From { get; init; } = string.Empty;
-
-    /// <summary>
-    /// Gets the terms matched against the recipient addresses (To and Cc); every term must match.
-    /// </summary>
-    public string To { get; init; } = string.Empty;
+    public string Participants { get; init; } = string.Empty;
 
     /// <summary>
     /// Gets the terms matched against the subject; every term must match.
@@ -66,8 +63,7 @@ public sealed record MessageSearchCriteria
     /// </summary>
     public bool IsEmpty =>
         string.IsNullOrWhiteSpace(Text)
-        && string.IsNullOrWhiteSpace(From)
-        && string.IsNullOrWhiteSpace(To)
+        && string.IsNullOrWhiteSpace(Participants)
         && string.IsNullOrWhiteSpace(Subject)
         && SentFrom is null
         && SentBefore is null

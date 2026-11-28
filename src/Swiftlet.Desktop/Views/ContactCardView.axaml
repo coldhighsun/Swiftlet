@@ -23,6 +23,7 @@
 
       <WrapPanel ItemSpacing="8" LineSpacing="8">
         <Button Classes="accent" Content="{loc:Loc Contacts_Write}" Command="{Binding WriteCommand}" />
+        <Button Content="{loc:Loc Contacts_Correspondence}" Command="{Binding ShowCorrespondenceCommand}" />
         <Button Content="{loc:Loc Contacts_Edit}" Command="{Binding EditCommand}" />
       </WrapPanel>
 

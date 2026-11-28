@@ -57,6 +57,13 @@ public sealed record ComposeRequest(
 public sealed record ContactsRequest(string Name, string Address);
 
 /// <summary>
+/// What the user chose to do next when closing the contacts window; at most one of the two is set.
+/// </summary>
+/// <param name="WriteTo">The recipient to write a new message to.</param>
+/// <param name="Correspondents">The addresses of the person whose messages should be listed.</param>
+public sealed record ContactsResult(string? WriteTo = null, IReadOnlyList<string>? Correspondents = null);
+
+/// <summary>
 /// Windows and pickers the view models need, abstracted so they can be tested without a UI.
 /// </summary>
 public interface IDialogService
@@ -120,7 +127,7 @@ public interface IDialogService
     /// </summary>
     /// <param name="request">An address to show or add, or <see langword="null"/>.</param>
     /// <returns>The recipient the user chose to write to, or <see langword="null"/>.</returns>
-    Task<string?> ShowContactsAsync(ContactsRequest? request);
+    Task<ContactsResult?> ShowContactsAsync(ContactsRequest? request);
 
     /// <summary>
     /// Asks the user to pick a contact file (vCard or CSV) to import.

@@ -228,7 +228,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _addressActions = new MessageAddressActions(
             (name, address) => ShowContactsAsync(new ContactsRequest(name, address)),
             (accountId, to) => ComposeToAsync(accountId, to),
-            dialogs.CopyTextAsync);
+            dialogs.CopyTextAsync,
+            ShowCorrespondenceOfAsync);
         _logger = logger ?? NullLogger<MainWindowViewModel>.Instance;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _remoteImageRules = remoteImageRules;
@@ -611,6 +612,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public bool CanAddContact => ContactTargets.Count > 0;
 
     /// <summary>
+    /// Gets the entries of the correspondence menu, one per person of the selected message; filled together with
+    /// <see cref="ContactTargets"/>.
+    /// </summary>
+    public ObservableCollection<ContactTargetViewModel> CorrespondenceTargets { get; } = [];
+
+    /// <summary>
+    /// Gets a value indicating whether the correspondence menu has entries.
+    /// </summary>
+    public bool CanShowCorrespondence => CorrespondenceTargets.Count > 0;
+
+    /// <summary>
     /// Gets or sets the selected tree node: the unified inbox, an account, a folder or a label.
     /// </summary>
     [ObservableProperty]
@@ -780,6 +792,47 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // A single arrival, or none known (unread mail from before the start): the newest unread message is the best guess.
         var target = ids.Count == 1 ? Messages.FirstOrDefault(m => m.Id == ids[0]) : null;
         SelectedMessage = target ?? Messages.FirstOrDefault(m => m.IsUnread);
+    }
+
+    /// <summary>
+    /// Raised when the main window should come to the front, because something asked for from another window shows in it.
+    /// </summary>
+    public event EventHandler? ActivationRequested;
+
+    /// <summary>
+    /// Lists the messages exchanged with the person behind an address.
+    /// </summary>
+    /// <param name="address">The address.</param>
+    /// <returns>A task that completes when the messages are listed or the failure is reported.</returns>
+    private async Task ShowCorrespondenceOfAsync(string address)
+    {
+        IReadOnlyList<string>? addresses = null;
+        await GuardedAsync("Error_Search", async () => addresses = await _dispatcher.SendAsync(new GetCorrespondentAddressesQuery(address)));
+        if (addresses is not null)
+        {
+            await ShowCorrespondenceAsync(addresses);
+        }
+    }
+
+    /// <summary>
+    /// Searches every account for the messages from or to any of the addresses, showing the condition so that it can be
+    /// refined or cleared.
+    /// </summary>
+    /// <param name="addresses">The addresses of one person.</param>
+    /// <returns>A task that completes when the messages are listed or the failure is reported.</returns>
+    private async Task ShowCorrespondenceAsync(IReadOnlyList<string> addresses)
+    {
+        ActivationRequested?.Invoke(this, EventArgs.Empty);
+
+        // The unified inbox searches all accounts and, unlike an account page, shows the list.
+        if (!await ShowUnifiedInboxAsync())
+        {
+            return;
+        }
+
+        Filter.Participants = string.Join(", ", addresses);
+        Filter.IsExpanded = true;
+        await SearchAsync();
     }
 
     /// <summary>
@@ -1555,13 +1608,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <returns>A task that completes when the windows have been handled.</returns>
     private async Task ShowContactsAsync(ContactsRequest? request)
     {
-        var recipient = await _dialogs.ShowContactsAsync(request);
+        var result = await _dialogs.ShowContactsAsync(request);
 
         // Contacts change only in that window.
         await ReloadContactNamesAsync();
-        if (recipient is not null)
+        if (result?.WriteTo is { } recipient)
         {
             await ComposeToAsync(recipient);
+        }
+        else if (result?.Correspondents is { } addresses)
+        {
+            await ShowCorrespondenceAsync(addresses);
         }
     }
 
@@ -1595,12 +1652,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Rebuilds the entries of the "add to contacts" menu: the sender and the recipients of the selected message, without
+    /// Rebuilds the entries of the "add to contacts" and correspondence menus: the sender and the recipients of the selected message, without
     /// the own accounts. Called when the menu opens, like <see cref="RefreshMoveTargets"/>.
     /// </summary>
     public void RefreshContactTargets()
     {
         ContactTargets.Clear();
+        CorrespondenceTargets.Clear();
         if (SelectedMessages.Count <= 1 && SelectedMessage is { } item)
         {
             var seen = new HashSet<string>(_accounts.Select(a => a.EmailAddress), StringComparer.OrdinalIgnoreCase);
@@ -1620,10 +1678,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         OnPropertyChanged(nameof(CanAddContact));
+        OnPropertyChanged(nameof(CanShowCorrespondence));
     }
 
     /// <summary>
-    /// Adds one entry to the "add to contacts" menu unless the address cannot be a contact or is listed already.
+    /// Adds one entry to the "add to contacts" and correspondence menus unless the address cannot be a contact or is listed already.
     /// </summary>
     /// <param name="describe">Writes the menu text, which says whether it is the sender or a recipient.</param>
     /// <param name="name">The name that came with the mail.</param>
@@ -1637,6 +1696,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         var header = describe(AddressText.Full(_contacts, name, address));
+        CorrespondenceTargets.Add(new ContactTargetViewModel(header, new AsyncRelayCommand(() => ShowCorrespondenceOfAsync(address))));
         if (_contacts.Contains(address))
         {
             header = _localizer.Format("Menu_Message_ContactSaved", header);
@@ -2170,8 +2230,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             var problems = outcomes.Select(o => o.Problem).OfType<string>().ToList();
 
             await GuardedAsync("Error_Refresh", ReloadAccountsAsync);
-            _loadTask = LoadMessagesAsync(SelectedNode, keepLoaded: true);
-            await _loadTask;
+            await ReloadViewAsync();
             StatusText = problems.Count == 0
                 ? _localizer.Format("Status_SyncDone", newMessages)
                 : _localizer.Format("Status_SyncDoneWithProblems", newMessages, string.Join(_localizer["Status_ProblemSeparator"], problems));

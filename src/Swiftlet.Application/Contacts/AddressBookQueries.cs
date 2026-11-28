@@ -69,6 +69,31 @@ public sealed class GetContactNamesQueryHandler(IContactRepository contacts)
 }
 
 /// <summary>
+/// Gets the addresses of the person behind an address: every address of the contacts containing it, the asked one first, or
+/// only that one when no contact does.
+/// </summary>
+/// <param name="Address">The address.</param>
+public sealed record GetCorrespondentAddressesQuery(string Address) : IQuery<IReadOnlyList<string>>;
+
+/// <summary>
+/// Handles <see cref="GetCorrespondentAddressesQuery"/>.
+/// </summary>
+/// <param name="contacts">The contact repository.</param>
+public sealed class GetCorrespondentAddressesQueryHandler(IContactRepository contacts)
+    : IQueryHandler<GetCorrespondentAddressesQuery, IReadOnlyList<string>>
+{
+    /// <inheritdoc />
+    public async ValueTask<IReadOnlyList<string>> Handle(GetCorrespondentAddressesQuery query, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        var others = (await contacts.GetAllAsync(cancellationToken))
+            .Where(c => c.Emails.Contains(query.Address, StringComparer.OrdinalIgnoreCase))
+            .SelectMany(c => c.Emails);
+        return others.Prepend(query.Address).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+}
+
+/// <summary>
 /// Handles <see cref="GetAddressBookQuery"/>. The collected addresses are derived on every request from the cached Sent
 /// folders and from the recipients remembered when sending, so nothing has to be updated during synchronization.
 /// </summary>

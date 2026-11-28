@@ -88,11 +88,11 @@ public class LoggingBehaviorTests
         var logger = new ListLogger<LoggingBehavior<SearchMessagesQuery, int>>();
         var behavior = new LoggingBehavior<SearchMessagesQuery, int>(logger);
 
-        var criteria = new MessageSearchCriteria { Text = "hunter2", From = "secret@x.com", To = "boss", Subject = "salary", UnreadOnly = true };
+        var criteria = new MessageSearchCriteria { Text = "hunter2", Participants = "secret@x.com, boss", Subject = "salary", UnreadOnly = true };
 
         await behavior.Handle(new SearchMessagesQuery(criteria, 0, 50), (_, _) => new ValueTask<int>(1), TestContext.Current.CancellationToken);
 
-        logger.Entries.Single().Message.Should().Contain("all accounts, 7 characters, conditions: from/to/subject/unread")
+        logger.Entries.Single().Message.Should().Contain("all accounts, 7 characters, conditions: participants/subject/unread")
             .And.NotContain("hunter2").And.NotContain("secret").And.NotContain("boss").And.NotContain("salary");
     }
 

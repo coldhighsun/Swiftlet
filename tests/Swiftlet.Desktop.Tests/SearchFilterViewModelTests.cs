@@ -46,7 +46,7 @@ public class SearchFilterViewModelTests
     [Fact]
     public void BuildCriteria_NothingEntered_IsEmpty()
     {
-        var filter = new SearchFilterViewModel { From = "  " };
+        var filter = new SearchFilterViewModel { Participants = "  " };
 
         var criteria = filter.BuildCriteria("  ", null, TimeZoneInfo.Utc);
 

@@ -200,8 +200,7 @@ public sealed record SearchMessagesQuery(MessageSearchCriteria Criteria, int Ski
         // Only the names of the conditions: what the user searches for is never logged.
         (bool IsSet, string Name)[] conditions =
         [
-            (!string.IsNullOrWhiteSpace(Criteria.From), "from"),
-            (!string.IsNullOrWhiteSpace(Criteria.To), "to"),
+            (!string.IsNullOrWhiteSpace(Criteria.Participants), "participants"),
             (!string.IsNullOrWhiteSpace(Criteria.Subject), "subject"),
             (Criteria.SentFrom is not null, "sent from"),
             (Criteria.SentBefore is not null, "sent before"),
