@@ -1,6 +1,8 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using System.Collections.ObjectModel;
 using System.Security;
+using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using CommunityToolkit.Mvvm.Input;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Desktop.Localization;
@@ -100,6 +102,15 @@ public sealed partial class SettingsViewModel : ObservableObject
             new ChoiceOptionViewModel(ThemePreference.Dark, () => localizer["Settings_ThemeDark"]),
         ];
         SelectedTheme = ThemeOptions.First(o => o.Code == settings.Theme);
+        ColorSchemeOptions =
+        [
+            Scheme(ColorScheme.Ocean, () => localizer["Settings_ColorSchemeOcean"]),
+            Scheme(ColorScheme.Indigo, () => localizer["Settings_ColorSchemeIndigo"]),
+            Scheme(ColorScheme.Forest, () => localizer["Settings_ColorSchemeForest"]),
+            Scheme(ColorScheme.Sand, () => localizer["Settings_ColorSchemeSand"]),
+            Scheme(ColorScheme.Graphite, () => localizer["Settings_ColorSchemeGraphite"]),
+        ];
+        SelectedColorScheme = ColorSchemeOptions.First(o => o.Code == settings.ColorScheme);
         TrayUnreadStyleOptions =
         [
             new ChoiceOptionViewModel(TrayUnreadStyle.Dot, () => localizer["Settings_TrayUnreadDot"]),
@@ -142,6 +153,17 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     public partial ChoiceOptionViewModel SelectedTheme { get; set; }
+
+    /// <summary>
+    /// Gets the available color schemes.
+    /// </summary>
+    public IReadOnlyList<ChoiceOptionViewModel> ColorSchemeOptions { get; }
+
+    /// <summary>
+    /// Gets or sets the selected color scheme.
+    /// </summary>
+    [ObservableProperty]
+    public partial ChoiceOptionViewModel SelectedColorScheme { get; set; }
 
     /// <summary>
     /// Gets the ways the tray icon can point out unread mail.
@@ -214,6 +236,33 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Saves and applies a newly selected color scheme.
+    /// </summary>
+    /// <param name="value">The new selection.</param>
+    partial void OnSelectedColorSchemeChanged(ChoiceOptionViewModel value)
+    {
+        if (value is null || value.Code == _settings.ColorScheme)
+        {
+            return;
+        }
+
+        ErrorText = null;
+        try
+        {
+            _settings.SetColorScheme(value.Code);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The file could not be written; show it and put the picker back so it matches what is stored.
+            ErrorText = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
+            SelectedColorScheme = ColorSchemeOptions.First(o => o.Code == _settings.ColorScheme);
+            return;
+        }
+
+        _themeApplier?.ApplyColorScheme(value.Code);
+    }
+
+    /// <summary>
     /// Saves a newly selected tray icon style.
     /// </summary>
     /// <param name="value">The new selection.</param>
@@ -262,13 +311,28 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Builds an entry of the color scheme picker.
+    /// </summary>
+    /// <param name="code">One of the <see cref="ColorScheme"/> values.</param>
+    /// <param name="displayName">Produces the display name in the current language.</param>
+    /// <returns>The entry with the color of the scheme beside it.</returns>
+    private static ChoiceOptionViewModel Scheme(string code, Func<string> displayName)
+    {
+        return new ChoiceOptionViewModel(code, displayName)
+        {
+            Swatch = new ImmutableSolidColorBrush(Color.Parse(ColorScheme.Swatch(code))),
+        };
+    }
+
+    /// <summary>
     /// Re-reads the texts built by this view model after the language changed.
     /// </summary>
     /// <param name="sender">The event sender.</param>
     /// <param name="e">The event arguments.</param>
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
-        foreach (var option in ThemeOptions.Concat(TrayUnreadStyleOptions).Concat(ContactNameOrderOptions))
+        foreach (var option in ThemeOptions.Concat(ColorSchemeOptions).Concat(TrayUnreadStyleOptions)
+            .Concat(ContactNameOrderOptions))
         {
             option.RefreshLanguage();
         }

@@ -1,3 +1,4 @@
+using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Swiftlet.Desktop.ViewModels.Settings;
@@ -18,6 +19,11 @@ public sealed class ChoiceOptionViewModel(string code, Func<string> displayName)
     /// Gets the name shown in the picker.
     /// </summary>
     public string DisplayName => displayName();
+
+    /// <summary>
+    /// Gets the color shown beside the name, or <see langword="null"/> when the picker shows none.
+    /// </summary>
+    public IBrush? Swatch { get; init; }
 
     /// <summary>
     /// Re-reads the display name after the UI language changed.

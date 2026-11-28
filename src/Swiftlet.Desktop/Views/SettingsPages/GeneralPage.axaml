@@ -33,6 +33,21 @@
               </ComboBox.ItemTemplate>
             </ComboBox>
           </Grid>
+          <Grid ColumnDefinitions="120,*">
+            <TextBlock Text="{loc:Loc Settings_ColorScheme}" VerticalAlignment="Center" TextWrapping="Wrap" />
+            <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding ColorSchemeOptions}"
+                      SelectedItem="{Binding SelectedColorScheme}"
+                      AutomationProperties.Name="{loc:Loc Settings_ColorScheme}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate DataType="settings:ChoiceOptionViewModel">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Ellipse Width="12" Height="12" Fill="{Binding Swatch}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding DisplayName}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+          </Grid>
           <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto" RowSpacing="4">
             <TextBlock Text="{loc:Loc Settings_ContactNameOrder}" VerticalAlignment="Center" TextWrapping="Wrap" />
             <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding ContactNameOrderOptions}"
