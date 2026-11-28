@@ -511,6 +511,53 @@ internal sealed class FakeRemoteImageRules : Swiftlet.Application.Abstractions.I
 }
 
 /// <summary>
+/// An in-memory registration of the start at sign-in.
+/// </summary>
+internal sealed class FakeAutoStart : IAutoStart
+{
+    /// <summary>
+    /// Gets or sets a value indicating whether an entry exists.
+    /// </summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>
+    /// Gets or sets an exception thrown on reading.
+    /// </summary>
+    public Exception? ReadFailure { get; set; }
+
+    /// <summary>
+    /// Gets or sets an exception thrown on writing.
+    /// </summary>
+    public Exception? WriteFailure { get; set; }
+
+    /// <summary>
+    /// Gets the values passed to <see cref="SetEnabled"/>.
+    /// </summary>
+    public List<bool> SetCalls { get; } = [];
+
+    /// <inheritdoc />
+    public bool IsSupported { get; set; } = true;
+
+    /// <inheritdoc />
+    public bool IsEnabled()
+    {
+        return ReadFailure is null ? Enabled : throw ReadFailure;
+    }
+
+    /// <inheritdoc />
+    public void SetEnabled(bool enabled)
+    {
+        SetCalls.Add(enabled);
+        if (WriteFailure is not null)
+        {
+            throw WriteFailure;
+        }
+
+        Enabled = enabled;
+    }
+}
+
+/// <summary>
 /// In-memory application settings.
 /// </summary>
 internal sealed class FakeAppSettings : IAppSettings

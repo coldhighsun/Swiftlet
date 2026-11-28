@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using System.Collections.ObjectModel;
+using System.Security;
 using CommunityToolkit.Mvvm.Input;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Desktop.Localization;
@@ -40,6 +41,16 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly IDatabaseProtection? _protection;
 
     /// <summary>
+    /// Registers the application to start at sign-in; <see langword="null"/> when that cannot be chosen.
+    /// </summary>
+    private readonly IAutoStart? _autoStart;
+
+    /// <summary>
+    /// What the system last reported about starting at sign-in, so that showing it does not write it back.
+    /// </summary>
+    private bool _storedStartAtLogin;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="SettingsViewModel"/> class.
     /// </summary>
     /// <param name="settings">The settings store.</param>
@@ -50,6 +61,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <param name="languageSelector">The language picker shown in the window; optional.</param>
     /// <param name="about">The "About" page; optional.</param>
     /// <param name="ai">The AI page; optional.</param>
+    /// <param name="autoStart">Registers the application to start at sign-in; optional.</param>
     public SettingsViewModel(
         IAppSettings settings,
         ILocalizer localizer,
@@ -58,10 +70,13 @@ public sealed partial class SettingsViewModel : ObservableObject
         IThemeApplier? themeApplier = null,
         LanguageSelectorViewModel? languageSelector = null,
         AboutViewModel? about = null,
-        AiSettingsViewModel? ai = null)
+        AiSettingsViewModel? ai = null,
+        IAutoStart? autoStart = null)
     {
         _settings = settings;
         _localizer = localizer;
+        _autoStart = autoStart;
+        ReadStartAtLogin();
         _remoteImageRules = remoteImageRules;
         RemoveServerDeletedMessages = settings.RemoveServerDeletedMessages;
         DownloadFullHistory = settings.DownloadFullHistory;
@@ -309,6 +324,17 @@ public sealed partial class SettingsViewModel : ObservableObject
     public partial bool StartMinimized { get; set; }
 
     /// <summary>
+    /// Gets a value indicating whether starting the application at sign-in can be chosen.
+    /// </summary>
+    public bool IsAutoStartSupported => _autoStart is { IsSupported: true };
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the application starts when the user signs in.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool StartAtLogin { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether the graphics card draws the application from the next start on.
     /// </summary>
     [ObservableProperty]
@@ -444,6 +470,54 @@ public sealed partial class SettingsViewModel : ObservableObject
             ErrorText = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
             StartMinimized = _settings.StartMinimized;
         }
+    }
+
+    /// <summary>
+    /// Registers or removes the sign-in entry as soon as the checkbox changes.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    partial void OnStartAtLoginChanged(bool value)
+    {
+        if (_autoStart is not { IsSupported: true } autoStart || value == _storedStartAtLogin)
+        {
+            return;
+        }
+
+        ErrorText = null;
+        try
+        {
+            autoStart.SetEnabled(value);
+            _storedStartAtLogin = value;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException)
+        {
+            // The system refused the change; show it and put the checkbox back to what the system reports.
+            ReadStartAtLogin();
+            ErrorText = _localizer.Format("Error_Format", _localizer["Settings_StartAtLoginFailed"], ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Shows whether the system currently starts the application at sign-in.
+    /// </summary>
+    private void ReadStartAtLogin()
+    {
+        if (_autoStart is not { IsSupported: true } autoStart)
+        {
+            return;
+        }
+
+        try
+        {
+            _storedStartAtLogin = autoStart.IsEnabled();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException)
+        {
+            // The window must still open; the last known value stays and the problem is shown.
+            ErrorText = _localizer.Format("Error_Format", _localizer["Settings_StartAtLoginFailed"], ex.Message);
+        }
+
+        StartAtLogin = _storedStartAtLogin;
     }
 
     /// <summary>

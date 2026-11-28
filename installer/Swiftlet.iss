@@ -70,6 +70,12 @@ Source: "..\THIRD-PARTY-NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
 Name: "{autoprograms}\Swiftlet"; Filename: "{app}\{#AppExeName}"
 Name: "{autodesktop}\Swiftlet"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
+[Registry]
+; The application writes these when the user lets it start at sign-in (WindowsAutoStart); setup creates nothing,
+; and uninstalling removes them.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "Swiftlet"; Flags: dontcreatekey uninsdeletevalue
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"; ValueType: none; ValueName: "Swiftlet"; Flags: dontcreatekey uninsdeletevalue
+
 [Run]
 ; No "skipifsilent": a silent run is the application updating itself, and it must start again.
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,Swiftlet}"; Flags: nowait postinstall

@@ -240,6 +240,9 @@
   <data name="Settings_CloseToTrayHint" xml:space="preserve"><value>Mail keeps synchronizing. Quit from the menu of the tray icon. Turn this off if your desktop shows no tray icons.</value></data>
   <data name="Settings_NewMailNotifications" xml:space="preserve"><value>Show a notification for new mail</value></data>
   <data name="Settings_NewMailNotificationsHint" xml:space="preserve"><value>A small window appears in the corner of the screen when unread mail arrives in an inbox. You can delete, archive or mark the mail there.</value></data>
+  <data name="Settings_StartAtLogin" xml:space="preserve"><value>Start Swiftlet when I sign in</value></data>
+  <data name="Settings_StartAtLoginHint" xml:space="preserve"><value>Applies to this copy of the app; after moving its folder, turn this on again. To start without a window, also turn on the option below.</value></data>
+  <data name="Settings_StartAtLoginFailed" xml:space="preserve"><value>Could not change the sign-in setting</value></data>
   <data name="Settings_StartMinimized" xml:space="preserve"><value>Start hidden in the tray</value></data>
   <data name="Settings_StartMinimizedHint" xml:space="preserve"><value>The main window is not shown when the app starts; open it from the tray icon. Needs a tray icon on your desktop. Starting the app again also brings the window back.</value></data>
   <data name="Settings_HardwareRendering" xml:space="preserve"><value>Use hardware rendering</value></data>

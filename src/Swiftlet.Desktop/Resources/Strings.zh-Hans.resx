@@ -240,6 +240,9 @@
   <data name="Settings_CloseToTrayHint" xml:space="preserve"><value>邮件会继续同步，可从托盘图标的菜单退出。如果你的桌面环境不显示托盘图标，请关闭此项。</value></data>
   <data name="Settings_NewMailNotifications" xml:space="preserve"><value>有新邮件时弹出提示</value></data>
   <data name="Settings_NewMailNotificationsHint" xml:space="preserve"><value>收件箱收到未读邮件时，在屏幕角落显示一个小窗口，可以直接删除、存档或标记邮件。</value></data>
+  <data name="Settings_StartAtLogin" xml:space="preserve"><value>开机自动启动</value></data>
+  <data name="Settings_StartAtLoginHint" xml:space="preserve"><value>登录系统后自动启动当前这份应用；移动应用文件夹后需重新勾选。如需启动时不显示窗口，请同时勾选下面的选项。</value></data>
+  <data name="Settings_StartAtLoginFailed" xml:space="preserve"><value>无法修改开机启动设置</value></data>
   <data name="Settings_StartMinimized" xml:space="preserve"><value>启动后自动最小化到托盘</value></data>
   <data name="Settings_StartMinimizedHint" xml:space="preserve"><value>应用启动时不显示主窗口，可从托盘图标打开。需要桌面环境显示托盘图标；再次启动应用也会把窗口带回前台。</value></data>
   <data name="Settings_HardwareRendering" xml:space="preserve"><value>使用硬件渲染</value></data>
