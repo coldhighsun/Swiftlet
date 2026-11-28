@@ -1139,14 +1139,14 @@ public class UiSmokeTests
                     .Select(c => c.SelectedItem).Should().Equal(
                         selector.SelectedOption,
                         viewModel.SelectedTheme,
-                        viewModel.SelectedTrayUnreadStyle,
-                        viewModel.SelectedContactNameOrder);
+                        viewModel.SelectedContactNameOrder,
+                        viewModel.SelectedTrayUnreadStyle);
                 var generalBoxes = window.GetVisualDescendants().OfType<CheckBox>().ToList();
                 generalBoxes.Should().HaveCount(4);
-                generalBoxes.Take(2).Should().OnlyContain(b => b.IsChecked == true, "the tray and notification settings are on by default");
-                generalBoxes.Skip(2).Should().OnlyContain(
+                generalBoxes.Take(2).Should().OnlyContain(
                     b => b.IsChecked == false && b.IsEffectivelyVisible,
                     "the start at sign-in and the hidden start are off by default");
+                generalBoxes.Skip(2).Should().OnlyContain(b => b.IsChecked == true, "the tray and notification settings are on by default");
                 window.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).Should().Contain(close);
 
                 SelectSettingsPage(window, 3, $"settings-performance-{language}");
