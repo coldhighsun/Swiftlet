@@ -299,9 +299,9 @@ internal sealed class FakeDialogService : IDialogService
     }
 
     /// <summary>
-    /// Gets or sets the recipient the contacts dialog returns.
+    /// Gets or sets what the contacts dialog returns.
     /// </summary>
-    public string? ContactsRecipient { get; set; }
+    public ContactsResult? ContactsResult { get; set; }
 
     /// <summary>
     /// Gets the requests the contacts dialog was shown with.
@@ -314,10 +314,10 @@ internal sealed class FakeDialogService : IDialogService
     public string? ContactFile { get; set; }
 
     /// <inheritdoc />
-    public Task<string?> ShowContactsAsync(ContactsRequest? request)
+    public Task<ContactsResult?> ShowContactsAsync(ContactsRequest? request)
     {
         ContactsRequests.Add(request);
-        return Task.FromResult(ContactsRecipient);
+        return Task.FromResult(ContactsResult);
     }
 
     /// <summary>

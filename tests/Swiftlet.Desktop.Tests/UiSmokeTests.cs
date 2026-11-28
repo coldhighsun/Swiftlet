@@ -2488,7 +2488,7 @@ public class UiSmokeTests
 
                 toggle.IsChecked = true;
                 var filter = scenario.ViewModel.Filter;
-                filter.From = "alice";
+                filter.Participants = "alice";
                 filter.DateFrom = new DateOnly(2026, 3, 2);
                 filter.DateTo = new DateOnly(2026, 3, 1);
                 Render(window, $"main-window-search-filters-{language}", language);
@@ -2515,7 +2515,7 @@ public class UiSmokeTests
                 toggle.IsChecked = false;
                 Render(window, $"main-window-search-hidden-{language}", language);
                 panel.IsVisible.Should().BeFalse();
-                filter.From.Should().Be("alice");
+                filter.Participants.Should().Be("alice");
                 window.Close();
             },
             TestContext.Current.CancellationToken);
@@ -2821,8 +2821,8 @@ public class UiSmokeTests
                 flyout.IsOpen.Should().BeTrue();
                 Snapshot(window, "main-window-address-menu");
                 var items = flyout.Items.OfType<MenuItem>().ToList();
-                items.Select(i => i.Header).Should().Equal("View contact", "Write email", "Copy address");
-                items[2].Command!.Execute(null);
+                items.Select(i => i.Header).Should().Equal("View contact", "Write email", "Show messages", "Copy address");
+                items[3].Command!.Execute(null);
                 scenario.Dialogs.CopiedTexts.Should().Equal("alice@example.com");
                 flyout.Hide();
                 window.Close();
@@ -2868,6 +2868,13 @@ public class UiSmokeTests
 
                 scenario.Dialogs.ContactsRequests.Should().ContainSingle()
                     .Which!.Address.Should().Be("alice@example.com");
+                var correspondence = menu.Items.OfType<MenuItem>().Single(i => Equals(i.Header, "Messages with"));
+                correspondence.IsEffectivelyEnabled.Should().BeTrue();
+                add.IsSubMenuOpen = false;
+                correspondence.IsSubMenuOpen = true;
+                Dispatcher.UIThread.RunJobs();
+                Snapshot(window, "main-window-correspondence-menu-open");
+                ((MenuItem)correspondence.ContainerFromIndex(0)!).Command.Should().NotBeNull();
                 menu.Close();
                 window.Close();
             },

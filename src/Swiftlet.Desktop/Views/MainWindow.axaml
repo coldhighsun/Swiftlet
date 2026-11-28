@@ -232,37 +232,30 @@
               <ScrollViewer HorizontalScrollBarVisibility="Disabled">
                 <!-- The wider right margin keeps the scroll bar off the inputs. -->
                 <StackPanel Spacing="4" Margin="12,12,16,0">
-                  <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="4">
-                    <TextBlock Classes="caption" Text="{loc:Loc Search_From}" />
-                    <TextBox Grid.Column="1" Text="{Binding Filter.From}" PlaceholderText="{loc:Loc Search_FromPlaceholder}"
-                             AutomationProperties.Name="{loc:Loc Search_From}">
+                  <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="4">
+                    <TextBlock Classes="caption" Text="{loc:Loc Search_Participants}" />
+                    <TextBox Grid.Column="1" Text="{Binding Filter.Participants}" PlaceholderText="{loc:Loc Search_ParticipantsPlaceholder}"
+                             ToolTip.Tip="{loc:Loc Search_ParticipantsPlaceholder}" AutomationProperties.Name="{loc:Loc Search_Participants}">
                       <TextBox.KeyBindings>
                         <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}" />
                       </TextBox.KeyBindings>
                     </TextBox>
-                    <TextBlock Grid.Row="1" Classes="caption" Text="{loc:Loc Search_To}" />
-                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Filter.To}" PlaceholderText="{loc:Loc Search_ToPlaceholder}"
-                             AutomationProperties.Name="{loc:Loc Search_To}">
+                    <TextBlock Grid.Row="1" Classes="caption" Text="{loc:Loc Search_Subject}" />
+                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Filter.Subject}" AutomationProperties.Name="{loc:Loc Search_Subject}">
                       <TextBox.KeyBindings>
                         <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}" />
                       </TextBox.KeyBindings>
                     </TextBox>
-                    <TextBlock Grid.Row="2" Classes="caption" Text="{loc:Loc Search_Subject}" />
-                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Filter.Subject}" AutomationProperties.Name="{loc:Loc Search_Subject}">
-                      <TextBox.KeyBindings>
-                        <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}" />
-                      </TextBox.KeyBindings>
-                    </TextBox>
-                    <TextBlock Grid.Row="3" Classes="caption" Text="{loc:Loc Search_DateFrom}" />
-                    <CalendarDatePicker Grid.Row="3" Grid.Column="1"
+                    <TextBlock Grid.Row="2" Classes="caption" Text="{loc:Loc Search_DateFrom}" />
+                    <CalendarDatePicker Grid.Row="2" Grid.Column="1"
                                         SelectedDate="{Binding Filter.DateFrom, Mode=TwoWay, Converter={x:Static conv:DateOnlyConverter.Instance}}"
                                         AutomationProperties.Name="{loc:Loc Search_DateFrom}" />
-                    <TextBlock Grid.Row="4" Classes="caption" Text="{loc:Loc Search_DateTo}" />
-                    <CalendarDatePicker Grid.Row="4" Grid.Column="1"
+                    <TextBlock Grid.Row="3" Classes="caption" Text="{loc:Loc Search_DateTo}" />
+                    <CalendarDatePicker Grid.Row="3" Grid.Column="1"
                                         SelectedDate="{Binding Filter.DateTo, Mode=TwoWay, Converter={x:Static conv:DateOnlyConverter.Instance}}"
                                         AutomationProperties.Name="{loc:Loc Search_DateTo}" />
-                    <TextBlock Grid.Row="5" Classes="caption" Text="{loc:Loc Search_Scope}" />
-                    <ComboBox Grid.Row="5" Grid.Column="1" HorizontalAlignment="Stretch" SelectedIndex="{Binding Filter.ScopeIndex}"
+                    <TextBlock Grid.Row="4" Classes="caption" Text="{loc:Loc Search_Scope}" />
+                    <ComboBox Grid.Row="4" Grid.Column="1" HorizontalAlignment="Stretch" SelectedIndex="{Binding Filter.ScopeIndex}"
                               AutomationProperties.Name="{loc:Loc Search_Scope}">
                       <!-- In the order of the SearchScope values. -->
                       <ComboBoxItem Content="{loc:Loc Search_ScopeAccount}" IsEnabled="{Binding Filter.CanSearchAccount}" />
@@ -300,6 +293,21 @@
                   <MenuItem Header="{loc:Loc Menu_Message_MarkUnread}" Command="{Binding MarkSelectedUnreadCommand}" />
                   <MenuItem Header="{loc:Loc Toolbar_Archive}" Command="{Binding ArchiveSelectedCommand}" />
                   <MenuItem Header="{loc:Loc Toolbar_Delete}" Command="{Binding DeleteSelectedCommand}" />
+                  <MenuItem Header="{loc:Loc Menu_Message_Correspondence}" ItemsSource="{Binding CorrespondenceTargets}"
+                            IsEnabled="{Binding CanShowCorrespondence}">
+                    <MenuItem.ItemContainerTheme>
+                      <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}"
+                                    x:DataType="main:ContactTargetViewModel">
+                        <Setter Property="Command" Value="{Binding Command}" />
+                      </ControlTheme>
+                    </MenuItem.ItemContainerTheme>
+                    <MenuItem.ItemTemplate>
+                      <!-- A text block keeps underscores of addresses, which a plain header reads as access keys. -->
+                      <DataTemplate DataType="main:ContactTargetViewModel">
+                        <TextBlock Text="{Binding Header}" />
+                      </DataTemplate>
+                    </MenuItem.ItemTemplate>
+                  </MenuItem>
                   <MenuItem Header="{loc:Loc Menu_Message_AddContact}" ItemsSource="{Binding ContactTargets}"
                             IsEnabled="{Binding CanAddContact}">
                     <MenuItem.ItemContainerTheme>

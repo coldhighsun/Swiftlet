@@ -897,8 +897,7 @@ public class MainWindowViewModelTests
         var scenario = new Scenario();
         await scenario.StartInInboxAsync();
         var filter = scenario.ViewModel.Filter;
-        filter.From = " alice ";
-        filter.To = "bob@example.com";
+        filter.Participants = " alice, bob@example.com ";
         filter.Subject = "Hello";
         filter.DateFrom = new DateOnly(2026, 3, 1);
         filter.DateTo = new DateOnly(2026, 3, 31);
@@ -910,8 +909,7 @@ public class MainWindowViewModelTests
 
         scenario.Dispatcher.Sent<SearchMessagesQuery>().Should().ContainSingle().Which.Criteria.Should().Be(new MessageSearchCriteria
         {
-            From = "alice",
-            To = "bob@example.com",
+            Participants = "alice, bob@example.com",
             Subject = "Hello",
             SentFrom = new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero),
             SentBefore = new DateTimeOffset(2026, 4, 1, 0, 0, 0, TimeSpan.Zero),
@@ -980,14 +978,14 @@ public class MainWindowViewModelTests
         await scenario.StartInInboxAsync();
         var filter = scenario.ViewModel.Filter;
         filter.IsExpanded = true;
-        filter.From = "alice";
+        filter.Participants = "alice";
         filter.HasAttachments = true;
         filter.HasActiveFilters.Should().BeTrue();
 
         scenario.ViewModel.SelectedNode = scenario.ViewModel.TreeRoots[0];
         await scenario.ViewModel.WhenIdleAsync();
 
-        filter.From.Should().BeEmpty();
+        filter.Participants.Should().BeEmpty();
         filter.HasAttachments.Should().BeFalse();
         filter.HasActiveFilters.Should().BeFalse();
         filter.IsExpanded.Should().BeTrue();
@@ -1285,7 +1283,7 @@ public class MainWindowViewModelTests
     {
         var scenario = new Scenario();
         await scenario.StartAsync();
-        scenario.Dialogs.ContactsRecipient = recipient;
+        scenario.Dialogs.ContactsResult = recipient is null ? null : new ContactsResult(recipient);
 
         await scenario.ViewModel.OpenContactsCommand.ExecuteAsync(null);
 
@@ -1372,6 +1370,88 @@ public class MainWindowViewModelTests
     }
 
     /// <summary>
+    /// Verifies showing the messages of an address leaves the account page and searches every account for all addresses of the contact.
+    /// </summary>
+    [Fact]
+    public async Task HeaderAddress_Correspondence_SearchesAllAccountsForTheContact()
+    {
+        var scenario = await StartWithRecipientsAsync();
+        scenario.Dispatcher.On<GetCorrespondentAddressesQuery>(
+            q => (IReadOnlyList<string>)new List<string> { q.Address, "bob@work.example.com" });
+        var bob = scenario.ViewModel.SelectedMessage!.RecipientAddresses[1];
+        scenario.ViewModel.SelectedNode = scenario.ViewModel.Accounts[0];
+        await scenario.ViewModel.WhenIdleAsync();
+        var activations = 0;
+        scenario.ViewModel.ActivationRequested += (_, _) => activations++;
+
+        await bob.CorrespondenceCommand.ExecuteAsync(null);
+
+        scenario.ViewModel.SelectedNode.Should().BeSameAs(scenario.ViewModel.UnifiedInbox);
+        scenario.ViewModel.IsAccountPageShown.Should().BeFalse();
+        scenario.ViewModel.Filter.IsExpanded.Should().BeTrue();
+        scenario.ViewModel.Filter.Participants.Should().Be("bob@example.com, bob@work.example.com");
+        scenario.Dispatcher.Sent<SearchMessagesQuery>().Should().ContainSingle().Which.Criteria.Should()
+            .Be(new MessageSearchCriteria { Participants = "bob@example.com, bob@work.example.com" });
+        activations.Should().Be(1);
+    }
+
+    /// <summary>
+    /// Verifies a manual synchronization keeps the shown search results.
+    /// </summary>
+    [Fact]
+    public async Task SyncCommand_SearchShown_SearchesAgain()
+    {
+        var scenario = new Scenario();
+        await scenario.StartInInboxAsync();
+        scenario.ViewModel.SearchText = "Hello";
+        await scenario.ViewModel.SearchCommand.ExecuteAsync(null);
+        var listed = scenario.ViewModel.Messages.Select(x => x.Id).ToList();
+
+        await scenario.ViewModel.SyncCommand.ExecuteAsync(null);
+
+        scenario.Dispatcher.Sent<SearchMessagesQuery>().Should().HaveCount(2);
+        scenario.ViewModel.Messages.Select(x => x.Id).Should().Equal(listed);
+    }
+
+    /// <summary>
+    /// Verifies the correspondence menu lists the same people as the contacts menu and searches for the chosen one.
+    /// </summary>
+    [Fact]
+    public async Task CorrespondenceTarget_Recipient_SearchesForAddress()
+    {
+        var scenario = await StartWithRecipientsAsync();
+        scenario.Dispatcher.On<GetCorrespondentAddressesQuery>(q => (IReadOnlyList<string>)new List<string> { q.Address });
+        scenario.ViewModel.RefreshContactTargets();
+        scenario.ViewModel.CanShowCorrespondence.Should().BeTrue();
+        scenario.ViewModel.CorrespondenceTargets.Select(t => t.Header).Should().Equal(
+            "发件人：Alice <alice@example.com>",
+            "收件人：bob@example.com");
+
+        scenario.ViewModel.CorrespondenceTargets[1].Command.Execute(null);
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.ViewModel.Filter.Participants.Should().Be("bob@example.com");
+        scenario.Dispatcher.Sent<SearchMessagesQuery>().Should().ContainSingle();
+    }
+
+    /// <summary>
+    /// Verifies the contacts window can ask for the messages of a contact.
+    /// </summary>
+    [Fact]
+    public async Task OpenContactsCommand_CorrespondenceChosen_Searches()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        scenario.Dialogs.ContactsResult = new ContactsResult(Correspondents: ["a@x.com", "b@x.com"]);
+
+        await scenario.ViewModel.OpenContactsCommand.ExecuteAsync(null);
+
+        scenario.ViewModel.Filter.Participants.Should().Be("a@x.com, b@x.com");
+        scenario.Dispatcher.Sent<SearchMessagesQuery>().Should().ContainSingle();
+        scenario.Dialogs.ComposeRequests.Should().BeEmpty();
+    }
+
+    /// <summary>
     /// Verifies the menu is empty for a selection of several messages.
     /// </summary>
     [Fact]
@@ -1389,6 +1469,7 @@ public class MainWindowViewModelTests
         scenario.ViewModel.RefreshContactTargets();
 
         scenario.ViewModel.CanAddContact.Should().BeFalse();
+        scenario.ViewModel.CanShowCorrespondence.Should().BeFalse();
     }
 
     /// <summary>

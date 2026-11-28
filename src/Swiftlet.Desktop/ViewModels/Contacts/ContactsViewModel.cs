@@ -94,9 +94,9 @@ public sealed partial class ContactsViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Raised when the window should close; the argument is the recipient to write to, or <see langword="null"/>.
+    /// Raised when the window should close; the argument is what the user chose to do next, or <see langword="null"/>.
     /// </summary>
-    public event EventHandler<string?>? CloseRequested;
+    public event EventHandler<ContactsResult?>? CloseRequested;
 
     /// <summary>
     /// Gets the contacts matching the search.
@@ -182,6 +182,7 @@ public sealed partial class ContactsViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(EditCommand))]
     [NotifyCanExecuteChangedFor(nameof(DeleteCommand))]
     [NotifyCanExecuteChangedFor(nameof(WriteCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ShowCorrespondenceCommand))]
     public partial bool IsExisting { get; set; }
 
     /// <summary>
@@ -433,7 +434,19 @@ public sealed partial class ContactsViewModel : ObservableObject
         if (FindContact(_shownId) is { } contact)
         {
             var name = contact.FormatName(Order);
-            CloseRequested?.Invoke(this, RecipientList.Format(name, address ?? contact.Emails[0]));
+            CloseRequested?.Invoke(this, new ContactsResult(RecipientList.Format(name, address ?? contact.Emails[0])));
+        }
+    }
+
+    /// <summary>
+    /// Closes the window to list the messages exchanged with the shown contact, under all its saved addresses.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(IsExisting))]
+    private void ShowCorrespondence()
+    {
+        if (FindContact(_shownId) is { } contact)
+        {
+            CloseRequested?.Invoke(this, new ContactsResult(Correspondents: contact.Emails));
         }
     }
 
@@ -546,7 +559,19 @@ public sealed partial class ContactsViewModel : ObservableObject
     {
         if (SingleCollected is { } item)
         {
-            CloseRequested?.Invoke(this, RecipientList.Format(item.Entry.Name, item.Entry.Address));
+            CloseRequested?.Invoke(this, new ContactsResult(RecipientList.Format(item.Entry.Name, item.Entry.Address)));
+        }
+    }
+
+    /// <summary>
+    /// Closes the window to list the messages exchanged with the selected collected address.
+    /// </summary>
+    [RelayCommand]
+    private void ShowCollectedCorrespondence()
+    {
+        if (SingleCollected is { } item)
+        {
+            CloseRequested?.Invoke(this, new ContactsResult(Correspondents: [item.Entry.Address]));
         }
     }
 

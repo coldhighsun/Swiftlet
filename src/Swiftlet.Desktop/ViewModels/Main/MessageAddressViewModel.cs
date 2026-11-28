@@ -13,10 +13,12 @@ namespace Swiftlet.Desktop.ViewModels.Main;
 /// <param name="OpenContact">Shows the contact of an address, or offers to add one; gets the name that came with the mail and the address.</param>
 /// <param name="Write">Opens a new message from an account to a recipient.</param>
 /// <param name="Copy">Copies a text to the clipboard.</param>
+/// <param name="ShowCorrespondence">Lists the messages exchanged with an address.</param>
 public sealed record MessageAddressActions(
     Func<string, string, Task> OpenContact,
     Func<Guid, string, Task> Write,
-    Func<string, Task> Copy);
+    Func<string, Task> Copy,
+    Func<string, Task> ShowCorrespondence);
 
 /// <summary>
 /// A sender or recipient in the header of the reading pane, with the menu behind it.
@@ -68,6 +70,7 @@ public sealed class MessageAddressViewModel : ObservableObject
             () => actions!.Write(accountId, RecipientList.Format(AddressText.Name(_contacts, _headerName, Address), Address)),
             () => usable);
         CopyCommand = new AsyncRelayCommand(() => actions!.Copy(Address), () => actions is not null);
+        CorrespondenceCommand = new AsyncRelayCommand(() => actions!.ShowCorrespondence(Address), () => usable);
     }
 
     /// <summary>
@@ -106,6 +109,11 @@ public sealed class MessageAddressViewModel : ObservableObject
     /// Gets the command that copies the address.
     /// </summary>
     public IAsyncRelayCommand CopyCommand { get; }
+
+    /// <summary>
+    /// Gets the command that lists the messages exchanged with the address.
+    /// </summary>
+    public IAsyncRelayCommand CorrespondenceCommand { get; }
 
     /// <summary>
     /// Re-reads the texts after the address book or the language changed.

@@ -44,18 +44,11 @@ public sealed partial class SearchFilterViewModel : ObservableObject
     public partial bool IsExpanded { get; set; }
 
     /// <summary>
-    /// Gets or sets the sender condition.
+    /// Gets or sets the people condition, matched against the sender and the recipients.
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasActiveFilters))]
-    public partial string From { get; set; }
-
-    /// <summary>
-    /// Gets or sets the recipient condition.
-    /// </summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasActiveFilters))]
-    public partial string To { get; set; }
+    public partial string Participants { get; set; }
 
     /// <summary>
     /// Gets or sets the subject condition.
@@ -129,8 +122,7 @@ public sealed partial class SearchFilterViewModel : ObservableObject
     /// pointed out.
     /// </summary>
     public bool HasActiveFilters =>
-        !string.IsNullOrWhiteSpace(From)
-        || !string.IsNullOrWhiteSpace(To)
+        !string.IsNullOrWhiteSpace(Participants)
         || !string.IsNullOrWhiteSpace(Subject)
         || DateFrom is not null
         || DateTo is not null
@@ -150,8 +142,7 @@ public sealed partial class SearchFilterViewModel : ObservableObject
     /// <param name="node">The selected tree node.</param>
     public void Reset(object? node)
     {
-        From = string.Empty;
-        To = string.Empty;
+        Participants = string.Empty;
         Subject = string.Empty;
         DateFrom = null;
         DateTo = null;
@@ -182,8 +173,7 @@ public sealed partial class SearchFilterViewModel : ObservableObject
         return new MessageSearchCriteria
         {
             Text = text.Trim(),
-            From = From.Trim(),
-            To = To.Trim(),
+            Participants = Participants.Trim(),
             Subject = Subject.Trim(),
             SentFrom = StartOfDay(DateFrom, timeZone),
             // The last day is included, so the search ends where the next day starts.

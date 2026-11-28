@@ -854,48 +854,97 @@ public class MessageRepositoryTests
     }
 
     /// <summary>
-    /// Verifies the sender condition looks at the name and the address only, for indexed and short terms alike.
+    /// Verifies the participant condition looks at the sender and the recipients, for long and short terms alike.
     /// </summary>
-    /// <param name="from">The sender condition.</param>
+    /// <param name="participants">The participant condition.</param>
     [Theory]
     [InlineData("carol")]
-    [InlineData("Walker")]
     [InlineData("cw")]
-    [InlineData("carol walker")]
-    public async Task SearchAsync_From_MatchesSenderNameOrAddressOnly(string from)
+    [InlineData("carol corp")]
+    [InlineData("CAROL@corp.com")]
+    public async Task SearchAsync_Participants_MatchesSenderOrRecipients(string participants)
     {
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var (account, folder) = await db.SeedAccountAsync(ct);
         var repository = db.CreateMessageRepository();
         var now = DateTimeOffset.UtcNow;
-        await repository.AddAsync(MailMessage.Create(account.Id, folder.Id, 1, "hit", "Carol Walker cw", "carol@corp.com", "r", now, "text"), ct);
-        await repository.AddAsync(Build(account, folder, 2, "carol walker cw", "carol walker cw", now), ct);
+        await repository.AddAsync(MailMessage.Create(account.Id, folder.Id, 1, "sent by", "Carol cw", "carol@corp.com", "me@x.com", now, "t"), ct);
+        await repository.AddAsync(MailMessage.Create(account.Id, folder.Id, 2, "sent to", "Me", "me@x.com", "bob@x.com, carol@corp.com, cw@x.com", now.AddMinutes(-1), "t"), ct);
+        await repository.AddAsync(Build(account, folder, 3, "carol@corp.com cw", "carol corp cw", now), ct);
 
-        var result = await repository.SearchAsync(new MessageSearchCriteria { From = from }, 0, 10, ct);
+        var result = await repository.SearchAsync(new MessageSearchCriteria { Participants = participants }, 0, 10, ct);
 
-        result.Should().ContainSingle().Which.Subject.Should().Be("hit");
+        result.Select(m => m.Subject).Should().Equal("sent by", "sent to");
     }
 
     /// <summary>
-    /// Verifies the recipient condition needs every term in the recipient addresses and treats wildcards literally.
+    /// Verifies a complete address matches only that whole address.
     /// </summary>
     [Fact]
-    public async Task SearchAsync_To_MatchesRecipientAddresses()
+    public async Task SearchAsync_ParticipantAddress_DoesNotMatchPartOfAnotherAddress()
     {
         var ct = TestContext.Current.CancellationToken;
         await using var db = await TestDatabase.CreateAsync(ct);
         var (account, folder) = await db.SeedAccountAsync(ct);
         var repository = db.CreateMessageRepository();
         var now = DateTimeOffset.UtcNow;
-        await repository.AddAsync(MailMessage.Create(account.Id, folder.Id, 1, "both", "A", "a@x.com", "dev_team@corp.com, bob@corp.com", now, "t"), ct);
-        await repository.AddAsync(MailMessage.Create(account.Id, folder.Id, 2, "one", "A", "bob@corp.com", "devXteam@corp.com", now, "bob@corp.com"), ct);
+        await repository.AddAsync(MailMessage.Create(account.Id, folder.Id, 1, "longer sender", "D", "dan@x.com", "r@x.com", now, "t"), ct);
+        await repository.AddAsync(MailMessage.Create(account.Id, folder.Id, 2, "longer recipient", "R", "r@x.com", "dan@x.com, an@x.com.cn", now, "t"), ct);
+        await repository.AddAsync(MailMessage.Create(account.Id, folder.Id, 3, "wildcard", "R", "r@x.com", "aXn@x.com", now, "t"), ct);
+        await repository.AddAsync(MailMessage.Create(account.Id, folder.Id, 4, "exact", "R", "r@x.com", "b@x.com, an@x.com", now, "t"), ct);
 
-        var both = await repository.SearchAsync(new MessageSearchCriteria { To = "BOB dev" }, 0, 10, ct);
-        var literal = await repository.SearchAsync(new MessageSearchCriteria { To = "dev_team" }, 0, 10, ct);
+        var result = await repository.SearchAsync(new MessageSearchCriteria { Participants = "an@x.com" }, 0, 10, ct);
+        var wildcard = await repository.SearchAsync(new MessageSearchCriteria { Participants = "a_n@x.com" }, 0, 10, ct);
 
-        both.Should().ContainSingle().Which.Subject.Should().Be("both");
-        literal.Should().ContainSingle().Which.Subject.Should().Be("both");
+        result.Should().ContainSingle().Which.Subject.Should().Be("exact");
+        wildcard.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies entries separated by commas or semicolons are alternatives, combined with the other conditions and paged.
+    /// </summary>
+    /// <param name="separator">The separator.</param>
+    [Theory]
+    [InlineData(", ")]
+    [InlineData(";")]
+    [InlineData("，")]
+    [InlineData("；")]
+    public async Task SearchAsync_SeveralParticipants_MatchAnyOfThem(string separator)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var repository = db.CreateMessageRepository();
+        var now = DateTimeOffset.UtcNow;
+        await repository.AddAsync(MailMessage.Create(account.Id, folder.Id, 1, "report home", "A", "home@x.com", "r@x.com", now.AddMinutes(-2), "t"), ct);
+        await repository.AddAsync(MailMessage.Create(account.Id, folder.Id, 2, "report work", "R", "r@x.com", "work@x.com", now.AddMinutes(-1), "t"), ct);
+        await repository.AddAsync(MailMessage.Create(account.Id, folder.Id, 3, "lunch", "R", "r@x.com", "work@x.com", now, "t"), ct);
+        await repository.AddAsync(MailMessage.Create(account.Id, folder.Id, 4, "report other", "R", "r@x.com", "else@x.com", now, "t"), ct);
+        var criteria = new MessageSearchCriteria { Participants = $"home@x.com{separator}work@x.com{separator}", Subject = "report" };
+
+        var first = await repository.SearchAsync(criteria, 0, 1, ct);
+        var second = await repository.SearchAsync(criteria, 1, 5, ct);
+
+        first.Select(m => m.Subject).Should().Equal("report work");
+        second.Select(m => m.Subject).Should().Equal("report home");
+    }
+
+    /// <summary>
+    /// Verifies a participant condition of separators only finds nothing instead of everything.
+    /// </summary>
+    [Fact]
+    public async Task SearchAsync_ParticipantSeparatorsOnly_ReturnsEmpty()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var (account, folder) = await db.SeedAccountAsync(ct);
+        var repository = db.CreateMessageRepository();
+        await repository.AddAsync(Build(account, folder, 1, "s", "b", DateTimeOffset.UtcNow), ct);
+
+        var result = await repository.SearchAsync(new MessageSearchCriteria { Participants = " , ; " }, 0, 10, ct);
+
+        result.Should().BeEmpty();
     }
 
     /// <summary>
@@ -932,7 +981,7 @@ public class MessageRepositoryTests
         await repository.AddAsync(Build(account, folder, 1, "the \"final\" draft", "text", DateTimeOffset.UtcNow), ct);
 
         var found = await repository.SearchAsync(new MessageSearchCriteria { Subject = "\"final\"" }, 0, 10, ct);
-        var none = await repository.SearchAsync(new MessageSearchCriteria { From = "} OR Subject : \"draft" }, 0, 10, ct);
+        var none = await repository.SearchAsync(new MessageSearchCriteria { Participants = "} OR Subject : \"draft" }, 0, 10, ct);
 
         found.Should().ContainSingle();
         none.Should().BeEmpty();
@@ -1009,7 +1058,7 @@ public class MessageRepositoryTests
         await repository.AddAsync(Build(account, folder, 2, "report two", "revenue", now.AddMinutes(-2)), ct);
         await repository.AddAsync(Build(account, folder, 3, "report three", "revenue", now, "bob@example.com"), ct);
         await repository.AddAsync(Build(account, folder, 4, "lunch", "revenue", now), ct);
-        var criteria = new MessageSearchCriteria { Text = "revenue", From = "alice@", To = "me", Subject = "report" };
+        var criteria = new MessageSearchCriteria { Text = "revenue", Participants = "alice@", Subject = "report" };
 
         var first = await repository.SearchAsync(criteria, 0, 1, ct);
         var second = await repository.SearchAsync(criteria, 1, 5, ct);

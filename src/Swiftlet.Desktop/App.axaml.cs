@@ -232,6 +232,12 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
     private bool ShowMain(IClassicDesktopStyleApplicationLifetime desktop, MainWindow window)
     {
         var hidden = AdoptMain(desktop, window);
+        if (window.DataContext is MainWindowViewModel viewModel)
+        {
+            // Something chosen in a message window shows in the main window, which may be behind it or in the tray.
+            viewModel.ActivationRequested += (_, _) => _activator?.BringToFront();
+        }
+
         KeepInTray(desktop, window);
         AnnounceNewMail(desktop, window);
         WatchForUpdates(desktop, window);

@@ -201,7 +201,7 @@ public sealed class ContactsViewModelTests
         var viewModel = await CreateAsync();
         viewModel.SelectedContact = viewModel.Contacts[0];
         string? recipient = null;
-        viewModel.CloseRequested += (_, value) => recipient = value;
+        viewModel.CloseRequested += (_, value) => recipient = value?.WriteTo;
 
         viewModel.WriteCommand.Execute("work@x.com");
         await viewModel.CopyCommand.ExecuteAsync("123");
@@ -209,6 +209,28 @@ public sealed class ContactsViewModelTests
         recipient.Should().Be("张三 <work@x.com>");
         _dialogs.CopiedTexts.Should().Equal("123");
         viewModel.StatusText.Should().Contain("123");
+    }
+
+    /// <summary>
+    /// Verifies asking for messages closes the window with every address of the contact, or the collected address.
+    /// </summary>
+    [Fact]
+    public async Task Correspondence_ContactAndCollected_ReturnsAddresses()
+    {
+        var viewModel = await CreateAsync();
+        var results = new List<ContactsResult?>();
+        viewModel.CloseRequested += (_, result) => results.Add(result);
+        viewModel.ShowCorrespondenceCommand.CanExecute(null).Should().BeFalse();
+        viewModel.SelectedContact = viewModel.Contacts[0];
+
+        viewModel.ShowCorrespondenceCommand.Execute(null);
+        viewModel.SelectedCollected.Add(viewModel.Collected[0]);
+        viewModel.ShowCollectedCorrespondenceCommand.Execute(null);
+
+        results.Should().HaveCount(2);
+        results[0]!.Correspondents.Should().Equal(_contact.Emails);
+        results[1]!.Correspondents.Should().Equal("bob@x.com");
+        results.Should().OnlyContain(r => r!.WriteTo == null);
     }
 
     /// <summary>
@@ -344,7 +366,7 @@ public sealed class ContactsViewModelTests
             settings: new FakeAppSettings { ContactNameOrder = order });
         await viewModel.InitializeAsync();
         string? recipient = null;
-        viewModel.CloseRequested += (_, value) => recipient = value;
+        viewModel.CloseRequested += (_, value) => recipient = value?.WriteTo;
 
         viewModel.SearchText = "alice walker";
         viewModel.Contacts.Should().ContainSingle().Which.Title.Should().Be(title);
@@ -399,7 +421,7 @@ public sealed class ContactsViewModelTests
     {
         var viewModel = await CreateAsync();
         var recipients = new List<string?>();
-        viewModel.CloseRequested += (_, recipient) => recipients.Add(recipient);
+        viewModel.CloseRequested += (_, result) => recipients.Add(result?.WriteTo);
         viewModel.WriteCommand.CanExecute(null).Should().BeFalse();
         viewModel.SelectedContact = viewModel.Contacts[0];
 

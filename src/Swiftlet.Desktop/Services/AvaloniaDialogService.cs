@@ -186,7 +186,7 @@ public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogSe
     }
 
     /// <inheritdoc />
-    public async Task<string?> ShowContactsAsync(ContactsRequest? request)
+    public async Task<ContactsResult?> ShowContactsAsync(ContactsRequest? request)
     {
         var owner = ActiveWindow;
         if (owner is null)
@@ -196,9 +196,9 @@ public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogSe
 
         var viewModel = services.GetRequiredService<ContactsViewModel>();
         var window = new ContactsWindow { DataContext = viewModel };
-        viewModel.CloseRequested += (_, recipient) => window.Close(recipient);
+        viewModel.CloseRequested += (_, result) => window.Close(result);
         await viewModel.InitializeAsync(request);
-        return await window.ShowDialog<string?>(owner);
+        return await window.ShowDialog<ContactsResult?>(owner);
     }
 
     /// <inheritdoc />

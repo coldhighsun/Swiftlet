@@ -18,6 +18,8 @@
                         IsVisible="{Binding CanBeContact}" x:DataType="main:MessageAddressViewModel" />
               <MenuItem Header="{loc:Loc Menu_Address_Write}" Command="{Binding WriteCommand}"
                         IsVisible="{Binding CanBeContact}" x:DataType="main:MessageAddressViewModel" />
+              <MenuItem Header="{loc:Loc Menu_Address_Correspondence}" Command="{Binding CorrespondenceCommand}"
+                        IsVisible="{Binding CanBeContact}" x:DataType="main:MessageAddressViewModel" />
               <MenuItem Header="{loc:Loc Menu_Address_Copy}" Command="{Binding CopyCommand}"
                         x:DataType="main:MessageAddressViewModel" />
             </MenuFlyout>

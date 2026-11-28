@@ -124,6 +124,26 @@ public sealed class ContactTests
     }
 
     /// <summary>
+    /// Verifies an address of a contact expands to all its addresses, the asked one first, and another stays alone.
+    /// </summary>
+    /// <param name="address">The asked address.</param>
+    /// <param name="expected">The expected addresses, space separated.</param>
+    [Theory]
+    [InlineData("ANN@work.com", "ANN@work.com Ann@x.com")]
+    [InlineData("other@x.com", "other@x.com")]
+    public async Task GetCorrespondentAddresses_Address_ExpandsToTheContact(string address, string expected)
+    {
+        await using var db = await TestDatabase.CreateAsync(Token);
+        var repository = db.CreateContactRepository();
+        await repository.AddRangeAsync([Contact.Create("Ann", "Lee", ["Ann@x.com", "ann@work.com"])], Token);
+        var handler = new GetCorrespondentAddressesQueryHandler(repository);
+
+        var addresses = await handler.Handle(new GetCorrespondentAddressesQuery(address), Token);
+
+        addresses.Should().Equal(expected.Split(' '));
+    }
+
+    /// <summary>
     /// Verifies every address of every contact maps to its name, ignoring case, and a contact without a name is listed.
     /// </summary>
     [Fact]
