@@ -314,6 +314,36 @@ public class ThemeTests
     }
 
     /// <summary>
+    /// Verifies the check mark uses the readable color on the accent, which is dark in the dark theme where the accents
+    /// are light.
+    /// </summary>
+    /// <param name="scheme">The color scheme.</param>
+    [Theory]
+    [MemberData(nameof(Schemes))]
+    public async Task Controls_CheckedCheckBox_UsesOnAccentMark(string scheme)
+    {
+        await UiSmokeTests.Session.Dispatch(
+            () => WithScheme(
+                scheme,
+                () =>
+                {
+                    foreach (var variant in (ThemeVariant[])[ThemeVariant.Light, ThemeVariant.Dark])
+                    {
+                        var box = new CheckBox { Content = "x", IsChecked = true };
+                        var window = new Window { Content = box, RequestedThemeVariant = variant };
+                        window.Show();
+                        Dispatcher.UIThread.RunJobs();
+
+                        box.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Single(p => p.Name == "CheckGlyph")
+                            .Fill.Should().BeAssignableTo<ISolidColorBrush>().Which.Color
+                            .Should().Be(Color("Brush.OnAccent", variant), $"{scheme} {variant}");
+                        window.Close();
+                    }
+                }),
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Verifies check boxes stay square: the rounder control radius would make them look like radio buttons.
     /// </summary>
     [Fact]
