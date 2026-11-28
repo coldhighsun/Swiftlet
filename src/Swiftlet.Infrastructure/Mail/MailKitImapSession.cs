@@ -377,8 +377,11 @@ internal sealed class MailKitImapSession(ImapClient client, ILogger<MailKitImapS
             var folder = await client.GetFolderAsync(folderFullName, cancellationToken);
             await folder.OpenAsync(FolderAccess.ReadOnly, cancellationToken);
 
+            // No upper bound is sent as "*": some servers (QQ Mail) answer BAD to a UID near the 32-bit limit.
+            var last = beforeUid == uint.MaxValue ? UniqueId.MaxValue : new UniqueId(beforeUid - 1);
+
             // The same \Deleted exclusion as the regular sync, so messages it would never download do not count.
-            var query = SearchQuery.Uids(new UniqueIdRange(new UniqueId(afterUid + 1), new UniqueId(beforeUid - 1))).And(SearchQuery.NotDeleted);
+            var query = SearchQuery.Uids(new UniqueIdRange(new UniqueId(afterUid + 1), last)).And(SearchQuery.NotDeleted);
             var found = await folder.SearchAsync(query, cancellationToken);
             return [.. found.Select(u => u.Id).Where(u => u > afterUid && u < beforeUid).Order()];
         }
