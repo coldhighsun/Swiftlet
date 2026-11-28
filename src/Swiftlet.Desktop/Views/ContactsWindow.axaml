@@ -3,10 +3,11 @@
         xmlns:vm="using:Swiftlet.Desktop.ViewModels.Contacts"
         xmlns:views="using:Swiftlet.Desktop.Views"
         xmlns:loc="using:Swiftlet.Desktop.Localization"
+        xmlns:controls="using:Swiftlet.Desktop.Controls"
         x:Class="Swiftlet.Desktop.Views.ContactsWindow"
         Icon="avares://Swiftlet/Assets/swiftlet.ico"
         x:DataType="vm:ContactsViewModel"
-        Title="{loc:Loc Contacts_Title}" Width="820" Height="580" MinWidth="640" MinHeight="440"
+        Title="{loc:Loc Contacts_Title}" Width="820" Height="620" MinWidth="640" MinHeight="480"
         WindowStartupLocation="CenterOwner">
   <Window.KeyBindings>
     <KeyBinding Gesture="Escape" Command="{Binding EscapeCommand}" />
@@ -51,148 +52,150 @@
     </Style>
   </Window.Styles>
 
-  <Grid ColumnDefinitions="280,*">
-    <Border Background="{DynamicResource Brush.SidebarBg}" BorderThickness="0,0,1,0"
-            BorderBrush="{DynamicResource Brush.Border}" Padding="12">
-      <DockPanel>
-        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,0,0,4">
-          <TextBox Text="{Binding SearchText}" PlaceholderText="{loc:Loc Contacts_SearchPlaceholder}"
-                   AutomationProperties.Name="{loc:Loc Contacts_SearchPlaceholder}">
-            <TextBox.InnerLeftContent>
-              <PathIcon Data="{StaticResource Icon.Search}" Width="14" Height="14" Margin="8,0,0,0"
-                        Foreground="{DynamicResource Brush.TextSecondary}" />
-            </TextBox.InnerLeftContent>
-          </TextBox>
-          <Button Grid.Column="1" Classes="icon" Command="{Binding NewCommand}" ToolTip.Tip="{loc:Loc Contacts_New}"
-                  AutomationProperties.Name="{loc:Loc Contacts_New}">
-            <PathIcon Data="{StaticResource Icon.Add}" />
-          </Button>
-        </Grid>
+  <controls:DialogFrame CloseCommand="{Binding CloseCommand}">
+    <Grid ColumnDefinitions="280,*">
+      <Border Background="{DynamicResource Brush.SidebarBg}" BorderThickness="0,0,1,0"
+              BorderBrush="{DynamicResource Brush.Border}" Padding="12">
+        <DockPanel>
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,0,0,4">
+            <TextBox Text="{Binding SearchText}" PlaceholderText="{loc:Loc Contacts_SearchPlaceholder}"
+                     AutomationProperties.Name="{loc:Loc Contacts_SearchPlaceholder}">
+              <TextBox.InnerLeftContent>
+                <PathIcon Data="{StaticResource Icon.Search}" Width="14" Height="14" Margin="8,0,0,0"
+                          Foreground="{DynamicResource Brush.TextSecondary}" />
+              </TextBox.InnerLeftContent>
+            </TextBox>
+            <Button Grid.Column="1" Classes="icon" Command="{Binding NewCommand}" ToolTip.Tip="{loc:Loc Contacts_New}"
+                    AutomationProperties.Name="{loc:Loc Contacts_New}">
+              <PathIcon Data="{StaticResource Icon.Add}" />
+            </Button>
+          </Grid>
 
-        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,8,0,0">
-          <Button Content="{loc:Loc Contacts_Import}" Command="{Binding ImportCommand}"
-                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
-          <Button Grid.Column="1" Content="{loc:Loc Contacts_Export}"
-                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
-            <Button.Flyout>
-              <MenuFlyout Placement="TopEdgeAlignedRight">
-                <MenuItem Header="{loc:Loc Contacts_ExportVCard}" Command="{Binding ExportVCardCommand}" />
-                <MenuItem Header="{loc:Loc Contacts_ExportCsv}" Command="{Binding ExportCsvCommand}" />
-              </MenuFlyout>
-            </Button.Flyout>
-          </Button>
-        </Grid>
+          <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,8,0,0">
+            <Button Content="{loc:Loc Contacts_Import}" Command="{Binding ImportCommand}"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+            <Button Grid.Column="1" Content="{loc:Loc Contacts_Export}"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+              <Button.Flyout>
+                <MenuFlyout Placement="TopEdgeAlignedRight">
+                  <MenuItem Header="{loc:Loc Contacts_ExportVCard}" Command="{Binding ExportVCardCommand}" />
+                  <MenuItem Header="{loc:Loc Contacts_ExportCsv}" Command="{Binding ExportCsvCommand}" />
+                </MenuFlyout>
+              </Button.Flyout>
+            </Button>
+          </Grid>
 
-        <TabControl SelectedIndex="{Binding SelectedPage}" Padding="0,8,0,0">
-          <TabItem Header="{loc:Loc Contacts_TabContacts}">
-            <ListBox Classes="contacts" ItemsSource="{Binding Contacts}" SelectedItem="{Binding SelectedContact}"
-                     Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-              <ListBox.ItemTemplate>
-                <DataTemplate DataType="vm:ContactItemViewModel">
-                  <StackPanel>
-                    <TextBlock Classes="caption" Text="{Binding GroupKey}" IsVisible="{Binding IsGroupStart}"
-                               FontWeight="SemiBold" Margin="8,8,8,4" />
-                    <Border Classes="row">
-                      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-                        <Border Width="32" Height="32" CornerRadius="16" Background="{Binding AvatarBrush}"
-                                VerticalAlignment="Center">
-                          <TextBlock Text="{Binding Initial}" Foreground="White" HorizontalAlignment="Center"
-                                     VerticalAlignment="Center" />
-                        </Border>
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                          <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
-                          <TextBlock Classes="caption" Text="{Binding Subtitle}" IsVisible="{Binding HasSubtitle}"
-                                     TextTrimming="CharacterEllipsis" />
-                        </StackPanel>
-                      </Grid>
-                    </Border>
-                  </StackPanel>
-                </DataTemplate>
-              </ListBox.ItemTemplate>
-            </ListBox>
-          </TabItem>
-
-          <TabItem Header="{loc:Loc Contacts_TabCollected}">
-            <Grid>
-              <ListBox Classes="contacts" ItemsSource="{Binding Collected}" SelectionMode="Multiple,Toggle"
-                       SelectedItems="{Binding SelectedCollected}" Background="Transparent"
-                       ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+          <TabControl SelectedIndex="{Binding SelectedPage}" Padding="0,8,0,0">
+            <TabItem Header="{loc:Loc Contacts_TabContacts}">
+              <ListBox Classes="contacts" ItemsSource="{Binding Contacts}" SelectedItem="{Binding SelectedContact}"
+                       Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBox.ItemTemplate>
-                  <DataTemplate DataType="vm:CollectedItemViewModel">
-                    <Border Classes="row">
-                      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-                        <Border Width="32" Height="32" CornerRadius="16" Background="{Binding AvatarBrush}"
-                                VerticalAlignment="Center">
-                          <TextBlock Text="{Binding Initial}" Foreground="White" HorizontalAlignment="Center"
-                                     VerticalAlignment="Center" />
-                        </Border>
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                          <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
-                          <TextBlock Classes="caption" Text="{Binding Subtitle}" IsVisible="{Binding HasSubtitle}"
-                                     TextTrimming="CharacterEllipsis" />
-                        </StackPanel>
-                      </Grid>
-                    </Border>
+                  <DataTemplate DataType="vm:ContactItemViewModel">
+                    <StackPanel>
+                      <TextBlock Classes="caption" Text="{Binding GroupKey}" IsVisible="{Binding IsGroupStart}"
+                                 FontWeight="SemiBold" Margin="8,8,8,4" />
+                      <Border Classes="row">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                          <Border Width="32" Height="32" CornerRadius="16" Background="{Binding AvatarBrush}"
+                                  VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Initial}" Foreground="White" HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+                          </Border>
+                          <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Classes="caption" Text="{Binding Subtitle}" IsVisible="{Binding HasSubtitle}"
+                                       TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+                        </Grid>
+                      </Border>
+                    </StackPanel>
                   </DataTemplate>
                 </ListBox.ItemTemplate>
               </ListBox>
-              <TextBlock Classes="secondary" Text="{loc:Loc Contacts_EmptyCollected}"
-                         IsVisible="{Binding IsCollectedEmpty}" HorizontalAlignment="Center" VerticalAlignment="Center"
-                         TextAlignment="Center" TextWrapping="Wrap" Margin="16" />
+            </TabItem>
+
+            <TabItem Header="{loc:Loc Contacts_TabCollected}">
+              <Grid>
+                <ListBox Classes="contacts" ItemsSource="{Binding Collected}" SelectionMode="Multiple,Toggle"
+                         SelectedItems="{Binding SelectedCollected}" Background="Transparent"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate DataType="vm:CollectedItemViewModel">
+                      <Border Classes="row">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                          <Border Width="32" Height="32" CornerRadius="16" Background="{Binding AvatarBrush}"
+                                  VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Initial}" Foreground="White" HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+                          </Border>
+                          <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Classes="caption" Text="{Binding Subtitle}" IsVisible="{Binding HasSubtitle}"
+                                       TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock Classes="secondary" Text="{loc:Loc Contacts_EmptyCollected}"
+                           IsVisible="{Binding IsCollectedEmpty}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                           TextAlignment="Center" TextWrapping="Wrap" Margin="16" />
+              </Grid>
+            </TabItem>
+          </TabControl>
+        </DockPanel>
+      </Border>
+
+      <DockPanel Grid.Column="1">
+        <StackPanel x:Name="Messages" DockPanel.Dock="Bottom" Spacing="4" Margin="24,0,24,8">
+          <TextBlock Classes="error" Text="{Binding ErrorText}" TextWrapping="Wrap"
+                     IsVisible="{Binding ErrorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <TextBlock Classes="secondary" Text="{Binding StatusText}" TextWrapping="Wrap"
+                     IsVisible="{Binding StatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+
+        <Panel>
+          <TextBlock Classes="secondary" Text="{loc:Loc Contacts_NoSelection}" IsVisible="{Binding IsNoContactShown}"
+                     HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" Margin="24" />
+          <views:ContactCardView IsVisible="{Binding IsViewing}" />
+          <views:ContactFormView IsVisible="{Binding IsFormShown}" />
+
+          <TextBlock Classes="secondary" Text="{loc:Loc Contacts_NoCollectedSelection}"
+                     IsVisible="{Binding IsNoCollectedShown}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                     TextWrapping="Wrap" Margin="24" />
+          <StackPanel IsVisible="{Binding IsOneCollectedShown}" Spacing="16" Margin="24" VerticalAlignment="Top">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
+              <Border Width="56" Height="56" CornerRadius="28" Background="{Binding SingleCollected.AvatarBrush}"
+                      VerticalAlignment="Center">
+                <TextBlock Text="{Binding SingleCollected.Initial}" Foreground="White" FontSize="20"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Classes="title" Text="{Binding SingleCollected.Title}" TextWrapping="Wrap" />
+                <SelectableTextBlock Classes="secondary" Text="{Binding SingleCollected.Subtitle}" TextWrapping="Wrap"
+                                     IsVisible="{Binding SingleCollected.HasSubtitle}" />
+              </StackPanel>
             </Grid>
-          </TabItem>
-        </TabControl>
+            <WrapPanel ItemSpacing="8" LineSpacing="8">
+              <Button Classes="accent" Content="{loc:Loc Contacts_Add}" Command="{Binding AddSelectedCollectedCommand}" />
+              <Button Content="{loc:Loc Contacts_Write}" Command="{Binding WriteCollectedCommand}" />
+              <Button Classes="danger" Content="{loc:Loc Contacts_Remove}"
+                      Command="{Binding RemoveSelectedCollectedCommand}" />
+            </WrapPanel>
+          </StackPanel>
+          <StackPanel IsVisible="{Binding IsManyCollectedShown}" Spacing="16" Margin="24" HorizontalAlignment="Center"
+                      VerticalAlignment="Center">
+            <TextBlock Classes="section" Text="{Binding SelectedCollectedText}" HorizontalAlignment="Center"
+                       TextWrapping="Wrap" />
+            <WrapPanel ItemSpacing="8" LineSpacing="8" HorizontalAlignment="Center">
+              <Button Classes="accent" Content="{loc:Loc Contacts_Add}" Command="{Binding AddSelectedCollectedCommand}" />
+              <Button Classes="danger" Content="{loc:Loc Contacts_Remove}"
+                      Command="{Binding RemoveSelectedCollectedCommand}" />
+            </WrapPanel>
+          </StackPanel>
+        </Panel>
       </DockPanel>
-    </Border>
-
-    <DockPanel Grid.Column="1">
-      <StackPanel x:Name="Messages" DockPanel.Dock="Bottom" Spacing="4" Margin="24,0,24,8">
-        <TextBlock Classes="error" Text="{Binding ErrorText}" TextWrapping="Wrap"
-                   IsVisible="{Binding ErrorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-        <TextBlock Classes="secondary" Text="{Binding StatusText}" TextWrapping="Wrap"
-                   IsVisible="{Binding StatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-      </StackPanel>
-
-      <Panel>
-        <TextBlock Classes="secondary" Text="{loc:Loc Contacts_NoSelection}" IsVisible="{Binding IsNoContactShown}"
-                   HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" Margin="24" />
-        <views:ContactCardView IsVisible="{Binding IsViewing}" />
-        <views:ContactFormView IsVisible="{Binding IsFormShown}" />
-
-        <TextBlock Classes="secondary" Text="{loc:Loc Contacts_NoCollectedSelection}"
-                   IsVisible="{Binding IsNoCollectedShown}" HorizontalAlignment="Center" VerticalAlignment="Center"
-                   TextWrapping="Wrap" Margin="24" />
-        <StackPanel IsVisible="{Binding IsOneCollectedShown}" Spacing="16" Margin="24" VerticalAlignment="Top">
-          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
-            <Border Width="56" Height="56" CornerRadius="28" Background="{Binding SingleCollected.AvatarBrush}"
-                    VerticalAlignment="Center">
-              <TextBlock Text="{Binding SingleCollected.Initial}" Foreground="White" FontSize="20"
-                         HorizontalAlignment="Center" VerticalAlignment="Center" />
-            </Border>
-            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-              <TextBlock Classes="title" Text="{Binding SingleCollected.Title}" TextWrapping="Wrap" />
-              <SelectableTextBlock Classes="secondary" Text="{Binding SingleCollected.Subtitle}" TextWrapping="Wrap"
-                                   IsVisible="{Binding SingleCollected.HasSubtitle}" />
-            </StackPanel>
-          </Grid>
-          <WrapPanel ItemSpacing="8" LineSpacing="8">
-            <Button Classes="accent" Content="{loc:Loc Contacts_Add}" Command="{Binding AddSelectedCollectedCommand}" />
-            <Button Content="{loc:Loc Contacts_Write}" Command="{Binding WriteCollectedCommand}" />
-            <Button Classes="danger" Content="{loc:Loc Contacts_Remove}"
-                    Command="{Binding RemoveSelectedCollectedCommand}" />
-          </WrapPanel>
-        </StackPanel>
-        <StackPanel IsVisible="{Binding IsManyCollectedShown}" Spacing="16" Margin="24" HorizontalAlignment="Center"
-                    VerticalAlignment="Center">
-          <TextBlock Classes="section" Text="{Binding SelectedCollectedText}" HorizontalAlignment="Center"
-                     TextWrapping="Wrap" />
-          <WrapPanel ItemSpacing="8" LineSpacing="8" HorizontalAlignment="Center">
-            <Button Classes="accent" Content="{loc:Loc Contacts_Add}" Command="{Binding AddSelectedCollectedCommand}" />
-            <Button Classes="danger" Content="{loc:Loc Contacts_Remove}"
-                    Command="{Binding RemoveSelectedCollectedCommand}" />
-          </WrapPanel>
-        </StackPanel>
-      </Panel>
-    </DockPanel>
-  </Grid>
+    </Grid>
+  </controls:DialogFrame>
 </Window>

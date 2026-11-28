@@ -3,75 +3,78 @@
         xmlns:settings="using:Swiftlet.Desktop.ViewModels.Settings"
         xmlns:pages="using:Swiftlet.Desktop.Views.SettingsPages"
         xmlns:loc="using:Swiftlet.Desktop.Localization"
+        xmlns:controls="using:Swiftlet.Desktop.Controls"
         x:Class="Swiftlet.Desktop.Views.SettingsWindow"
         Icon="avares://Swiftlet/Assets/swiftlet.ico"
         x:DataType="settings:SettingsViewModel"
-        Title="{loc:Loc Settings_Title}" Width="720" Height="560" MinWidth="640" MinHeight="480"
+        Title="{loc:Loc Settings_Title}" Width="720" Height="600" MinWidth="640" MinHeight="520"
         WindowStartupLocation="CenterOwner">
-  <DockPanel>
-    <Border DockPanel.Dock="Bottom" Padding="16,12" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Brush.Border}">
-      <Button HorizontalAlignment="Right" MinWidth="88" HorizontalContentAlignment="Center"
-              Content="{loc:Loc Common_Close}" Command="{Binding CloseCommand}" IsCancel="True" />
-    </Border>
-    <TextBlock DockPanel.Dock="Bottom" Classes="error" Margin="16,0,16,8" Text="{Binding ErrorText}" TextWrapping="Wrap"
-               IsVisible="{Binding ErrorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-    <TabControl Classes="nav" TabStripPlacement="Left">
-      <TabItem AutomationProperties.Name="{loc:Loc Settings_SectionGeneral}">
-        <TabItem.Header>
-          <StackPanel Orientation="Horizontal" Spacing="12">
-            <PathIcon Data="{StaticResource Icon.Settings}" />
-            <TextBlock Text="{loc:Loc Settings_SectionGeneral}" VerticalAlignment="Center" />
-          </StackPanel>
-        </TabItem.Header>
-        <pages:GeneralPage />
-      </TabItem>
-      <TabItem AutomationProperties.Name="{loc:Loc Settings_SectionSync}">
-        <TabItem.Header>
-          <StackPanel Orientation="Horizontal" Spacing="12">
-            <PathIcon Data="{StaticResource Icon.Sync}" />
-            <TextBlock Text="{loc:Loc Settings_SectionSync}" VerticalAlignment="Center" />
-          </StackPanel>
-        </TabItem.Header>
-        <pages:SyncPage />
-      </TabItem>
-      <TabItem AutomationProperties.Name="{loc:Loc Settings_PagePrivacy}">
-        <TabItem.Header>
-          <StackPanel Orientation="Horizontal" Spacing="12">
-            <PathIcon Data="{StaticResource Icon.Shield}" />
-            <TextBlock Text="{loc:Loc Settings_PagePrivacy}" VerticalAlignment="Center" />
-          </StackPanel>
-        </TabItem.Header>
-        <pages:PrivacyPage />
-      </TabItem>
-      <TabItem AutomationProperties.Name="{loc:Loc Settings_PagePerformance}">
-        <TabItem.Header>
-          <StackPanel Orientation="Horizontal" Spacing="12">
-            <PathIcon Data="{StaticResource Icon.Gauge}" />
-            <TextBlock Text="{loc:Loc Settings_PagePerformance}" VerticalAlignment="Center" />
-          </StackPanel>
-        </TabItem.Header>
-        <pages:PerformancePage />
-      </TabItem>
-      <TabItem AutomationProperties.Name="{loc:Loc Settings_PageAi}"
-               IsVisible="{Binding Ai, Converter={x:Static ObjectConverters.IsNotNull}}">
-        <TabItem.Header>
-          <StackPanel Orientation="Horizontal" Spacing="12">
-            <PathIcon Data="{StaticResource Icon.Sparkle}" />
-            <TextBlock Text="{loc:Loc Settings_PageAi}" VerticalAlignment="Center" />
-          </StackPanel>
-        </TabItem.Header>
-        <pages:AiPage DataContext="{Binding Ai}" />
-      </TabItem>
-      <TabItem AutomationProperties.Name="{loc:Loc Settings_PageAbout}"
-               IsVisible="{Binding About, Converter={x:Static ObjectConverters.IsNotNull}}">
-        <TabItem.Header>
-          <StackPanel Orientation="Horizontal" Spacing="12">
-            <PathIcon Data="{StaticResource Icon.Info}" />
-            <TextBlock Text="{loc:Loc Settings_PageAbout}" VerticalAlignment="Center" />
-          </StackPanel>
-        </TabItem.Header>
-        <pages:AboutPage DataContext="{Binding About}" />
-      </TabItem>
-    </TabControl>
-  </DockPanel>
+  <controls:DialogFrame>
+    <DockPanel>
+      <Border DockPanel.Dock="Bottom" Padding="16,12" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Brush.Border}">
+        <Button HorizontalAlignment="Right" MinWidth="88" HorizontalContentAlignment="Center"
+                Content="{loc:Loc Common_Close}" Command="{Binding CloseCommand}" IsCancel="True" />
+      </Border>
+      <TextBlock DockPanel.Dock="Bottom" Classes="error" Margin="16,0,16,8" Text="{Binding ErrorText}" TextWrapping="Wrap"
+                 IsVisible="{Binding ErrorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <TabControl Classes="nav" TabStripPlacement="Left">
+        <TabItem AutomationProperties.Name="{loc:Loc Settings_SectionGeneral}">
+          <TabItem.Header>
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <PathIcon Data="{StaticResource Icon.Settings}" />
+              <TextBlock Text="{loc:Loc Settings_SectionGeneral}" VerticalAlignment="Center" />
+            </StackPanel>
+          </TabItem.Header>
+          <pages:GeneralPage />
+        </TabItem>
+        <TabItem AutomationProperties.Name="{loc:Loc Settings_SectionSync}">
+          <TabItem.Header>
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <PathIcon Data="{StaticResource Icon.Sync}" />
+              <TextBlock Text="{loc:Loc Settings_SectionSync}" VerticalAlignment="Center" />
+            </StackPanel>
+          </TabItem.Header>
+          <pages:SyncPage />
+        </TabItem>
+        <TabItem AutomationProperties.Name="{loc:Loc Settings_PagePrivacy}">
+          <TabItem.Header>
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <PathIcon Data="{StaticResource Icon.Shield}" />
+              <TextBlock Text="{loc:Loc Settings_PagePrivacy}" VerticalAlignment="Center" />
+            </StackPanel>
+          </TabItem.Header>
+          <pages:PrivacyPage />
+        </TabItem>
+        <TabItem AutomationProperties.Name="{loc:Loc Settings_PagePerformance}">
+          <TabItem.Header>
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <PathIcon Data="{StaticResource Icon.Gauge}" />
+              <TextBlock Text="{loc:Loc Settings_PagePerformance}" VerticalAlignment="Center" />
+            </StackPanel>
+          </TabItem.Header>
+          <pages:PerformancePage />
+        </TabItem>
+        <TabItem AutomationProperties.Name="{loc:Loc Settings_PageAi}"
+                 IsVisible="{Binding Ai, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <TabItem.Header>
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <PathIcon Data="{StaticResource Icon.Sparkle}" />
+              <TextBlock Text="{loc:Loc Settings_PageAi}" VerticalAlignment="Center" />
+            </StackPanel>
+          </TabItem.Header>
+          <pages:AiPage DataContext="{Binding Ai}" />
+        </TabItem>
+        <TabItem AutomationProperties.Name="{loc:Loc Settings_PageAbout}"
+                 IsVisible="{Binding About, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <TabItem.Header>
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <PathIcon Data="{StaticResource Icon.Info}" />
+              <TextBlock Text="{loc:Loc Settings_PageAbout}" VerticalAlignment="Center" />
+            </StackPanel>
+          </TabItem.Header>
+          <pages:AboutPage DataContext="{Binding About}" />
+        </TabItem>
+      </TabControl>
+    </DockPanel>
+  </controls:DialogFrame>
 </Window>

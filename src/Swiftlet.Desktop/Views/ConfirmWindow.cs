@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Swiftlet.Desktop.Controls;
 
 namespace Swiftlet.Desktop.Views;
 
@@ -50,7 +51,7 @@ public static class ConfirmWindow
             SizeToContent = SizeToContent.Height,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Content = panel,
+            Content = new DialogFrame { Content = panel },
         };
         ok.Click += (_, _) => window.Close(true);
         cancel.Click += (_, _) => window.Close(false);

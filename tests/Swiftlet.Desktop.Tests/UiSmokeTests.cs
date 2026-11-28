@@ -573,7 +573,8 @@ public class UiSmokeTests
 
                 Render(window, $"startup-key-lost-{language}", language);
 
-                var visible = window.GetVisualDescendants().OfType<Button>().Where(b => b.IsEffectivelyVisible).Select(b => b.Content as string).ToList();
+                var visible = window.GetVisualDescendants().OfType<Button>()
+                    .Where(b => b.IsEffectivelyVisible && b.Name != "TitleCloseButton").Select(b => b.Content as string).ToList();
                 visible.Should().HaveCount(3).And.Contain(reset);
                 window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).Should().Contain(viewModel.Message);
                 window.Close();
@@ -2645,6 +2646,130 @@ public class UiSmokeTests
         var viewModel = new ContactsViewModel(dispatcher, new FakeDialogService(), localizer);
         await viewModel.InitializeAsync();
         return viewModel;
+    }
+
+    /// <summary>
+    /// Verifies every dialog replaces the system title bar with the frame, keeping the system border.
+    /// </summary>
+    [Fact]
+    public async Task Dialogs_Frame_ReplacesSystemTitleBar()
+    {
+        await DispatchAsync(
+            () =>
+            {
+                Window[] windows =
+                [
+                    new AddAccountWindow(), new EditAccountWindow(), new SettingsWindow(), new LabelManagerWindow(),
+                    new ClassifyWindow(), new ContactsWindow(), new UpdateWindow(), new StartupWindow(),
+                    ConfirmWindow.Create("Delete", "Delete everything?", "Delete", "Cancel"),
+                ];
+                foreach (var window in windows)
+                {
+                    var name = window.Content?.ToString();
+                    window.Content.Should().BeOfType<DialogFrame>(window.GetType().Name);
+                    window.WindowDecorations.Should().Be(WindowDecorations.BorderOnly, name);
+                    window.ExtendClientAreaToDecorationsHint.Should().BeTrue(name);
+                    window.CanMaximize.Should().BeFalse(name);
+                }
+
+                return Task.CompletedTask;
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the title row shows the window title, follows its changes and has a named close button that closes.
+    /// </summary>
+    [Fact]
+    public async Task DialogFrame_TitleRow_ShowsTitleAndCloses()
+    {
+        await DispatchAsync(
+            () =>
+            {
+                var window = ConfirmWindow.Create("Delete", "Delete everything?", "Delete", "Cancel");
+                var closed = false;
+                window.Closed += (_, _) => closed = true;
+                Render(window, "dialog-frame", "en");
+                var title = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "TitleText");
+                title.Text.Should().Be("Delete");
+
+                window.Title = "Remove";
+                Dispatcher.UIThread.RunJobs();
+
+                title.Text.Should().Be("Remove");
+                var button = TitleCloseButton(window);
+                UiQueries.Caption(button).Should().Be("Close");
+                ToolTip.GetTip(button).Should().Be("Close");
+                button.GetVisualDescendants().OfType<PathIcon>().Single().Bounds.Width.Should().Be(12);
+
+                Click(window, button);
+
+                closed.Should().BeTrue();
+                return Task.CompletedTask;
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies closing the contacts window from its title row asks before unsaved changes are dropped.
+    /// </summary>
+    /// <param name="confirmed">Whether the user drops the changes.</param>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ContactsWindow_TitleRowCloseWithUnsavedChanges_AsksFirst(bool confirmed)
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var dialogs = new FakeDialogService { ConfirmResult = confirmed };
+                var dispatcher = new FakeDispatcher();
+                dispatcher.On<Swiftlet.Application.Contacts.GetAddressBookQuery>(
+                    _ => new Swiftlet.Application.Contacts.AddressBook([], []));
+                var viewModel = new ContactsViewModel(dispatcher, dialogs, TestLocalizer.English());
+                await viewModel.InitializeAsync();
+                viewModel.NewCommand.Execute(null);
+                viewModel.FirstName = "typed";
+                var window = new ContactsWindow { DataContext = viewModel };
+                var closeRequested = false;
+                viewModel.CloseRequested += (_, _) => closeRequested = true;
+                Render(window, "contacts-title-close", "en");
+
+                Click(window, TitleCloseButton(window));
+
+                dialogs.Confirmations.Should().ContainSingle();
+                closeRequested.Should().Be(confirmed);
+
+                // Dropping the changes lets the test close the window.
+                dialogs.ConfirmResult = true;
+                viewModel.CancelCommand.Execute(null);
+                Dispatcher.UIThread.RunJobs();
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Finds the close button of the title row of a dialog.
+    /// </summary>
+    /// <param name="window">The shown dialog.</param>
+    /// <returns>The button.</returns>
+    private static Button TitleCloseButton(Window window)
+    {
+        return window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TitleCloseButton");
+    }
+
+    /// <summary>
+    /// Clicks the middle of a control with the pointer.
+    /// </summary>
+    /// <param name="window">The window showing the control.</param>
+    /// <param name="control">The control.</param>
+    private static void Click(Window window, Control control)
+    {
+        var center = control.TranslatePoint(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), window)!.Value;
+        window.MouseDown(center, MouseButton.Left);
+        window.MouseUp(center, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
     }
 
     /// <summary>
