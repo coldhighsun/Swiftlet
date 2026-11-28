@@ -98,6 +98,7 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
         if (services.GetService<IAppSettings>() is { } settings)
         {
             RememberWindowPlacement.Attach(window, settings, services.GetService<ILogger<RememberWindowPlacement>>());
+            ReleaseWebViewWhenHidden.Attach(window, () => settings.ReleaseWebViewWhenHidden);
         }
 
         return window;

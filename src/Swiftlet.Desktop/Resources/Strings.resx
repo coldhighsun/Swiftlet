@@ -244,6 +244,8 @@
   <data name="Settings_StartMinimizedHint" xml:space="preserve"><value>The main window is not shown when the app starts; open it from the tray icon. Needs a tray icon on your desktop. Starting the app again also brings the window back.</value></data>
   <data name="Settings_HardwareRendering" xml:space="preserve"><value>Use hardware rendering</value></data>
   <data name="Settings_HardwareRenderingHint" xml:space="preserve"><value>Draws the app with the graphics card. Turning it off uses noticeably less memory, but scrolling and resizing need more processor time; it can also help when windows are drawn incorrectly. Takes effect after a restart (quit from the tray icon; closing the window may not be enough).</value></data>
+  <data name="Settings_ReleaseWebView" xml:space="preserve"><value>Free the message viewer while hidden in the tray</value></data>
+  <data name="Settings_ReleaseWebViewHint" xml:space="preserve"><value>Closes the component that displays HTML mail while the main window is hidden, which frees memory. When the window is shown again, the open message is loaded anew: it appears a moment later and starts at the top.</value></data>
   <data name="Settings_TrayUnread" xml:space="preserve"><value>Unread in tray</value></data>
   <data name="Settings_TrayUnreadDot" xml:space="preserve"><value>Red dot</value></data>
   <data name="Settings_TrayUnreadBlink" xml:space="preserve"><value>Blinking</value></data>

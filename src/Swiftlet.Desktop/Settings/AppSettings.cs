@@ -57,6 +57,17 @@ public interface IAppSettings : ISyncSettings
     void SetUseHardwareRendering(bool value);
 
     /// <summary>
+    /// Gets a value indicating whether the web view showing mail is released while the main window is hidden.
+    /// </summary>
+    bool ReleaseWebViewWhenHidden { get; }
+
+    /// <summary>
+    /// Changes whether the web view is released while the main window is hidden, and saves the choice.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    void SetReleaseWebViewWhenHidden(bool value);
+
+    /// <summary>
     /// Gets a value indicating whether newly arrived mail is announced with a pop-up.
     /// </summary>
     bool ShowNewMailNotifications { get; }
@@ -198,6 +209,11 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
     private volatile bool _useHardwareRendering;
 
     /// <summary>
+    /// The in-memory value, read when the main window is hidden.
+    /// </summary>
+    private volatile bool _releaseWebViewWhenHidden;
+
+    /// <summary>
     /// The in-memory language preference, guarded by <see cref="_gate"/>; kept so a corrupt file never resets it.
     /// </summary>
     private string? _language;
@@ -252,6 +268,7 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
         _showNewMailNotifications = file.ShowNewMailNotifications ?? true;
         _startMinimized = file.StartMinimized ?? false;
         _useHardwareRendering = file.UseHardwareRendering ?? true;
+        _releaseWebViewWhenHidden = file.ReleaseWebViewWhenHidden ?? false;
         _theme = ThemePreference.Normalize(
             file.Theme is { ValueKind: JsonValueKind.String } theme ? theme.GetString() : null);
         _trayUnreadStyle = Settings.TrayUnreadStyle.Normalize(
@@ -281,6 +298,7 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
     /// <param name="UpdateCheck">What is remembered about update checks; raw JSON for the same reason as the theme.</param>
     /// <param name="Ai">The AI settings, without the API key; raw JSON for the same reason as the theme.</param>
     /// <param name="UseHardwareRendering">Whether the graphics card may draw the application.</param>
+    /// <param name="ReleaseWebViewWhenHidden">Whether the web view is released while the main window is hidden.</param>
     private sealed record SettingsFile(
         string? Language,
         bool? SyncServerDeletions,
@@ -295,7 +313,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
         bool? CheckForUpdates = null,
         JsonElement? UpdateCheck = null,
         JsonElement? Ai = null,
-        bool? UseHardwareRendering = null);
+        bool? UseHardwareRendering = null,
+        bool? ReleaseWebViewWhenHidden = null);
 
     /// <inheritdoc />
     public bool RemoveServerDeletedMessages => _removeServerDeletedMessages;
@@ -317,6 +336,9 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
 
     /// <inheritdoc />
     public bool UseHardwareRendering => _useHardwareRendering;
+
+    /// <inheritdoc />
+    public bool ReleaseWebViewWhenHidden => _releaseWebViewWhenHidden;
 
     /// <inheritdoc />
     public string TrayUnreadStyle => _trayUnreadStyle;
@@ -482,6 +504,16 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
     }
 
     /// <inheritdoc />
+    public void SetReleaseWebViewWhenHidden(bool value)
+    {
+        lock (_gate)
+        {
+            Write(Snapshot() with { ReleaseWebViewWhenHidden = value });
+            _releaseWebViewWhenHidden = value;
+        }
+    }
+
+    /// <inheritdoc />
     public void SetTrayUnreadStyle(string value)
     {
         var style = Settings.TrayUnreadStyle.Normalize(value);
@@ -540,7 +572,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
             _checkForUpdates,
             SerializeUpdateCheckState(_updateCheckState),
             JsonSerializer.SerializeToElement(_ai, AiOptions),
-            _useHardwareRendering);
+            _useHardwareRendering,
+            _releaseWebViewWhenHidden);
     }
 
     /// <summary>
