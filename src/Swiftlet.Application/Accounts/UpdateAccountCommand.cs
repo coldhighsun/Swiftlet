@@ -18,6 +18,7 @@ namespace Swiftlet.Application.Accounts;
 /// <param name="Smtp">The SMTP endpoint; omitted to keep the current one.</param>
 /// <param name="Password">The new password; omitted or empty to keep the current one.</param>
 /// <param name="ArchiveFolderName">The full name of the archive folder; omitted or blank to pick it automatically.</param>
+/// <param name="Color">The new color as <c>#RRGGBB</c>; omitted to keep the current one.</param>
 public sealed record UpdateAccountCommand(
     Guid AccountId,
     string DisplayName,
@@ -25,7 +26,8 @@ public sealed record UpdateAccountCommand(
     ServerEndpoint? Imap = null,
     ServerEndpoint? Smtp = null,
     string? Password = null,
-    string? ArchiveFolderName = null) : ICommand<UpdateAccountResult>, IAccountRequest;
+    string? ArchiveFolderName = null,
+    string? Color = null) : ICommand<UpdateAccountResult>, IAccountRequest;
 
 /// <summary>
 /// The outcome of <see cref="UpdateAccountCommand"/>.
@@ -70,6 +72,11 @@ public sealed class UpdateAccountCommandHandler(
         account.ChangeDisplayName(command.DisplayName);
         account.ChangeSyncInterval(command.SyncInterval);
         account.ChangeArchiveFolder(command.ArchiveFolderName);
+        if (command.Color is { } color)
+        {
+            account.ChangeColor(color);
+        }
+
         if (imapChanged || smtpChanged)
         {
             // An unchanged endpoint keeps its instance, so it is not written again.

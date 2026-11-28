@@ -1,10 +1,12 @@
 using AwesomeAssertions;
 using Mediator;
 using Swiftlet.Application.Accounts;
+using Swiftlet.Application.Queries;
 using Swiftlet.Application.Sending;
 using Swiftlet.Desktop.Services;
 using Swiftlet.Desktop.ViewModels;
 using Swiftlet.Desktop.ViewModels.Compose;
+using Swiftlet.Domain.Accounts;
 
 namespace Swiftlet.Desktop.Tests;
 
@@ -134,6 +136,60 @@ public class DialogViewModelTests
         command.Smtp!.Port.Should().Be(465);
         command.Password.Should().Be("secret");
         viewModel.IsBusy.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies the dialog preselects a color no account shows and sends it with a password account.
+    /// </summary>
+    [Fact]
+    public async Task LoadAsync_ExistingAccounts_PreselectsAnUnusedColorAndSendsIt()
+    {
+        var dispatcher = new FakeDispatcher();
+        var accounts = AccountColors.Palette.Skip(1).Select((color, i) =>
+        {
+            var account = TestData.Account($"me{i}@example.com");
+            account.ChangeColor(color);
+            return account;
+        }).ToList();
+        dispatcher.On<GetAccountsQuery>(_ => accounts);
+        dispatcher.On<AddAccountCommand>(_ => Guid.NewGuid());
+        var viewModel = new AddAccountViewModel(dispatcher, TestLocalizer.Chinese()) { Email = "me@gmail.com", Password = "secret" };
+
+        await viewModel.LoadAsync();
+        await viewModel.AddCommand.ExecuteAsync(null);
+
+        viewModel.Color.Should().Be(AccountColors.Palette[0]);
+        dispatcher.Sent<AddAccountCommand>().Single().Color.Should().Be(AccountColors.Palette[0]);
+    }
+
+    /// <summary>
+    /// Verifies a color chosen in the dialog is sent with a browser sign-in.
+    /// </summary>
+    [Fact]
+    public async Task SignInWithMicrosoft_ColorChosen_SendsIt()
+    {
+        var dispatcher = new FakeDispatcher();
+        dispatcher.On<AddOAuthAccountCommand>(_ => Guid.NewGuid());
+        var viewModel = new AddAccountViewModel(dispatcher, TestLocalizer.Chinese()) { Color = "#6B6F00" };
+
+        await viewModel.SignInWithMicrosoftCommand.ExecuteAsync(null);
+
+        dispatcher.Sent<AddOAuthAccountCommand>().Single().Color.Should().Be("#6B6F00");
+    }
+
+    /// <summary>
+    /// Verifies the dialog still opens when the accounts cannot be read; the handler then picks the color.
+    /// </summary>
+    [Fact]
+    public async Task LoadAsync_QueryFails_LeavesTheColorOpen()
+    {
+        var dispatcher = new FakeDispatcher();
+        dispatcher.On<GetAccountsQuery>(_ => throw new InvalidOperationException("database busy"));
+        var viewModel = new AddAccountViewModel(dispatcher, TestLocalizer.Chinese());
+
+        await viewModel.LoadAsync();
+
+        viewModel.Color.Should().BeNull();
     }
 
     /// <summary>

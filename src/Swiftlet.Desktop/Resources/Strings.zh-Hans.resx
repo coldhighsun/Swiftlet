@@ -141,6 +141,7 @@
   <data name="AddAccount_OAuthNotConfigured" xml:space="preserve"><value>尚未配置 {0} 登录。{1}</value></data>
   <data name="AddAccount_SignInFailed" xml:space="preserve"><value>登录失败：{0}</value></data>
   <data name="AddAccount_HintUnknown" xml:space="preserve"><value>未识别的邮箱服务商，请填写服务器设置。</value></data>
+  <data name="Account_Color" xml:space="preserve"><value>颜色</value></data>
   <data name="EditAccount_Title" xml:space="preserve"><value>账号设置</value></data>
   <data name="EditAccount_DisplayName" xml:space="preserve"><value>显示名称</value></data>
   <data name="EditAccount_SyncInterval" xml:space="preserve"><value>同步间隔</value></data>

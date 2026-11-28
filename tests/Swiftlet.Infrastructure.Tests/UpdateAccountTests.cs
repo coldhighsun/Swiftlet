@@ -66,6 +66,25 @@ public class UpdateAccountTests
     }
 
     [Fact]
+    public async Task Handle_Color_SavesWithoutConnectingAndKeepsItWhenOmitted()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var s = await Scenario.CreateAsync(ct);
+        s.Factory.Failure = new IOException("offline");
+        var command = new UpdateAccountCommand(s.Account.Id, string.Empty, TimeSpan.FromMinutes(5), Color: "#5E63D6");
+
+        // Act
+        var result = await s.Handler.Handle(command, ct);
+        await s.Handler.Handle(command with { Color = null }, ct);
+
+        // Assert
+        result.ConnectionChanged.Should().BeFalse();
+        s.Factory.ConnectCount.Should().Be(0);
+        (await s.StoredAsync(ct)).Color.Should().Be("#5E63D6");
+    }
+
+    [Fact]
     public async Task Handle_NewServers_VerifiesWithStoredPasswordAndSaves()
     {
         // Arrange

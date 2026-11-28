@@ -1,8 +1,10 @@
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Application.Accounts;
+using Swiftlet.Application.Queries;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
 using Swiftlet.Domain.Accounts;
@@ -45,6 +47,11 @@ public sealed partial class AddAccountViewModel : ObservableObject
     private readonly ILocalizer _localizer;
 
     /// <summary>
+    /// The logger; <see langword="null"/> when there is none.
+    /// </summary>
+    private readonly ILogger<AddAccountViewModel>? _logger;
+
+    /// <summary>
     /// Cancels the pending browser sign-in, if any.
     /// </summary>
     private CancellationTokenSource? _signInCancellation;
@@ -59,8 +66,10 @@ public sealed partial class AddAccountViewModel : ObservableObject
     /// </summary>
     /// <param name="dispatcher">The request dispatcher.</param>
     /// <param name="localizer">The localizer.</param>
-    public AddAccountViewModel(IRequestDispatcher dispatcher, ILocalizer localizer)
+    /// <param name="logger">The logger; optional.</param>
+    public AddAccountViewModel(IRequestDispatcher dispatcher, ILocalizer localizer, ILogger<AddAccountViewModel>? logger = null)
     {
+        _logger = logger;
         _dispatcher = dispatcher;
         _localizer = localizer;
         DisplayName = string.Empty;
@@ -86,6 +95,18 @@ public sealed partial class AddAccountViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     public partial string DisplayName { get; set; }
+
+    /// <summary>
+    /// Gets the colors offered for the account.
+    /// </summary>
+    public IReadOnlyList<string> ColorOptions { get; } = AccountColors.Palette;
+
+    /// <summary>
+    /// Gets or sets the color of the account as <c>#RRGGBB</c>, or <see langword="null"/> to have one picked when the
+    /// account is added.
+    /// </summary>
+    [ObservableProperty]
+    public partial string? Color { get; set; }
 
     /// <summary>
     /// Gets or sets the email address.
@@ -182,6 +203,24 @@ public sealed partial class AddAccountViewModel : ObservableObject
     public partial bool IsBusy { get; set; }
 
     /// <summary>
+    /// Preselects a random color no account uses; call it before the dialog is shown.
+    /// </summary>
+    /// <returns>A task that completes when the color is selected.</returns>
+    public async Task LoadAsync()
+    {
+        try
+        {
+            var accounts = await _dispatcher.SendAsync(new GetAccountsQuery());
+            Color = AccountColors.PickUnused(accounts.Select(a => a.EffectiveColor), Random.Shared);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The dialog works without a preselection: adding the account picks a color itself.
+            _logger?.LogWarning(ex, "Could not preselect an account color");
+        }
+    }
+
+    /// <summary>
     /// Verifies the login and adds the account.
     /// </summary>
     /// <returns>A task that completes when the account was added or the attempt failed.</returns>
@@ -205,7 +244,8 @@ public sealed partial class AddAccountViewModel : ObservableObject
                 email,
                 Password,
                 new ServerEndpoint(ImapHost.Trim(), imapPort, ImapUseSsl),
-                new ServerEndpoint(SmtpHost.Trim(), smtpPort, SmtpUseSsl));
+                new ServerEndpoint(SmtpHost.Trim(), smtpPort, SmtpUseSsl),
+                Color);
             await _dispatcher.SendAsync(command);
             CloseRequested?.Invoke(this, true);
         }
@@ -265,7 +305,7 @@ public sealed partial class AddAccountViewModel : ObservableObject
         try
         {
             var name = string.IsNullOrWhiteSpace(DisplayName) ? null : DisplayName.Trim();
-            await _dispatcher.SendAsync(new AddOAuthAccountCommand(provider, name), cancellation.Token);
+            await _dispatcher.SendAsync(new AddOAuthAccountCommand(provider, name, Color), cancellation.Token);
             CloseRequested?.Invoke(this, true);
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)

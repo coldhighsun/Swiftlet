@@ -1,9 +1,11 @@
+using System.Text.RegularExpressions;
+
 namespace Swiftlet.Domain.Accounts;
 
 /// <summary>
 /// A mailbox account configured by the user (IMAP for receiving, SMTP for sending).
 /// </summary>
-public sealed class MailAccount
+public sealed partial class MailAccount
 {
     /// <summary>
     /// Gets the unique identifier of the account.
@@ -58,6 +60,16 @@ public sealed class MailAccount
     public string? ArchiveFolderName { get; private set; }
 
     /// <summary>
+    /// Gets the color chosen for the account as <c>#RRGGBB</c>, or <see langword="null"/> to derive it from the address.
+    /// </summary>
+    public string? Color { get; private set; }
+
+    /// <summary>
+    /// Gets the color the account is shown in.
+    /// </summary>
+    public string EffectiveColor => Color ?? AccountColors.Derive(EmailAddress);
+
+    /// <summary>
     /// Gets the position of the account in the folder tree; lower values come first.
     /// </summary>
     public int SortOrder { get; private set; }
@@ -90,6 +102,7 @@ public sealed class MailAccount
     /// <param name="now">The creation time.</param>
     /// <param name="oauthProvider">The token issuer; required when <paramref name="authMethod"/> is OAuth 2.0.</param>
     /// <param name="hasCustomDisplayName">Whether the user typed <paramref name="displayName"/>.</param>
+    /// <param name="color">The color as <c>#RRGGBB</c>; omitted to derive it from the address.</param>
     /// <returns>The created account.</returns>
     public static MailAccount Create(
         string displayName,
@@ -99,7 +112,8 @@ public sealed class MailAccount
         ServerEndpoint smtp,
         DateTimeOffset now,
         OAuthProvider? oauthProvider = null,
-        bool hasCustomDisplayName = false)
+        bool hasCustomDisplayName = false,
+        string? color = null)
     {
         if (authMethod == AuthMethod.OAuth2 && oauthProvider is null)
         {
@@ -128,6 +142,7 @@ public sealed class MailAccount
             Imap = imap,
             Smtp = smtp,
             CreatedAt = now,
+            Color = color is null ? null : ValidateColor(color),
         };
     }
 
@@ -189,6 +204,15 @@ public sealed class MailAccount
     }
 
     /// <summary>
+    /// Changes the color of the account.
+    /// </summary>
+    /// <param name="color">The new color as <c>#RRGGBB</c>.</param>
+    public void ChangeColor(string color)
+    {
+        Color = ValidateColor(color);
+    }
+
+    /// <summary>
     /// Changes the position of the account in the folder tree.
     /// </summary>
     /// <param name="order">The new position; must not be negative.</param>
@@ -205,6 +229,28 @@ public sealed class MailAccount
     public void SetExpanded(bool expanded)
     {
         IsExpanded = expanded;
+    }
+
+    /// <summary>
+    /// Matches a color in <c>#RRGGBB</c> form.
+    /// </summary>
+    /// <returns>The regular expression.</returns>
+    [GeneratedRegex(@"^#[0-9A-Fa-f]{6}\z", RegexOptions.None, matchTimeoutMilliseconds: 2000)]
+    private static partial Regex ColorPattern();
+
+    /// <summary>
+    /// Validates a color.
+    /// </summary>
+    /// <param name="color">The raw color.</param>
+    /// <returns>The validated color.</returns>
+    private static string ValidateColor(string color)
+    {
+        if (color is null || !ColorPattern().IsMatch(color))
+        {
+            throw new ArgumentException("Color must be in #RRGGBB format.", nameof(color));
+        }
+
+        return color;
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using Avalonia.Media;
 using Swiftlet.Application.Queries;
 using Swiftlet.Desktop.ViewModels.Main;
 using Swiftlet.Domain.Accounts;
@@ -176,6 +177,37 @@ public class AccountTagTests
 
         Marks(scenario)["Hello 3"].Should().Be("Work mail");
         scenario.ViewModel.Messages.Single(m => m.Subject == "Hello 1").AccountTag.Should().BeSameAs(unchanged);
+    }
+
+    /// <summary>
+    /// Verifies a reload shows a new account color on the tree node and on the listed rows.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Refresh_AccountRecolored_UpdatesTreeNodeAndMarks()
+    {
+        // Brushes belong to the UI thread of the shared headless session.
+        await UiSmokeTests.Session.Dispatch(
+            async () =>
+            {
+                var (scenario, second) = CreateTwoAccounts(out _);
+                await scenario.StartAsync();
+                var node = scenario.ViewModel.Accounts.Single(n => n.Account.Id == second.Id);
+                var color = AccountColors.Palette.First(c => c != second.EffectiveColor);
+                ((ISolidColorBrush)node.AvatarBrush).Color.Should().Be(Color.Parse(second.EffectiveColor));
+                var changed = new List<string?>();
+                node.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+                second.ChangeColor(color);
+
+                await scenario.ViewModel.RefreshAsync();
+                await scenario.ViewModel.WhenIdleAsync();
+
+                changed.Should().Contain(nameof(AccountNodeViewModel.AvatarBrush));
+                ((ISolidColorBrush)node.AvatarBrush).Color.Should().Be(Color.Parse(color));
+                scenario.ViewModel.Messages.Single(m => m.Subject == "Hello 3").AccountTag!.Color.Should().Be(color);
+                return true;
+            },
+            TestContext.Current.CancellationToken);
     }
 
     /// <summary>

@@ -47,6 +47,37 @@ public class AddOAuthAccountTests
     }
 
     /// <summary>
+    /// Verifies a chosen color is stored, and a palette color is picked when none is chosen.
+    /// </summary>
+    /// <param name="chosen">The color sent with the command.</param>
+    [Theory]
+    [InlineData("#BF4B00")]
+    [InlineData(null)]
+    public async Task Handle_Color_KeepsTheChosenOneOrPicksOne(string? chosen)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var handler = new AddOAuthAccountCommandHandler(
+            db.CreateAccountRepository(),
+            new InMemorySecretStore(),
+            new FakeOAuthAuthorizer { Result = SignedIn },
+            new FakeImapSessionFactory(),
+            TimeProvider.System);
+
+        var id = await handler.Handle(new AddOAuthAccountCommand(OAuthProvider.Google, Color: chosen), ct);
+
+        var saved = await db.CreateAccountRepository().GetAsync(id, ct);
+        if (chosen is null)
+        {
+            AccountColors.Palette.Should().Contain(saved!.Color!);
+        }
+        else
+        {
+            saved!.Color.Should().Be(chosen);
+        }
+    }
+
+    /// <summary>
     /// Verifies the Microsoft provider uses the Outlook servers and an explicit display name wins.
     /// </summary>
     [Fact]

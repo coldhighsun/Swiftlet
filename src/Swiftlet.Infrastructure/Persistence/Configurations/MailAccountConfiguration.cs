@@ -17,6 +17,7 @@ internal sealed class MailAccountConfiguration : IEntityTypeConfiguration<MailAc
         builder.Property(a => a.DisplayName).IsRequired().HasMaxLength(200);
         builder.Property(a => a.EmailAddress).IsRequired().HasMaxLength(320);
         builder.Property(a => a.ArchiveFolderName).HasMaxLength(1024);
+        builder.Property(a => a.Color).HasMaxLength(7);
         builder.HasIndex(a => a.EmailAddress).IsUnique();
         builder.Property(a => a.AuthMethod).HasConversion<int>();
         builder.OwnsOne(a => a.Imap, imap => imap.Property(e => e.Host).IsRequired().HasMaxLength(255));

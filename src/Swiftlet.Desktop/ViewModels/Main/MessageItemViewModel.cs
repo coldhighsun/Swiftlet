@@ -234,9 +234,10 @@ public sealed partial class MessageItemViewModel : ObservableObject
         var name = AddressText.AccountName(account);
 
         // An unchanged mark is kept, so a periodic refresh redraws nothing.
-        if (AccountTag?.Name != name || AccountTag.Address != account.EmailAddress)
+        var color = account.EffectiveColor;
+        if (AccountTag?.Name != name || AccountTag.Address != account.EmailAddress || AccountTag.Color != color)
         {
-            AccountTag = new AccountTagViewModel(name, account.EmailAddress);
+            AccountTag = new AccountTagViewModel(name, account.EmailAddress, color);
         }
     }
 

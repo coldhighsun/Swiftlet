@@ -95,9 +95,14 @@ public sealed partial class AccountNodeViewModel(MailAccount account) : Observab
     public string Initial => Avatar.Initial(DisplayName, Account.EmailAddress);
 
     /// <summary>
-    /// Gets the avatar color; created on first use so view models stay creatable off the UI thread.
+    /// The brush of the account color, once asked for; cleared when the color changes.
     /// </summary>
-    public IBrush AvatarBrush => field ??= new SolidColorBrush(Color.Parse(Avatar.Color(Account.EmailAddress)));
+    private SolidColorBrush? _avatarBrush;
+
+    /// <summary>
+    /// Gets the brush of the account color; created on first use so view models stay creatable off the UI thread.
+    /// </summary>
+    public IBrush AvatarBrush => _avatarBrush ??= new SolidColorBrush(Color.Parse(Account.EffectiveColor));
 
     /// <summary>
     /// Gets a value indicating whether the account signs in with OAuth 2.0 and can therefore be signed in again.
@@ -117,6 +122,14 @@ public sealed partial class AccountNodeViewModel(MailAccount account) : Observab
     {
         ArgumentNullException.ThrowIfNull(updated);
         Account = updated;
+
+        // Compared with the brush, because the caller may pass the same instance with new values.
+        if (_avatarBrush is not null && _avatarBrush.Color != Color.Parse(updated.EffectiveColor))
+        {
+            _avatarBrush = null;
+            OnPropertyChanged(nameof(AvatarBrush));
+        }
+
         OnPropertyChanged(nameof(Account));
         OnPropertyChanged(nameof(DisplayName));
         OnPropertyChanged(nameof(Initial));
