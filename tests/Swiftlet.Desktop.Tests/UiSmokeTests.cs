@@ -2750,6 +2750,35 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies every way to delete something in the contacts window is a named button showing the trash icon.
+    /// </summary>
+    [Fact]
+    public async Task ContactsWindow_DeleteButtons_ShowTrashIcon()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var viewModel = await CreateContactsAsync(TestLocalizer.English());
+                var window = new ContactsWindow { DataContext = viewModel };
+                Render(window, "contacts-delete-buttons", "en");
+                viewModel.SelectedContact = viewModel.Contacts[0];
+                viewModel.EditCommand.Execute(null);
+                Snapshot(window, "contacts-delete-buttons-form");
+
+                var trash = (Avalonia.Media.Geometry)window.FindResource("Icon.Delete")!;
+                var buttons = window.GetVisualDescendants().OfType<Button>().Where(b => b.IsEffectivelyVisible)
+                    .Where(b => b.Content is PathIcon icon && icon.Data == trash).ToList();
+
+                // The contact itself, its address and the empty phone row.
+                buttons.Select(UiQueries.Caption).Should().BeEquivalentTo(
+                    "Delete", "Remove email address", "Remove phone number");
+                buttons.Should().OnlyContain(b => b.Classes.Contains("danger") && ToolTip.GetTip(b) != null);
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Finds the close button of the title row of a dialog.
     /// </summary>
     /// <param name="window">The shown dialog.</param>

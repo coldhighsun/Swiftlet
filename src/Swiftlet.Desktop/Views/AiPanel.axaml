@@ -26,7 +26,7 @@
           </Button>
           <Button Classes="icon" Command="{Binding CloseCommand}"
                   ToolTip.Tip="{loc:Loc Ai_ClosePanel}" AutomationProperties.Name="{loc:Loc Ai_ClosePanel}">
-            <PathIcon Data="{StaticResource Icon.Close}" />
+            <PathIcon Data="{StaticResource Icon.Close}" Width="12" Height="12" />
           </Button>
         </StackPanel>
       </Grid>
