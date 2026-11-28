@@ -63,7 +63,12 @@ public sealed class AiClientFactory(ILogger<AiClientFactory>? logger = null) : I
             Timeout = Timeout.InfiniteTimeSpan,
         };
 
-        // Every setting the SDK would otherwise read from the environment is given here: the address, the credential
+        // The SDK reads this variable once per process, at its first request, and adds the headers listed in it to every
+        // request; on a developer machine they can hold the token of a gateway. An Authorization entry even makes it
+        // fail before anything is sent, so the variable cannot be handled afterwards and is removed from this process.
+        Environment.SetEnvironmentVariable("ANTHROPIC_CUSTOM_HEADERS", null);
+
+        // Every other setting the SDK would read from the environment is given here: the address, the credential
         // (setting the key stops it from looking for other ones) and the telemetry, which could export message content.
         var client = new AnthropicClient(new ClientOptions
         {
@@ -100,16 +105,11 @@ public sealed class AiClientFactory(ILogger<AiClientFactory>? logger = null) : I
     }
 
     /// <summary>
-    /// Makes sure a Claude request carries the configured key and nothing the environment added: the SDK copies the
-    /// headers listed in <c>ANTHROPIC_CUSTOM_HEADERS</c>, which on a developer machine can hold the token of a gateway.
+    /// Sends the configured key of a Claude request in <c>x-api-key</c> only: the SDK also puts it into
+    /// <c>Authorization</c>.
     /// </summary>
     private sealed class ClaudeHeaderHandler : DelegatingHandler
     {
-        /// <summary>
-        /// The headers the protocol needs, which are kept even when the variable names them.
-        /// </summary>
-        private static readonly string[] ProtocolHeaders = ["anthropic-version", "anthropic-beta", "x-api-key"];
-
         /// <summary>
         /// The configured API key.
         /// </summary>
@@ -129,18 +129,6 @@ public sealed class AiClientFactory(ILogger<AiClientFactory>? logger = null) : I
         /// <inheritdoc />
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            var added = Environment.GetEnvironmentVariable("ANTHROPIC_CUSTOM_HEADERS") ?? string.Empty;
-            foreach (var line in added.Split('\n'))
-            {
-                var colon = line.IndexOf(':', StringComparison.Ordinal);
-                var name = colon > 0 ? line[..colon].Trim() : string.Empty;
-                if (name.Length > 0 && !ProtocolHeaders.Contains(name, StringComparer.OrdinalIgnoreCase))
-                {
-                    // False for names that are content headers; those cannot carry a credential.
-                    _ = request.Headers.TryGetValues(name, out _) && request.Headers.Remove(name);
-                }
-            }
-
             request.Headers.Authorization = null;
             request.Headers.Remove("x-api-key");
             if (_apiKey.Length > 0)
