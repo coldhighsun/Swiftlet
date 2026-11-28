@@ -86,6 +86,7 @@ internal static class Program
         builder.Services.AddSingleton<IContactDirectory, ContactDirectory>();
         builder.Services.AddSingleton<IUiThread, AvaloniaUiThread>();
         builder.Services.AddSingleton<IThemeApplier, AvaloniaThemeApplier>();
+        builder.Services.AddSingleton(_ => PlatformAutoStart.Create(Environment.ProcessPath));
         builder.Services.AddSingleton(sp => new HtmlPreviewStore(Path.GetTempPath(), sp.GetService<ILogger<HtmlPreviewStore>>()));
         builder.Services.AddSingleton<MainWindowViewModel>();
         builder.Services.AddSingleton<AiAssistViewModel>();

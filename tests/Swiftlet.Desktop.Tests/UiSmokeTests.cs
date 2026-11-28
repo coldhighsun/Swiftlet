@@ -1056,7 +1056,11 @@ public class UiSmokeTests
                     new FakeLanguageStore(),
                     Microsoft.Extensions.Logging.Abstractions.NullLogger<LanguageSelectorViewModel>.Instance);
                 var viewModel = new SettingsViewModel(
-                    new FakeAppSettings(), LocalizationManager.Instance, new FakeRemoteImageRules(), languageSelector: selector);
+                    new FakeAppSettings(),
+                    LocalizationManager.Instance,
+                    new FakeRemoteImageRules(),
+                    languageSelector: selector,
+                    autoStart: new FakeAutoStart());
                 var window = new SettingsWindow { DataContext = viewModel };
                 Render(window, $"settings-general-{language}", language);
 
@@ -1068,9 +1072,11 @@ public class UiSmokeTests
                         viewModel.SelectedTrayUnreadStyle,
                         viewModel.SelectedContactNameOrder);
                 var generalBoxes = window.GetVisualDescendants().OfType<CheckBox>().ToList();
-                generalBoxes.Should().HaveCount(3);
+                generalBoxes.Should().HaveCount(4);
                 generalBoxes.Take(2).Should().OnlyContain(b => b.IsChecked == true, "the tray and notification settings are on by default");
-                generalBoxes[2].IsChecked.Should().BeFalse("the hidden start is off by default");
+                generalBoxes.Skip(2).Should().OnlyContain(
+                    b => b.IsChecked == false && b.IsEffectivelyVisible,
+                    "the start at sign-in and the hidden start are off by default");
                 window.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).Should().Contain(close);
 
                 SelectSettingsPage(window, 3, $"settings-performance-{language}");

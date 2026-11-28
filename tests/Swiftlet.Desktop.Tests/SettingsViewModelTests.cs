@@ -442,6 +442,94 @@ public class SettingsViewModelTests
     }
 
     /// <summary>
+    /// Verifies the checkbox shows what the system reports without writing it back.
+    /// </summary>
+    [Fact]
+    public void StartAtLogin_AlreadyEnabled_IsShownWithoutWriting()
+    {
+        var autoStart = new FakeAutoStart { Enabled = true };
+
+        var viewModel = CreateWithAutoStart(autoStart);
+
+        viewModel.IsAutoStartSupported.Should().BeTrue();
+        viewModel.StartAtLogin.Should().BeTrue();
+        autoStart.SetCalls.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies toggling the start at sign-in creates and removes the entry.
+    /// </summary>
+    [Fact]
+    public void StartAtLogin_Toggle_ChangesEntry()
+    {
+        var autoStart = new FakeAutoStart();
+        var viewModel = CreateWithAutoStart(autoStart);
+
+        viewModel.StartAtLogin = true;
+        viewModel.StartAtLogin = false;
+
+        autoStart.SetCalls.Should().Equal(true, false);
+        autoStart.Enabled.Should().BeFalse();
+        viewModel.ErrorText.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Verifies a refused change is reported and the checkbox returns to what the system reports, writing only once.
+    /// </summary>
+    [Fact]
+    public void StartAtLogin_ChangeRefused_ShowsErrorAndRevertsValue()
+    {
+        var autoStart = new FakeAutoStart { WriteFailure = new UnauthorizedAccessException("access denied") };
+        var viewModel = CreateWithAutoStart(autoStart);
+
+        viewModel.StartAtLogin = true;
+
+        viewModel.StartAtLogin.Should().BeFalse();
+        viewModel.ErrorText.Should().Contain("access denied");
+        autoStart.SetCalls.Should().Equal(true);
+    }
+
+    /// <summary>
+    /// Verifies the window still opens, and says why, when the entry cannot be read.
+    /// </summary>
+    [Fact]
+    public void StartAtLogin_ReadFails_ShowsError()
+    {
+        var autoStart = new FakeAutoStart { ReadFailure = new System.Security.SecurityException("registry locked") };
+
+        var viewModel = CreateWithAutoStart(autoStart);
+
+        viewModel.StartAtLogin.Should().BeFalse();
+        viewModel.ErrorText.Should().Contain("registry locked");
+    }
+
+    /// <summary>
+    /// Verifies the choice is not offered where it is unsupported.
+    /// </summary>
+    [Fact]
+    public void StartAtLogin_Unsupported_IsHiddenAndWritesNothing()
+    {
+        var autoStart = new FakeAutoStart { IsSupported = false };
+        var viewModel = CreateWithAutoStart(autoStart);
+
+        viewModel.StartAtLogin = true;
+
+        viewModel.IsAutoStartSupported.Should().BeFalse();
+        autoStart.SetCalls.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Creates a view model that registers the start at sign-in with a fake.
+    /// </summary>
+    /// <param name="autoStart">The fake.</param>
+    /// <returns>The view model.</returns>
+    private static SettingsViewModel CreateWithAutoStart(FakeAutoStart autoStart)
+    {
+        return new SettingsViewModel(
+            new FakeAppSettings(), TestLocalizer.English(), new FakeRemoteImageRules(), autoStart: autoStart);
+    }
+
+    /// <summary>
     /// Verifies a failed save of the notification choice is reported and the checkbox returns to the stored value.
     /// </summary>
     [Fact]
