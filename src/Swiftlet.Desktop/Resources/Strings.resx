@@ -242,6 +242,8 @@
   <data name="Settings_NewMailNotificationsHint" xml:space="preserve"><value>A small window appears in the corner of the screen when unread mail arrives in an inbox. You can delete, archive or mark the mail there.</value></data>
   <data name="Settings_StartMinimized" xml:space="preserve"><value>Start hidden in the tray</value></data>
   <data name="Settings_StartMinimizedHint" xml:space="preserve"><value>The main window is not shown when the app starts; open it from the tray icon. Needs a tray icon on your desktop. Starting the app again also brings the window back.</value></data>
+  <data name="Settings_HardwareRendering" xml:space="preserve"><value>Use hardware rendering</value></data>
+  <data name="Settings_HardwareRenderingHint" xml:space="preserve"><value>Draws the app with the graphics card. Turning it off uses noticeably less memory, but scrolling and resizing need more processor time; it can also help when windows are drawn incorrectly. Takes effect after a restart (quit from the tray icon; closing the window may not be enough).</value></data>
   <data name="Settings_TrayUnread" xml:space="preserve"><value>Unread in tray</value></data>
   <data name="Settings_TrayUnreadDot" xml:space="preserve"><value>Red dot</value></data>
   <data name="Settings_TrayUnreadBlink" xml:space="preserve"><value>Blinking</value></data>
@@ -268,6 +270,7 @@
   <data name="Tray_SummaryAccount" xml:space="preserve"><value>{0}: {1}</value></data>
   <data name="Tray_SummaryMore" xml:space="preserve"><value>More accounts: {0}</value></data>
   <data name="Settings_PagePrivacy" xml:space="preserve"><value>Privacy &amp; security</value></data>
+  <data name="Settings_PagePerformance" xml:space="preserve"><value>Performance</value></data>
   <data name="Settings_PageAbout" xml:space="preserve"><value>About</value></data>
   <data name="About_Description" xml:space="preserve"><value>A cross-platform email client.</value></data>
   <data name="About_Version" xml:space="preserve"><value>Version {0}</value></data>

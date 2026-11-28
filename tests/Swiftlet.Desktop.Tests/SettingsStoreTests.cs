@@ -193,6 +193,23 @@ public class SettingsStoreTests : IDisposable
     }
 
     /// <summary>
+    /// Verifies hardware rendering is on unless switched off, and the choice survives a restart and later saves.
+    /// </summary>
+    [Fact]
+    public void UseHardwareRendering_DefaultsOnAndIsSaved()
+    {
+        var store = new AppSettings(StorePath);
+        store.UseHardwareRendering.Should().BeTrue();
+
+        store.SetUseHardwareRendering(false);
+        store.SetCloseToTray(false);
+
+        var reloaded = new AppSettings(StorePath);
+        reloaded.UseHardwareRendering.Should().BeFalse();
+        reloaded.CloseToTray.Should().BeFalse();
+    }
+
+    /// <summary>
     /// Verifies the tray style defaults to the dot, is saved and announced.
     /// </summary>
     [Fact]

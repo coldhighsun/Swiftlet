@@ -188,8 +188,12 @@ internal static class Program
     /// <returns>The configured app builder.</returns>
     public static AppBuilder BuildAvaloniaApp(IServiceProvider services, AppStartup startup)
     {
+        var hardwareRendering = services.GetService<IAppSettings>()?.UseHardwareRendering ?? true;
+        services.GetService<ILoggerFactory>()?.CreateLogger("Swiftlet.Desktop.Startup")
+            .LogInformation("Hardware rendering: {HardwareRendering}", hardwareRendering);
         return AppBuilder.Configure(() => new App(services, startup))
             .UsePlatformDetect()
+            .UseHardwareRendering(hardwareRendering)
             .WithInterFont()
             .LogToTrace();
     }

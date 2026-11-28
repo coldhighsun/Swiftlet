@@ -242,6 +242,8 @@
   <data name="Settings_NewMailNotificationsHint" xml:space="preserve"><value>收件箱收到未读邮件时，在屏幕角落显示一个小窗口，可以直接删除、存档或标记邮件。</value></data>
   <data name="Settings_StartMinimized" xml:space="preserve"><value>启动后自动最小化到托盘</value></data>
   <data name="Settings_StartMinimizedHint" xml:space="preserve"><value>应用启动时不显示主窗口，可从托盘图标打开。需要桌面环境显示托盘图标；再次启动应用也会把窗口带回前台。</value></data>
+  <data name="Settings_HardwareRendering" xml:space="preserve"><value>使用硬件渲染</value></data>
+  <data name="Settings_HardwareRenderingHint" xml:space="preserve"><value>由显卡绘制界面。关闭后内存占用明显减少，但滚动和缩放窗口时处理器占用会升高；画面显示异常时也可尝试关闭。重启应用后生效（请从托盘图标退出，仅关闭窗口可能不够）。</value></data>
   <data name="Settings_TrayUnread" xml:space="preserve"><value>托盘未读提示</value></data>
   <data name="Settings_TrayUnreadDot" xml:space="preserve"><value>右下角红点</value></data>
   <data name="Settings_TrayUnreadBlink" xml:space="preserve"><value>图标闪烁</value></data>
@@ -268,6 +270,7 @@
   <data name="Tray_SummaryAccount" xml:space="preserve"><value>{0}：{1}</value></data>
   <data name="Tray_SummaryMore" xml:space="preserve"><value>另有 {0} 个账户</value></data>
   <data name="Settings_PagePrivacy" xml:space="preserve"><value>隐私与安全</value></data>
+  <data name="Settings_PagePerformance" xml:space="preserve"><value>性能</value></data>
   <data name="Settings_PageAbout" xml:space="preserve"><value>关于</value></data>
   <data name="About_Description" xml:space="preserve"><value>跨平台邮件客户端。</value></data>
   <data name="About_Version" xml:space="preserve"><value>版本 {0}</value></data>

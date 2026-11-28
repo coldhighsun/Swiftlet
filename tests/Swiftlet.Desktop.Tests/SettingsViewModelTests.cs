@@ -352,6 +352,36 @@ public class SettingsViewModelTests
     }
 
     /// <summary>
+    /// Verifies switching hardware rendering off saves the choice.
+    /// </summary>
+    [Fact]
+    public void UseHardwareRendering_Toggle_SavesValue()
+    {
+        var settings = new FakeAppSettings();
+        var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules());
+        viewModel.UseHardwareRendering.Should().BeTrue();
+
+        viewModel.UseHardwareRendering = false;
+
+        settings.UseHardwareRendering.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies a failed save of the rendering choice is reported and the checkbox returns to the stored value.
+    /// </summary>
+    [Fact]
+    public void UseHardwareRendering_SaveFails_ShowsErrorAndRevertsValue()
+    {
+        var settings = new FakeAppSettings { Failure = new IOException("disk full") };
+        var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules());
+
+        viewModel.UseHardwareRendering = false;
+
+        viewModel.UseHardwareRendering.Should().BeTrue();
+        viewModel.ErrorText.Should().Contain("disk full");
+    }
+
+    /// <summary>
     /// Verifies toggling the hidden start saves the choice.
     /// </summary>
     [Fact]

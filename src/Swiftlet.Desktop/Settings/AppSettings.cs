@@ -46,6 +46,17 @@ public interface IAppSettings : ISyncSettings
     void SetStartMinimized(bool value);
 
     /// <summary>
+    /// Gets a value indicating whether the graphics card may draw the application; read when it starts.
+    /// </summary>
+    bool UseHardwareRendering { get; }
+
+    /// <summary>
+    /// Changes whether the graphics card is used from the next start on, and saves the choice.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    void SetUseHardwareRendering(bool value);
+
+    /// <summary>
     /// Gets a value indicating whether newly arrived mail is announced with a pop-up.
     /// </summary>
     bool ShowNewMailNotifications { get; }
@@ -182,6 +193,11 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
     private volatile bool _startMinimized;
 
     /// <summary>
+    /// The in-memory value, read when the application starts.
+    /// </summary>
+    private volatile bool _useHardwareRendering;
+
+    /// <summary>
     /// The in-memory language preference, guarded by <see cref="_gate"/>; kept so a corrupt file never resets it.
     /// </summary>
     private string? _language;
@@ -235,6 +251,7 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
         _closeToTray = file.CloseToTray ?? true;
         _showNewMailNotifications = file.ShowNewMailNotifications ?? true;
         _startMinimized = file.StartMinimized ?? false;
+        _useHardwareRendering = file.UseHardwareRendering ?? true;
         _theme = ThemePreference.Normalize(
             file.Theme is { ValueKind: JsonValueKind.String } theme ? theme.GetString() : null);
         _trayUnreadStyle = Settings.TrayUnreadStyle.Normalize(
@@ -263,6 +280,7 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
     /// <param name="CheckForUpdates">Whether new versions are looked for automatically.</param>
     /// <param name="UpdateCheck">What is remembered about update checks; raw JSON for the same reason as the theme.</param>
     /// <param name="Ai">The AI settings, without the API key; raw JSON for the same reason as the theme.</param>
+    /// <param name="UseHardwareRendering">Whether the graphics card may draw the application.</param>
     private sealed record SettingsFile(
         string? Language,
         bool? SyncServerDeletions,
@@ -276,7 +294,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
         JsonElement? ContactNameOrder = null,
         bool? CheckForUpdates = null,
         JsonElement? UpdateCheck = null,
-        JsonElement? Ai = null);
+        JsonElement? Ai = null,
+        bool? UseHardwareRendering = null);
 
     /// <inheritdoc />
     public bool RemoveServerDeletedMessages => _removeServerDeletedMessages;
@@ -295,6 +314,9 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
 
     /// <inheritdoc />
     public bool StartMinimized => _startMinimized;
+
+    /// <inheritdoc />
+    public bool UseHardwareRendering => _useHardwareRendering;
 
     /// <inheritdoc />
     public string TrayUnreadStyle => _trayUnreadStyle;
@@ -450,6 +472,16 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
     }
 
     /// <inheritdoc />
+    public void SetUseHardwareRendering(bool value)
+    {
+        lock (_gate)
+        {
+            Write(Snapshot() with { UseHardwareRendering = value });
+            _useHardwareRendering = value;
+        }
+    }
+
+    /// <inheritdoc />
     public void SetTrayUnreadStyle(string value)
     {
         var style = Settings.TrayUnreadStyle.Normalize(value);
@@ -507,7 +539,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
             JsonSerializer.SerializeToElement(_contactNameOrder),
             _checkForUpdates,
             SerializeUpdateCheckState(_updateCheckState),
-            JsonSerializer.SerializeToElement(_ai, AiOptions));
+            JsonSerializer.SerializeToElement(_ai, AiOptions),
+            _useHardwareRendering);
     }
 
     /// <summary>

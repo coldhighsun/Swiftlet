@@ -1,5 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Platform;
+using Swiftlet.Desktop.Hosting;
 using Swiftlet.Desktop.Html;
 
 namespace Swiftlet.Desktop.Controls;
@@ -45,6 +47,7 @@ public sealed class HtmlBodyView : Border
     public HtmlBodyView()
     {
         Child = _webView;
+        _webView.EnvironmentRequested += OnEnvironmentRequested;
         _webView.AdapterCreated += (_, _) =>
         {
             _adapterReady = true;
@@ -66,6 +69,21 @@ public sealed class HtmlBodyView : Border
     {
         get => GetValue(DocumentProperty);
         set => SetValue(DocumentProperty, value);
+    }
+
+    /// <summary>
+    /// Keeps the web view off the graphics card when hardware rendering is switched off (Windows only; no such switch
+    /// is passed to the web views of the other platforms).
+    /// </summary>
+    /// <param name="sender">The web view.</param>
+    /// <param name="e">The settings of the browser about to be created.</param>
+    private void OnEnvironmentRequested(object? sender, WebViewEnvironmentRequestedEventArgs e)
+    {
+        if (e is WindowsWebView2EnvironmentRequestedEventArgs windows)
+        {
+            windows.AdditionalBrowserArguments =
+                HardwareRendering.BrowserArguments(windows.AdditionalBrowserArguments, HardwareRendering.IsEnabled);
+        }
     }
 
     /// <summary>
