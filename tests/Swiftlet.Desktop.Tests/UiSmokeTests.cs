@@ -2640,6 +2640,13 @@ public class UiSmokeTests
                 archive.IsEffectivelyEnabled.Should().BeFalse();
                 ToolTip.GetShowOnDisabled(archive).Should().BeTrue();
 
+                var pager = window.FindControl<Border>("Pager")!;
+                pager.IsEffectivelyVisible.Should().BeTrue();
+                pager.GetVisualDescendants().OfType<Button>().Select(b => b.Bounds.Size)
+                    .Should().Equal(new Size(24, 24), new Size(24, 24));
+                pager.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text)
+                    .Should().Contain(viewModel.Position);
+
                 // The action row must not move when the shown message has shorter texts.
                 var height = window.Bounds.Height;
                 viewModel.NextCommand.Execute(null);
@@ -2671,6 +2678,9 @@ public class UiSmokeTests
                 var closeRequests = 0;
                 viewModel.CloseRequested += (_, _) => closeRequests++;
                 presenter.Show(viewModel);
+
+                // There is nothing to move between with a single message.
+                presenter.Window!.FindControl<Border>("Pager")!.IsVisible.Should().BeFalse();
 
                 presenter.Window!.Close();
 
