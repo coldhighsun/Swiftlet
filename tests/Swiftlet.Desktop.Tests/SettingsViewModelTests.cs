@@ -531,6 +531,36 @@ public class SettingsViewModelTests
     }
 
     /// <summary>
+    /// Verifies turning the animations off saves the inverted choice.
+    /// </summary>
+    [Fact]
+    public void EnableAnimations_Toggle_SavesValue()
+    {
+        var settings = new FakeAppSettings();
+        var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules());
+        viewModel.DisableAnimations.Should().BeFalse();
+
+        viewModel.DisableAnimations = true;
+
+        settings.EnableAnimations.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies a failed save of the animation choice is reported and the checkbox returns to the stored value.
+    /// </summary>
+    [Fact]
+    public void EnableAnimations_SaveFails_ShowsErrorAndRevertsValue()
+    {
+        var settings = new FakeAppSettings { Failure = new IOException("disk full") };
+        var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules());
+
+        viewModel.DisableAnimations = true;
+
+        viewModel.DisableAnimations.Should().BeFalse();
+        viewModel.ErrorText.Should().Contain("disk full");
+    }
+
+    /// <summary>
     /// Verifies toggling the hidden start saves the choice.
     /// </summary>
     [Fact]

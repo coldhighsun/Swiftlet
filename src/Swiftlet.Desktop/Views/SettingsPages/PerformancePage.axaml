@@ -2,7 +2,9 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:settings="using:Swiftlet.Desktop.ViewModels.Settings"
              xmlns:loc="using:Swiftlet.Desktop.Localization"
+             xmlns:ctl="using:Swiftlet.Desktop.Controls"
              x:Class="Swiftlet.Desktop.Views.SettingsPages.PerformancePage"
+             ctl:Entrance.Effect="Fade" ctl:Entrance.OnAttach="True"
              x:DataType="settings:SettingsViewModel">
   <ScrollViewer HorizontalScrollBarVisibility="Disabled">
     <StackPanel Margin="16" Spacing="12">
@@ -15,6 +17,12 @@
           <TextBlock Classes="caption" Text="{loc:Loc Settings_SoftwareRenderingHint}" TextWrapping="Wrap" Margin="28,0,0,0" />
           <CheckBox Content="{loc:Loc Settings_ReleaseWebView}" IsChecked="{Binding ReleaseWebViewWhenHidden}" Margin="0,8,0,0" />
           <TextBlock Classes="caption" Text="{loc:Loc Settings_ReleaseWebViewHint}" TextWrapping="Wrap" Margin="28,0,0,0" />
+        </StackPanel>
+      </Border>
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <CheckBox Content="{loc:Loc Settings_NoAnimations}" IsChecked="{Binding DisableAnimations}" />
+          <TextBlock Classes="caption" Text="{loc:Loc Settings_NoAnimationsHint}" TextWrapping="Wrap" Margin="28,0,0,0" />
         </StackPanel>
       </Border>
     </StackPanel>

@@ -1,4 +1,5 @@
 using Avalonia.Threading;
+using Swiftlet.Desktop.Controls;
 using Swiftlet.Desktop.ViewModels;
 using Swiftlet.Desktop.Views;
 
@@ -79,7 +80,11 @@ public sealed class AvaloniaNewMailPresenter : INewMailPresenter
         _timer.Stop();
         var window = _window;
         _window = null;
-        window?.Close();
+        if (window is not null)
+        {
+            // The window is no longer the shown one, so new mail arriving while it fades gets a window of its own.
+            _ = Entrance.CloseWithFadeAsync(window, window.Card);
+        }
     }
 
     /// <summary>

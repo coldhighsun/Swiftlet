@@ -2,7 +2,9 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:settings="using:Swiftlet.Desktop.ViewModels.Settings"
              xmlns:loc="using:Swiftlet.Desktop.Localization"
+             xmlns:ctl="using:Swiftlet.Desktop.Controls"
              x:Class="Swiftlet.Desktop.Views.SettingsPages.AboutPage"
+             ctl:Entrance.Effect="Fade" ctl:Entrance.OnAttach="True"
              x:DataType="settings:AboutViewModel">
   <ScrollViewer HorizontalScrollBarVisibility="Disabled">
     <StackPanel Margin="16" Spacing="12">

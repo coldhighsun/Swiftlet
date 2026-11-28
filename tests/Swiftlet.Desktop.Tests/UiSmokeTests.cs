@@ -1245,7 +1245,8 @@ public class UiSmokeTests
 
                 var performanceBoxes = window.GetVisualDescendants().OfType<CheckBox>().ToList();
                 performanceBoxes.Select(b => b.IsChecked).Should().Equal(
-                    [false, false], "neither memory saving option is on by default");
+                    [false, false, false],
+                    "neither memory saving option is on by default and the animations are not turned off");
 
                 SelectSettingsPage(window, 1, $"settings-sync-{language}");
 

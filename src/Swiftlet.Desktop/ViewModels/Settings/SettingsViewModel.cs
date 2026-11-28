@@ -85,6 +85,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         StartMinimized = settings.StartMinimized;
         UseSoftwareRendering = !settings.UseHardwareRendering;
         ReleaseWebViewWhenHidden = settings.ReleaseWebViewWhenHidden;
+        DisableAnimations = !settings.EnableAnimations;
         RefreshRemoteImageRules();
         _protection = protection;
         _themeApplier = themeApplier;
@@ -353,6 +354,13 @@ public sealed partial class SettingsViewModel : ObservableObject
     public partial bool ReleaseWebViewWhenHidden { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether the user interface stays still. It is the inverse of the stored choice,
+    /// so that every checkbox on the page saves resources when checked.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool DisableAnimations { get; set; }
+
+    /// <summary>
     /// Gets or sets the localized error of the last failed save, or <see langword="null"/>.
     /// </summary>
     [ObservableProperty]
@@ -571,6 +579,30 @@ public sealed partial class SettingsViewModel : ObservableObject
             // The file could not be written; show it and put the checkbox back so it matches what is stored.
             ErrorText = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
             ReleaseWebViewWhenHidden = _settings.ReleaseWebViewWhenHidden;
+        }
+    }
+
+    /// <summary>
+    /// Saves the new value as soon as the checkbox changes.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    partial void OnDisableAnimationsChanged(bool value)
+    {
+        if (value == !_settings.EnableAnimations)
+        {
+            return;
+        }
+
+        ErrorText = null;
+        try
+        {
+            _settings.SetEnableAnimations(!value);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The file could not be written; show it and put the checkbox back so it matches what is stored.
+            ErrorText = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
+            DisableAnimations = !_settings.EnableAnimations;
         }
     }
 

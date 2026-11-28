@@ -49,7 +49,7 @@
     <TextBlock DockPanel.Dock="Bottom" Classes="error" Text="{Binding ErrorMessage}" TextWrapping="Wrap" Margin="0,8,0,0"
                IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
-    <views:ComposeAiPanel DockPanel.Dock="Bottom" DataContext="{Binding Assist}"
+    <views:ComposeAiPanel DockPanel.Dock="Bottom" ctl:Entrance.Effect="Fade" DataContext="{Binding Assist}"
                           IsVisible="{Binding IsOpen, FallbackValue=False}" />
 
     <Border Classes="card" Padding="12" ClipToBounds="True">

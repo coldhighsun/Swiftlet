@@ -156,15 +156,15 @@
         </StackPanel>
 
         <Panel>
-          <TextBlock Classes="secondary" Text="{loc:Loc Contacts_NoSelection}" IsVisible="{Binding IsNoContactShown}"
+          <TextBlock Classes="secondary" Text="{loc:Loc Contacts_NoSelection}" IsVisible="{Binding IsNoContactShown}" controls:Entrance.Effect="Fade"
                      HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" Margin="24" />
-          <views:ContactCardView IsVisible="{Binding IsViewing}" />
-          <views:ContactFormView IsVisible="{Binding IsFormShown}" />
+          <views:ContactCardView controls:Entrance.Effect="Fade" IsVisible="{Binding IsViewing}" />
+          <views:ContactFormView controls:Entrance.Effect="Fade" IsVisible="{Binding IsFormShown}" />
 
           <TextBlock Classes="secondary" Text="{loc:Loc Contacts_NoCollectedSelection}"
-                     IsVisible="{Binding IsNoCollectedShown}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                     IsVisible="{Binding IsNoCollectedShown}" controls:Entrance.Effect="Fade" HorizontalAlignment="Center" VerticalAlignment="Center"
                      TextWrapping="Wrap" Margin="24" />
-          <StackPanel IsVisible="{Binding IsOneCollectedShown}" Spacing="16" Margin="24" VerticalAlignment="Top">
+          <StackPanel IsVisible="{Binding IsOneCollectedShown}" controls:Entrance.Effect="Fade" Spacing="16" Margin="24" VerticalAlignment="Top">
             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
               <Border Width="56" Height="56" CornerRadius="28" Background="{Binding SingleCollected.AvatarBrush}"
                       VerticalAlignment="Center">
@@ -186,7 +186,7 @@
               </Button>
             </WrapPanel>
           </StackPanel>
-          <StackPanel IsVisible="{Binding IsManyCollectedShown}" Spacing="16" Margin="24" HorizontalAlignment="Center"
+          <StackPanel IsVisible="{Binding IsManyCollectedShown}" controls:Entrance.Effect="Fade" Spacing="16" Margin="24" HorizontalAlignment="Center"
                       VerticalAlignment="Center">
             <TextBlock Classes="section" Text="{Binding SelectedCollectedText}" HorizontalAlignment="Center"
                        TextWrapping="Wrap" />
