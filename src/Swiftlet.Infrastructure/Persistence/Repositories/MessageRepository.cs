@@ -474,6 +474,22 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
     }
 
     /// <inheritdoc />
+    public async Task<int> MarkFolderReadAsync(
+        Guid accountId,
+        Guid folderId,
+        CancellationToken cancellationToken = default)
+    {
+        var context = await contexts.GetAsync(accountId, cancellationToken);
+        return await context.Messages
+            .Where(m => m.FolderId == folderId && !m.IsRead && !m.IsDeletePending)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(m => m.IsRead, true)
+                    .SetProperty(m => m.IsFlagSyncPending, true),
+                cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task<int> MarkFolderDeletePendingAsync(
         Guid accountId,
         Guid folderId,

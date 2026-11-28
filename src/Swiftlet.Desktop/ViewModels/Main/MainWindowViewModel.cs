@@ -1070,6 +1070,37 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Marks every downloaded message of a folder as read.
+    /// </summary>
+    /// <param name="node">The folder node the menu was opened on.</param>
+    /// <returns>A task that completes when the messages are shown as read or the failure is reported.</returns>
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private async Task MarkFolderReadAsync(FolderNodeViewModel? node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        var marked = false;
+        await GuardedAsync("Error_MarkRead", async () =>
+        {
+            await _dispatcher.SendAsync(new MarkFolderReadCommand(node.Folder.AccountId, node.Folder.Id));
+            marked = true;
+        });
+        if (!marked)
+        {
+            return;
+        }
+
+        foreach (var item in Messages.Where(m => m.Message.FolderId == node.Folder.Id))
+        {
+            item.IsRead = true;
+        }
+
+        StartUnreadRefresh(node.Folder.AccountId);
+
+        // A search for unread messages must drop the rows that no longer match.
+        await ReloadViewAsync();
+    }
+
+    /// <summary>
     /// Deletes every message of a folder after the user confirmed, including those that were never downloaded.
     /// </summary>
     /// <param name="node">The folder node the menu was opened on.</param>

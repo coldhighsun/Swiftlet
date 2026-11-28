@@ -276,6 +276,16 @@ public interface IMessageRepository
     Task<int> MarkFolderDeletePendingAsync(Guid accountId, Guid folderId, uint throughUid, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Marks every cached unread message of a folder as read and as waiting for the server to be told.
+    /// Messages waiting for deletion or a move are left alone.
+    /// </summary>
+    /// <param name="accountId">The owning account.</param>
+    /// <param name="folderId">The folder.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The number of messages marked.</returns>
+    Task<int> MarkFolderReadAsync(Guid accountId, Guid folderId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Marks messages as moved by the user, which hides them from every view until the server has been told.
     /// Messages already in the target folder and messages already waiting for deletion or another move are left alone.
     /// </summary>

@@ -167,6 +167,9 @@
                 <Grid Classes="node" ColumnDefinitions="Auto,*" Background="Transparent">
                   <Grid.ContextMenu>
                     <ContextMenu>
+                      <MenuItem Header="{loc:Loc Menu_Folder_MarkAllRead}" IsEnabled="{Binding HasUnread}"
+                                Command="{Binding $parent[TreeView].((main:MainWindowViewModel)DataContext).MarkFolderReadCommand}"
+                                CommandParameter="{Binding}" />
                       <MenuItem Header="{loc:Loc Menu_Folder_Empty}" IsEnabled="{Binding CanEmpty}"
                                 Command="{Binding $parent[TreeView].((main:MainWindowViewModel)DataContext).EmptyFolderCommand}"
                                 CommandParameter="{Binding}" />

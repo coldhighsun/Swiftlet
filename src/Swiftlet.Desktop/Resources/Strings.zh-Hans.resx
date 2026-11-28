@@ -125,6 +125,7 @@
   <data name="Confirm_TrashRetention_Title" xml:space="preserve"><value>自动清理已删除邮件</value></data>
   <data name="Confirm_TrashRetention_Message" xml:space="preserve"><value>{0} 的“已删除”中存放满 {1} 天的邮件将从服务器上永久删除，无法恢复。</value></data>
   <data name="Confirm_TrashRetention_Ok" xml:space="preserve"><value>确认开启</value></data>
+  <data name="Menu_Folder_MarkAllRead" xml:space="preserve"><value>全部标为已读</value></data>
   <data name="Menu_Folder_Empty" xml:space="preserve"><value>删除全部邮件</value></data>
   <data name="Error_EmptyFolder" xml:space="preserve"><value>删除文件夹内的邮件失败</value></data>
   <data name="Status_EmptyQueued" xml:space="preserve"><value>正在后台删除“{0}”中的全部邮件</value></data>
