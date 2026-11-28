@@ -54,7 +54,6 @@ The [Apache License 2.0 text](#apache-license-20) applies to each of these.
 | Packages | Version | Copyright |
 |---|---|---|
 | [Anthropic .NET SDK](https://github.com/anthropics/anthropic-sdk-csharp): `Anthropic` | 13.14.0 | Copyright 2023 Anthropic, PBC. |
-| [Magick.NET](https://github.com/dlemstra/Magick.NET): `Magick.NET-Q8-AnyCPU`, `Magick.NET.Core` | 15.1.1 | Copyright 2013-2026 Dirk Lemstra |
 | [Serilog](https://serilog.net/) | 4.4.0 | Copyright © Serilog Contributors |
 | [Serilog.Extensions.Hosting](https://github.com/serilog/serilog-extensions-hosting) | 11.0.0 | Microsoft, Serilog Contributors |
 | [Serilog.Extensions.Logging](https://github.com/serilog/serilog-extensions-logging) | 11.0.0 | Microsoft, Serilog Contributors |
@@ -98,59 +97,6 @@ packages.
 Portions of this software are copyright © The FreeType Project
 (<https://freetype.org>). All rights reserved. This software is based in part on
 the work of the Independent JPEG Group.
-
-### ImageMagick native library
-
-The native library in `Magick.NET-Q8-AnyCPU` contains
-[ImageMagick](https://github.com/ImageMagick/ImageMagick) 7.1.2-36,
-Copyright © 1999 ImageMagick Studio LLC, under the
-[ImageMagick License](https://imagemagick.org/license/), together with the
-libraries below. The complete copyright notices and license texts are in
-`Notice.txt` inside the package
-([nuget.org](https://www.nuget.org/packages/Magick.NET-Q8-AnyCPU/15.1.1)).
-
-Several of these libraries are covered by a GNU Lesser (or Library) General
-Public License. The exact source of each version is linked from `Notice.txt`.
-
-| Library | Version | License |
-|---|---|---|
-| aom | 3.15.3 | BSD |
-| brotli | 1.2.1 | MIT |
-| libbzip2 | 1.0.8 | bzip2 license (BSD style) |
-| cairo | 1.18.6 | Mozilla Public License 1.1 |
-| libcroco | 0.6.13 | GNU LGPL |
-| libde265 | 1.1.3 | GNU LGPL |
-| openexr | 3.5.4 | BSD |
-| libffi | 3.8.1 | MIT |
-| fontconfig | 2.18.3 | MIT style |
-| freetype | 2.15.0 | FreeType Project License |
-| fribidi | 1.0.18 | GNU LGPL |
-| gdk-pixbuf | 2.44.8 | GNU LGPL |
-| glib | 2.64.3 | GNU LGPL |
-| harfbuzz | 15.1.0 | Old MIT |
-| libheif | 1.23.7 | GNU LGPL |
-| libhwy | 1.4.0 | Apache 2.0 or BSD 3-Clause |
-| imath | 3.2.3 | BSD |
-| libjpeg-turbo | 3.2.1 | IJG and BSD style |
-| libjxl | 0.13.0 | BSD |
-| lcms | 2.20.0 | MIT |
-| liblqr | 0.4.2 | GNU LGPL |
-| liblzma | 5.8.4 | GNU LGPL (as stated in `Notice.txt`) |
-| openh264 | 2.7.0 | BSD |
-| openjpeg | 2.5.4 | BSD 2-Clause |
-| openjph | 0.33.0 | BSD 2-Clause |
-| pango | 1.45.3 | GNU LGPL |
-| pixman | 0.46.4 | MIT |
-| libpng | 1.6.59 | PNG Reference Library License |
-| libraqm | 0.11.0 | MIT |
-| libraw | 0.22.3 | GNU LGPL |
-| librsvg | 2.40.20 | GNU LGPL |
-| libtiff | 4.7.2 | LibTIFF license |
-| libwebp | 1.6.0 | BSD |
-| libxml2 | 2.15.4 | MIT style |
-| libzip | 1.12.1 | BSD |
-| zlib | 1.4.0 | zlib license |
-| zstd | 1.5.7 | BSD |
 
 ## License texts
 

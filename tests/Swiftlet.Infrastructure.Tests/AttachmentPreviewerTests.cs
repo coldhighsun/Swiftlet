@@ -1,7 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using AwesomeAssertions;
-using ImageMagick;
+using SkiaSharp;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Infrastructure.Mail;
 
@@ -39,20 +39,6 @@ public class AttachmentPreviewerTests
     }
 
     /// <summary>
-    /// Builds an image of one color.
-    /// </summary>
-    /// <param name="width">The width.</param>
-    /// <param name="height">The height.</param>
-    /// <param name="format">The format.</param>
-    /// <returns>The encoded image.</returns>
-    private static byte[] Image(uint width, uint height, MagickFormat format)
-    {
-        using var image = new MagickImage(MagickColors.SteelBlue, width, height);
-        image.Format = format;
-        return image.ToByteArray();
-    }
-
-    /// <summary>
     /// Verifies the types that can be previewed are recognised by extension or content type.
     /// </summary>
     /// <param name="fileName">The file name.</param>
@@ -60,7 +46,10 @@ public class AttachmentPreviewerTests
     /// <param name="expected">Whether a preview is possible.</param>
     [Theory]
     [InlineData("photo.PNG", "application/octet-stream", true)]
-    [InlineData("scan", "image/tiff", true)]
+    [InlineData("scan", "image/webp", true)]
+    [InlineData("scan", "image/tiff", false)]
+    [InlineData("IMG_1.HEIC", "image/heic", false)]
+    [InlineData("logo.svg", "image/svg+xml", false)]
     [InlineData("notes.txt", "application/octet-stream", true)]
     [InlineData("data", "application/json", true)]
     [InlineData("backup.zip", "application/octet-stream", true)]
@@ -79,12 +68,12 @@ public class AttachmentPreviewerTests
     [Fact]
     public void Create_LargeImage_ReturnsScaledThumbnail()
     {
-        var content = Image(1920, 1080, MagickFormat.Jpeg);
+        var content = TestImages.Solid(1920, 1080, SKEncodedImageFormat.Jpeg);
 
         var preview = _previewer.Create("big.jpg", "image/jpeg", content);
 
         preview.Kind.Should().Be(AttachmentPreviewKind.Image);
-        using var thumbnail = new MagickImage(preview.Image!);
+        using var thumbnail = SKBitmap.Decode(preview.Image);
         thumbnail.Width.Should().Be(AttachmentPreviewer.MaxThumbnailSide);
         thumbnail.Height.Should().Be(270);
     }
@@ -95,26 +84,56 @@ public class AttachmentPreviewerTests
     [Fact]
     public void Create_SmallImage_IsNotEnlarged()
     {
-        var content = Image(40, 20, MagickFormat.Png);
+        var content = TestImages.Solid(40, 20, SKEncodedImageFormat.Png);
 
         var preview = _previewer.Create("icon.png", "image/png", content);
 
-        using var thumbnail = new MagickImage(preview.Image!);
+        using var thumbnail = SKBitmap.Decode(preview.Image);
         thumbnail.Width.Should().Be(40);
         thumbnail.Height.Should().Be(20);
     }
 
     /// <summary>
-    /// Verifies a format a browser could not show (TIFF) is converted, found through the extension of a generic file.
+    /// Verifies a photo taken with a rotated camera is shown upright.
     /// </summary>
     [Fact]
-    public void Create_TiffWithGenericContentType_ReturnsImage()
+    public void Create_RotatedPhoto_AppliesExifOrientation()
     {
-        var content = Image(64, 64, MagickFormat.Tiff);
+        var content = TestImages.WithOrientation(TestImages.Solid(80, 40, SKEncodedImageFormat.Jpeg), 6);
 
-        var preview = _previewer.Create("scan.tif", "application/octet-stream", content);
+        var preview = _previewer.Create("photo.jpg", "image/jpeg", content);
 
-        preview.Kind.Should().Be(AttachmentPreviewKind.Image);
+        using var thumbnail = SKBitmap.Decode(preview.Image);
+        thumbnail.Width.Should().Be(40);
+        thumbnail.Height.Should().Be(80);
+    }
+
+    /// <summary>
+    /// Verifies a transparent image stays transparent.
+    /// </summary>
+    [Fact]
+    public void Create_TransparentImage_ReturnsPng()
+    {
+        var content = TestImages.Solid(600, 300, SKEncodedImageFormat.Png, SKColors.Transparent);
+
+        var preview = _previewer.Create("logo.png", "image/png", content);
+
+        preview.Image.Should().StartWith(new byte[] { 0x89, 0x50, 0x4E, 0x47 });
+        using var thumbnail = SKBitmap.Decode(preview.Image);
+        thumbnail.GetPixel(0, 0).Alpha.Should().Be(0);
+    }
+
+    /// <summary>
+    /// Verifies an image whose header declares too many pixels is refused before it is decoded.
+    /// </summary>
+    [Fact]
+    public void Create_ImageWithTooManyPixels_ReturnsUnsupported()
+    {
+        var content = TestImages.PngHeader(20_000, 20_000);
+
+        var preview = _previewer.Create("bomb.png", "image/png", content);
+
+        preview.Kind.Should().Be(AttachmentPreviewKind.Unsupported);
     }
 
     /// <summary>

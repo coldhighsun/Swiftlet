@@ -5,12 +5,13 @@
   <ItemGroup>
     <ProjectReference Include="..\Swiftlet.Application\Swiftlet.Application.csproj" />
     <PackageReference Include="Anthropic" />
-    <PackageReference Include="Magick.NET-Q8-AnyCPU" />
     <PackageReference Include="MailKit" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite.Core" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
     <PackageReference Include="Polly.Core" />
+    <PackageReference Include="SkiaSharp" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" />
     <PackageReference Include="SQLite3MC.PCLRaw.bundle" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" />
   </ItemGroup>

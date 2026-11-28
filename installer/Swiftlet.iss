@@ -60,6 +60,9 @@ Type: files; Name: "{app}\zh-Hans\Swiftlet.Desktop.resources.dll"
 ; Native symbol files that earlier packages shipped.
 Type: files; Name: "{app}\libHarfBuzzSharp.pdb"
 Type: files; Name: "{app}\libSkiaSharp.pdb"
+; ImageMagick, which up to 0.1.0-alpha.1 decoded images.
+Type: files; Name: "{app}\Magick.NET*.dll"
+Type: files; Name: "{app}\Magick.Native*.dll"
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
