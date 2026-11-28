@@ -193,6 +193,13 @@ public sealed partial class ComposeViewModel : ObservableObject
     public partial string To { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether the Cc and Bcc fields are shown. They are rarely needed, so a window starts
+    /// without them; once shown they stay, so that nobody is sent a message through a field that is out of sight.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsCcBccShown { get; set; }
+
+    /// <summary>
     /// Gets or sets the Cc recipients.
     /// </summary>
     [ObservableProperty]
@@ -304,6 +311,15 @@ public sealed partial class ComposeViewModel : ObservableObject
         {
             IsSending = false;
         }
+    }
+
+    /// <summary>
+    /// Shows the Cc and Bcc fields.
+    /// </summary>
+    [RelayCommand]
+    private void ShowCcBcc()
+    {
+        IsCcBccShown = true;
     }
 
     /// <summary>

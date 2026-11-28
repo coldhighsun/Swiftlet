@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Avalonia.Controls;
+using Avalonia.Threading;
 using Swiftlet.Desktop.ViewModels.Ai;
 using Swiftlet.Desktop.ViewModels.Compose;
 
@@ -26,6 +27,11 @@ public partial class ComposeWindow : Window
     private ComposeAssistViewModel? _assist;
 
     /// <summary>
+    /// The view model being followed, if any.
+    /// </summary>
+    private ComposeViewModel? _viewModel;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ComposeWindow"/> class.
     /// </summary>
     public ComposeWindow()
@@ -43,10 +49,35 @@ public partial class ComposeWindow : Window
             _assist.PropertyChanged -= OnAssistChanged;
         }
 
-        _assist = (DataContext as ComposeViewModel)?.Assist;
+        if (_viewModel is not null)
+        {
+            _viewModel.PropertyChanged -= OnViewModelChanged;
+        }
+
+        _viewModel = DataContext as ComposeViewModel;
+        if (_viewModel is not null)
+        {
+            _viewModel.PropertyChanged += OnViewModelChanged;
+        }
+
+        _assist = _viewModel?.Assist;
         if (_assist is not null)
         {
             _assist.PropertyChanged += OnAssistChanged;
+        }
+    }
+
+    /// <summary>
+    /// Moves to the Cc field when it appears.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ComposeViewModel.IsCcBccShown) && _viewModel!.IsCcBccShown)
+        {
+            // Posted, because the field cannot take the focus before the binding has made it visible.
+            Dispatcher.UIThread.Post(() => CcBox.Focus());
         }
     }
 

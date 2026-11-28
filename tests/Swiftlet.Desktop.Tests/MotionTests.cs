@@ -8,6 +8,8 @@ using Avalonia.VisualTree;
 using AwesomeAssertions;
 using Swiftlet.Desktop.Controls;
 using Swiftlet.Desktop.Hosting;
+using Swiftlet.Desktop.Services;
+using Swiftlet.Desktop.ViewModels.Compose;
 using Swiftlet.Desktop.Views;
 using Xunit;
 
@@ -262,6 +264,40 @@ public class MotionTests
             content.IsHitTestVisible.Should().BeFalse();
             await DrawUntilAsync(closing);
             window.IsVisible.Should().BeFalse();
+        });
+    }
+
+    /// <summary>
+    /// Verifies the Cc and Bcc rows of the compose window are animated into view and end up fully visible.
+    /// </summary>
+    [Fact]
+    public async Task ComposeWindow_ShowCcBcc_AnimatesTheRows()
+    {
+        await DispatchAsync(async () =>
+        {
+            Motion.Apply(Avalonia.Application.Current!, true);
+            var account = TestData.Account();
+            var viewModel = new ComposeViewModel(
+                new FakeDispatcher(),
+                new FakeDialogService(),
+                TestLocalizer.English(),
+                [account],
+                new ComposeRequest(ComposeMode.New, account.Id, string.Empty, string.Empty, string.Empty, null));
+            var window = new ComposeWindow { DataContext = viewModel };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var rows = window.FindControl<Grid>("CcBccRows")!;
+            Entrance.GetRunning(rows).Should().BeNull();
+
+            viewModel.ShowCcBccCommand.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+            var running = Entrance.GetRunning(rows);
+
+            running.Should().NotBeNull();
+            await DrawUntilAsync(running!);
+            rows.IsEffectivelyVisible.Should().BeTrue();
+            rows.Opacity.Should().Be(1);
+            window.Close();
         });
     }
 
