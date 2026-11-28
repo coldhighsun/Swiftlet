@@ -210,6 +210,23 @@ public class SettingsStoreTests : IDisposable
     }
 
     /// <summary>
+    /// Verifies releasing the web view is off unless chosen, and the choice survives a restart and later saves.
+    /// </summary>
+    [Fact]
+    public void ReleaseWebViewWhenHidden_DefaultsOffAndIsSaved()
+    {
+        var store = new AppSettings(StorePath);
+        store.ReleaseWebViewWhenHidden.Should().BeFalse();
+
+        store.SetReleaseWebViewWhenHidden(true);
+        store.SetCloseToTray(false);
+
+        var reloaded = new AppSettings(StorePath);
+        reloaded.ReleaseWebViewWhenHidden.Should().BeTrue();
+        reloaded.CloseToTray.Should().BeFalse();
+    }
+
+    /// <summary>
     /// Verifies the tray style defaults to the dot, is saved and announced.
     /// </summary>
     [Fact]

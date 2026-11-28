@@ -382,6 +382,36 @@ public class SettingsViewModelTests
     }
 
     /// <summary>
+    /// Verifies switching the web view release on saves the choice.
+    /// </summary>
+    [Fact]
+    public void ReleaseWebViewWhenHidden_Toggle_SavesValue()
+    {
+        var settings = new FakeAppSettings();
+        var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules());
+        viewModel.ReleaseWebViewWhenHidden.Should().BeFalse();
+
+        viewModel.ReleaseWebViewWhenHidden = true;
+
+        settings.ReleaseWebViewWhenHidden.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies a failed save of the web view release is reported and the checkbox returns to the stored value.
+    /// </summary>
+    [Fact]
+    public void ReleaseWebViewWhenHidden_SaveFails_ShowsErrorAndRevertsValue()
+    {
+        var settings = new FakeAppSettings { Failure = new IOException("disk full") };
+        var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules());
+
+        viewModel.ReleaseWebViewWhenHidden = true;
+
+        viewModel.ReleaseWebViewWhenHidden.Should().BeFalse();
+        viewModel.ErrorText.Should().Contain("disk full");
+    }
+
+    /// <summary>
     /// Verifies toggling the hidden start saves the choice.
     /// </summary>
     [Fact]

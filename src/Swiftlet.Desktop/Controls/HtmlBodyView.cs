@@ -19,9 +19,15 @@ public sealed class HtmlBodyView : Border
         AvaloniaProperty.Register<HtmlBodyView, string?>(nameof(Document));
 
     /// <summary>
-    /// The embedded web view.
+    /// Identifies the inherited attached property that makes every view below an element give up its web view.
     /// </summary>
-    private readonly NativeWebView _webView = new();
+    public static readonly AttachedProperty<bool> IsReleasedProperty =
+        AvaloniaProperty.RegisterAttached<HtmlBodyView, Control, bool>("IsReleased", inherits: true);
+
+    /// <summary>
+    /// The embedded web view, or <see langword="null"/> while it is released.
+    /// </summary>
+    private NativeWebView? _webView;
 
     /// <summary>
     /// Whether the platform adapter behind the web view exists, so documents can be loaded.
@@ -39,6 +45,7 @@ public sealed class HtmlBodyView : Border
     static HtmlBodyView()
     {
         DocumentProperty.Changed.AddClassHandler<HtmlBodyView>((view, _) => view.LoadDocument());
+        IsReleasedProperty.Changed.AddClassHandler<HtmlBodyView>((view, _) => view.UpdateWebView());
     }
 
     /// <summary>
@@ -46,20 +53,23 @@ public sealed class HtmlBodyView : Border
     /// </summary>
     public HtmlBodyView()
     {
-        Child = _webView;
-        _webView.EnvironmentRequested += OnEnvironmentRequested;
-        _webView.AdapterCreated += (_, _) =>
-        {
-            _adapterReady = true;
-            LoadDocument();
-        };
-        _webView.AdapterDestroyed += (_, _) =>
-        {
-            _adapterReady = false;
-            _loadedDocument = null;
-        };
-        _webView.NavigationStarted += OnNavigationStarted;
-        _webView.NewWindowRequested += OnNewWindowRequested;
+        UpdateWebView();
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether a web view exists at the moment.
+    /// </summary>
+    internal bool HasWebView => _webView is not null;
+
+    /// <summary>
+    /// Releases the web views below an element, which ends the browser processes behind them, or creates them again.
+    /// </summary>
+    /// <param name="element">The element, usually a window.</param>
+    /// <param name="value">Whether the web views are released.</param>
+    public static void SetIsReleased(Control element, bool value)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        element.SetValue(IsReleasedProperty, value);
     }
 
     /// <summary>
@@ -69,6 +79,61 @@ public sealed class HtmlBodyView : Border
     {
         get => GetValue(DocumentProperty);
         set => SetValue(DocumentProperty, value);
+    }
+
+    /// <summary>
+    /// Creates or drops the web view, following <see cref="IsReleasedProperty"/>.
+    /// </summary>
+    private void UpdateWebView()
+    {
+        var released = GetValue(IsReleasedProperty);
+        if (!released && _webView is null)
+        {
+            var webView = new NativeWebView();
+            webView.EnvironmentRequested += OnEnvironmentRequested;
+            webView.AdapterCreated += OnAdapterCreated;
+            webView.AdapterDestroyed += OnAdapterDestroyed;
+            webView.NavigationStarted += OnNavigationStarted;
+            webView.NewWindowRequested += OnNewWindowRequested;
+            _webView = webView;
+            Child = webView;
+        }
+        else if (released && _webView is { } webView)
+        {
+            webView.EnvironmentRequested -= OnEnvironmentRequested;
+            webView.AdapterCreated -= OnAdapterCreated;
+            webView.AdapterDestroyed -= OnAdapterDestroyed;
+            webView.NavigationStarted -= OnNavigationStarted;
+            webView.NewWindowRequested -= OnNewWindowRequested;
+            _webView = null;
+            _adapterReady = false;
+            _loadedDocument = null;
+
+            // Leaving the visual tree makes the control destroy its platform web view.
+            Child = null;
+        }
+    }
+
+    /// <summary>
+    /// Shows the current document as soon as the platform web view exists.
+    /// </summary>
+    /// <param name="sender">The web view.</param>
+    /// <param name="e">The adapter details.</param>
+    private void OnAdapterCreated(object? sender, WebViewAdapterEventArgs e)
+    {
+        _adapterReady = true;
+        LoadDocument();
+    }
+
+    /// <summary>
+    /// Remembers that nothing can be loaded and that the document has to be loaded again.
+    /// </summary>
+    /// <param name="sender">The web view.</param>
+    /// <param name="e">The adapter details.</param>
+    private void OnAdapterDestroyed(object? sender, WebViewAdapterEventArgs e)
+    {
+        _adapterReady = false;
+        _loadedDocument = null;
     }
 
     /// <summary>
@@ -91,10 +156,10 @@ public sealed class HtmlBodyView : Border
     /// </summary>
     private void LoadDocument()
     {
-        if (_adapterReady && Document is { } document && !string.Equals(document, _loadedDocument, StringComparison.Ordinal))
+        if (_adapterReady && _webView is { } webView && Document is { } document && !string.Equals(document, _loadedDocument, StringComparison.Ordinal))
         {
             _loadedDocument = document;
-            _webView.NavigateToString(document, null);
+            webView.NavigateToString(document, null);
         }
     }
 

@@ -69,6 +69,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         ShowNewMailNotifications = settings.ShowNewMailNotifications;
         StartMinimized = settings.StartMinimized;
         UseHardwareRendering = settings.UseHardwareRendering;
+        ReleaseWebViewWhenHidden = settings.ReleaseWebViewWhenHidden;
         RefreshRemoteImageRules();
         _protection = protection;
         _themeApplier = themeApplier;
@@ -314,6 +315,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     public partial bool UseHardwareRendering { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether the web view is released while the main window is hidden.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool ReleaseWebViewWhenHidden { get; set; }
+
+    /// <summary>
     /// Gets or sets the localized error of the last failed save, or <see langword="null"/>.
     /// </summary>
     [ObservableProperty]
@@ -460,6 +467,30 @@ public sealed partial class SettingsViewModel : ObservableObject
             // The file could not be written; show it and put the checkbox back so it matches what is stored.
             ErrorText = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
             UseHardwareRendering = _settings.UseHardwareRendering;
+        }
+    }
+
+    /// <summary>
+    /// Saves the new value as soon as the checkbox changes.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    partial void OnReleaseWebViewWhenHiddenChanged(bool value)
+    {
+        if (value == _settings.ReleaseWebViewWhenHidden)
+        {
+            return;
+        }
+
+        ErrorText = null;
+        try
+        {
+            _settings.SetReleaseWebViewWhenHidden(value);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The file could not be written; show it and put the checkbox back so it matches what is stored.
+            ErrorText = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
+            ReleaseWebViewWhenHidden = _settings.ReleaseWebViewWhenHidden;
         }
     }
 

@@ -416,6 +416,70 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies hiding the window gives up the web view only when the setting says so, and showing creates it again.
+    /// </summary>
+    /// <param name="enabled">Whether the setting is on.</param>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ReleaseWebViewWhenHidden_WindowHiddenAndShown_ReleasesAndRestoresWebView(bool enabled)
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Messages[1] = TestData.Message(scenario.Account, scenario.Inbox, 2, "Hello 2", html: "<p>rich</p>");
+                await scenario.StartAsync();
+                scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+                await scenario.ViewModel.WhenIdleAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Swiftlet.Desktop.Hosting.ReleaseWebViewWhenHidden.Attach(window, () => enabled);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+                var htmlView = window.GetVisualDescendants().OfType<Swiftlet.Desktop.Controls.HtmlBodyView>().Single();
+                htmlView.HasWebView.Should().BeTrue();
+
+                window.Hide();
+                Dispatcher.UIThread.RunJobs();
+
+                htmlView.HasWebView.Should().Be(!enabled);
+
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                htmlView.HasWebView.Should().BeTrue();
+                htmlView.Document.Should().Contain("<p>rich</p>");
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies a view first created inside a window that is still hidden has no web view until the window is shown.
+    /// </summary>
+    [Fact]
+    public async Task ReleaseWebViewWhenHidden_ViewCreatedWhileHidden_HasNoWebViewUntilShown()
+    {
+        await DispatchAsync(
+            () =>
+            {
+                var window = new Window();
+                Swiftlet.Desktop.Hosting.ReleaseWebViewWhenHidden.Attach(window, () => true);
+                var htmlView = new Swiftlet.Desktop.Controls.HtmlBodyView();
+
+                window.Content = htmlView;
+
+                htmlView.HasWebView.Should().BeFalse();
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+                htmlView.HasWebView.Should().BeTrue();
+                window.Close();
+                return Task.CompletedTask;
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Verifies every visible label of the main window follows a runtime language switch, without recreating the window.
     /// </summary>
     [Fact]
@@ -1013,7 +1077,7 @@ public class UiSmokeTests
 
                 var performanceBoxes = window.GetVisualDescendants().OfType<CheckBox>().ToList();
                 performanceBoxes.Select(b => b.IsChecked).Should().Equal(
-                    [true], "hardware rendering is on by default");
+                    [true, false], "hardware rendering is on and releasing the web view is off by default");
 
                 SelectSettingsPage(window, 1, $"settings-sync-{language}");
 

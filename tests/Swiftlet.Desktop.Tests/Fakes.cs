@@ -591,6 +591,20 @@ internal sealed class FakeAppSettings : IAppSettings
     }
 
     /// <inheritdoc />
+    public bool ReleaseWebViewWhenHidden { get; set; }
+
+    /// <inheritdoc />
+    public void SetReleaseWebViewWhenHidden(bool value)
+    {
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+
+        ReleaseWebViewWhenHidden = value;
+    }
+
+    /// <inheritdoc />
     public string TrayUnreadStyle { get; set; } = Swiftlet.Desktop.Settings.TrayUnreadStyle.Dot;
 
     /// <inheritdoc />

@@ -244,6 +244,8 @@
   <data name="Settings_StartMinimizedHint" xml:space="preserve"><value>应用启动时不显示主窗口，可从托盘图标打开。需要桌面环境显示托盘图标；再次启动应用也会把窗口带回前台。</value></data>
   <data name="Settings_HardwareRendering" xml:space="preserve"><value>使用硬件渲染</value></data>
   <data name="Settings_HardwareRenderingHint" xml:space="preserve"><value>由显卡绘制界面。关闭后内存占用明显减少，但滚动和缩放窗口时处理器占用会升高；画面显示异常时也可尝试关闭。重启应用后生效（请从托盘图标退出，仅关闭窗口可能不够）。</value></data>
+  <data name="Settings_ReleaseWebView" xml:space="preserve"><value>隐藏到托盘时释放邮件显示组件</value></data>
+  <data name="Settings_ReleaseWebViewHint" xml:space="preserve"><value>主窗口隐藏时关闭用于显示 HTML 邮件的组件，从而释放内存。重新显示窗口时会再次加载当前邮件：正文会稍慢出现，并回到顶部。</value></data>
   <data name="Settings_TrayUnread" xml:space="preserve"><value>托盘未读提示</value></data>
   <data name="Settings_TrayUnreadDot" xml:space="preserve"><value>右下角红点</value></data>
   <data name="Settings_TrayUnreadBlink" xml:space="preserve"><value>图标闪烁</value></data>
