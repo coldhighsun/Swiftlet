@@ -42,6 +42,17 @@ public sealed class MailFolder
     public uint? EmptyThroughUid { get; private set; }
 
     /// <summary>
+    /// The least time between two checkpoints, which keeps their number small.
+    /// </summary>
+    private static readonly TimeSpan CheckpointSpacing = TimeSpan.FromDays(1);
+
+    /// <summary>
+    /// Gets what was recorded about when messages were first seen in this folder, oldest first. Only the automatic
+    /// cleanup of the Trash folder records any.
+    /// </summary>
+    public IReadOnlyList<UidCheckpoint> TrashCheckpoints { get; private set; } = [];
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="MailFolder"/> class for persistence.
     /// </summary>
     private MailFolder()
@@ -90,6 +101,7 @@ public sealed class MailFolder
         {
             // The boundary names UIDs of the old epoch; applying it to the new one could delete unrelated mail.
             EmptyThroughUid = null;
+            TrashCheckpoints = [];
         }
 
         return invalidated;
@@ -111,5 +123,35 @@ public sealed class MailFolder
     public void ClearEmptyRequest()
     {
         EmptyThroughUid = null;
+    }
+
+    /// <summary>
+    /// Records what the folder holds now and tells which messages have been in it for the whole retention. A message
+    /// never expires earlier than that; it may expire up to about a day later.
+    /// </summary>
+    /// <param name="highestUid">The highest UID the server holds in the folder, or 0 when it is empty.</param>
+    /// <param name="now">The current time.</param>
+    /// <param name="enabledAt">When cleaning up was switched on; older records are dropped.</param>
+    /// <param name="retention">How long messages are kept.</param>
+    /// <returns>The highest expired UID, or 0 when nothing has expired.</returns>
+    public uint ObserveTrash(uint highestUid, DateTimeOffset now, DateTimeOffset enabledAt, TimeSpan retention)
+    {
+        var checkpoints = TrashCheckpoints.Where(c => c.ObservedAt >= enabledAt).ToList();
+        if (highestUid > 0
+            && (checkpoints.Count == 0
+                || (highestUid > checkpoints[^1].Uid && now - checkpoints[^1].ObservedAt >= CheckpointSpacing)))
+        {
+            checkpoints.Add(new UidCheckpoint(highestUid, now));
+        }
+
+        // The newest expired record covers all older ones, and stays so a failed deletion is repeated.
+        var expired = checkpoints.FindLastIndex(c => now - c.ObservedAt >= retention);
+        if (expired > 0)
+        {
+            checkpoints.RemoveRange(0, expired);
+        }
+
+        TrashCheckpoints = checkpoints;
+        return expired < 0 ? 0 : checkpoints[0].Uid;
     }
 }

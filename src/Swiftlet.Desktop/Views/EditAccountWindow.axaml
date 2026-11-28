@@ -12,7 +12,7 @@
     <StackPanel Margin="24" Spacing="12">
       <TextBlock Classes="section" Text="{Binding Email}" TextTrimming="CharacterEllipsis" />
 
-      <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="8">
+      <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="8">
         <TextBlock Text="{loc:Loc EditAccount_DisplayName}" VerticalAlignment="Center" TextWrapping="Wrap" />
         <TextBox Grid.Column="1" Text="{Binding DisplayName}" PlaceholderText="{Binding DisplayNamePlaceholder}" MaxLength="200"
                  AutomationProperties.Name="{loc:Loc EditAccount_DisplayName}" />
@@ -35,8 +35,19 @@
             </DataTemplate>
           </ComboBox.ItemTemplate>
         </ComboBox>
-        <TextBlock Grid.Row="4" Text="{loc:Loc Account_Color}" VerticalAlignment="Center" TextWrapping="Wrap" />
-        <ListBox Grid.Row="4" Grid.Column="1" x:Name="ColorSwatches" Classes="swatches" ItemsSource="{Binding ColorOptions}"
+        <TextBlock Grid.Row="4" Text="{loc:Loc EditAccount_TrashRetention}" VerticalAlignment="Center" TextWrapping="Wrap" />
+        <ComboBox Grid.Row="4" Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding TrashRetentionOptions}"
+                  SelectedItem="{Binding SelectedTrashRetention}" IsEnabled="{Binding HasTrashFolder}"
+                  AutomationProperties.Name="{loc:Loc EditAccount_TrashRetention}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate DataType="vm:TrashRetentionOption">
+              <TextBlock Text="{Binding Text}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <TextBlock Grid.Row="5" Grid.ColumnSpan="2" Classes="caption" Text="{Binding TrashRetentionHint}" TextWrapping="Wrap" />
+        <TextBlock Grid.Row="6" Text="{loc:Loc Account_Color}" VerticalAlignment="Center" TextWrapping="Wrap" />
+        <ListBox Grid.Row="6" Grid.Column="1" x:Name="ColorSwatches" Classes="swatches" ItemsSource="{Binding ColorOptions}"
                  SelectedItem="{Binding Color}" AutomationProperties.Name="{loc:Loc Account_Color}" />
       </Grid>
 

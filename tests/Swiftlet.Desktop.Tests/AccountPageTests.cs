@@ -54,6 +54,7 @@ public class AccountPageTests
         page.SignInMethodText.Should().Be("密码");
         page.SenderName.Should().Be(account.DisplayName);
         page.ArchiveFolderText.Should().Be("自动（未找到归档文件夹）");
+        page.TrashRetentionText.Should().Be("从不");
         page.SyncSummary.Should().Be("本次启动后尚未同步");
         page.HasSyncError.Should().BeFalse();
     }

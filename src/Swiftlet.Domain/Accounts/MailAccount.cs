@@ -60,6 +60,17 @@ public sealed partial class MailAccount
     public string? ArchiveFolderName { get; private set; }
 
     /// <summary>
+    /// Gets how many days a message stays in the Trash folder before it is deleted permanently, or
+    /// <see langword="null"/> to keep it.
+    /// </summary>
+    public int? TrashRetentionDays { get; private set; }
+
+    /// <summary>
+    /// Gets when the automatic cleanup of the Trash folder was switched on, or <see langword="null"/> while it is off.
+    /// </summary>
+    public DateTimeOffset? TrashCleanupEnabledAt { get; private set; }
+
+    /// <summary>
     /// Gets the color chosen for the account as <c>#RRGGBB</c>, or <see langword="null"/> to derive it from the address.
     /// </summary>
     public string? Color { get; private set; }
@@ -201,6 +212,22 @@ public sealed partial class MailAccount
     public void ChangeArchiveFolder(string? folderName)
     {
         ArchiveFolderName = string.IsNullOrWhiteSpace(folderName) ? null : folderName;
+    }
+
+    /// <summary>
+    /// Changes how long messages stay in the Trash folder.
+    /// </summary>
+    /// <param name="days">The number of days, at least one; <see langword="null"/> keeps them.</param>
+    /// <param name="now">The current time, recorded when the cleanup is switched on.</param>
+    public void ChangeTrashRetention(int? days, DateTimeOffset now)
+    {
+        if (days is { } value)
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(value, 1, nameof(days));
+        }
+
+        TrashRetentionDays = days;
+        TrashCleanupEnabledAt = days is null ? null : TrashCleanupEnabledAt ?? now;
     }
 
     /// <summary>

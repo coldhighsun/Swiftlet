@@ -1,3 +1,4 @@
+using System.Globalization;
 using Mediator;
 using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Abstractions;
@@ -19,6 +20,7 @@ namespace Swiftlet.Application.Accounts;
 /// <param name="Password">The new password; omitted or empty to keep the current one.</param>
 /// <param name="ArchiveFolderName">The full name of the archive folder; omitted or blank to pick it automatically.</param>
 /// <param name="Color">The new color as <c>#RRGGBB</c>; omitted to keep the current one.</param>
+/// <param name="TrashRetentionDays">After how many days messages in Trash are deleted permanently; omitted to keep them.</param>
 public sealed record UpdateAccountCommand(
     Guid AccountId,
     string DisplayName,
@@ -27,7 +29,15 @@ public sealed record UpdateAccountCommand(
     ServerEndpoint? Smtp = null,
     string? Password = null,
     string? ArchiveFolderName = null,
-    string? Color = null) : ICommand<UpdateAccountResult>, IAccountRequest;
+    string? Color = null,
+    int? TrashRetentionDays = null) : ICommand<UpdateAccountResult>, IAccountRequest, ILogDetails
+{
+    /// <inheritdoc />
+    public string DescribeForLog(LogNames names)
+    {
+        return $"trash retention days={TrashRetentionDays?.ToString(CultureInfo.InvariantCulture) ?? "off"}";
+    }
+}
 
 /// <summary>
 /// The outcome of <see cref="UpdateAccountCommand"/>.
@@ -43,12 +53,14 @@ public sealed record UpdateAccountResult(bool ConnectionChanged);
 /// <param name="imapFactory">The IMAP connection factory used to verify new settings.</param>
 /// <param name="revisions">Tells the background services about changed connection settings.</param>
 /// <param name="logger">The logger; optional.</param>
+/// <param name="timeProvider">The clock; optional.</param>
 public sealed class UpdateAccountCommandHandler(
     IAccountRepository accounts,
     ISecretStore secrets,
     IImapSessionFactory imapFactory,
     AccountConnectionRevisions revisions,
-    ILogger<UpdateAccountCommandHandler>? logger = null) : ICommandHandler<UpdateAccountCommand, UpdateAccountResult>
+    ILogger<UpdateAccountCommandHandler>? logger = null,
+    TimeProvider? timeProvider = null) : ICommandHandler<UpdateAccountCommand, UpdateAccountResult>
 {
     /// <inheritdoc />
     public async ValueTask<UpdateAccountResult> Handle(UpdateAccountCommand command, CancellationToken cancellationToken)
@@ -72,6 +84,7 @@ public sealed class UpdateAccountCommandHandler(
         account.ChangeDisplayName(command.DisplayName);
         account.ChangeSyncInterval(command.SyncInterval);
         account.ChangeArchiveFolder(command.ArchiveFolderName);
+        account.ChangeTrashRetention(command.TrashRetentionDays, (timeProvider ?? TimeProvider.System).GetUtcNow());
         if (command.Color is { } color)
         {
             account.ChangeColor(color);
