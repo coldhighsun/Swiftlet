@@ -23,13 +23,20 @@ public sealed class AttachmentItemViewModel
     /// </summary>
     /// <param name="accountId">The account that owns the attachment's message.</param>
     /// <param name="attachment">The attachment metadata.</param>
+    /// <param name="open">The action invoked to open the attachment.</param>
     /// <param name="save">The action invoked to save the attachment.</param>
-    public AttachmentItemViewModel(Guid accountId, MailAttachment attachment, Func<AttachmentItemViewModel, Task> save)
+    public AttachmentItemViewModel(
+        Guid accountId,
+        MailAttachment attachment,
+        Func<AttachmentItemViewModel, Task> open,
+        Func<AttachmentItemViewModel, Task> save)
     {
         ArgumentNullException.ThrowIfNull(attachment);
+        ArgumentNullException.ThrowIfNull(open);
         ArgumentNullException.ThrowIfNull(save);
         AccountId = accountId;
         Attachment = attachment;
+        OpenCommand = new AsyncRelayCommand(() => open(this));
         SaveCommand = new AsyncRelayCommand(() => save(this));
     }
 
@@ -57,6 +64,11 @@ public sealed class AttachmentItemViewModel
     /// Gets the readable file size.
     /// </summary>
     public string SizeText => FileSizeFormatter.Format(Attachment.Size);
+
+    /// <summary>
+    /// Gets the command that opens the attachment with the system's program for it.
+    /// </summary>
+    public IAsyncRelayCommand OpenCommand { get; }
 
     /// <summary>
     /// Gets the command that saves the attachment to disk.
@@ -108,6 +120,7 @@ public sealed partial class MessageItemViewModel : ObservableObject
     /// Initializes a new instance of the <see cref="MessageItemViewModel"/> class.
     /// </summary>
     /// <param name="message">The cached message.</param>
+    /// <param name="openAttachment">The action invoked to open one of the attachments.</param>
     /// <param name="saveAttachment">The action invoked to save one of the attachments.</param>
     /// <param name="localizer">The localizer used for the placeholder subject.</param>
     /// <param name="rememberRemoteImages">The action invoked to save a rule that always allows remote images (the rule is an address or a domain).</param>
@@ -116,6 +129,7 @@ public sealed partial class MessageItemViewModel : ObservableObject
     /// <param name="addressActions">What the menus of the header addresses do; optional.</param>
     public MessageItemViewModel(
         MailMessage message,
+        Func<AttachmentItemViewModel, Task> openAttachment,
         Func<AttachmentItemViewModel, Task> saveAttachment,
         ILocalizer localizer,
         Func<MessageItemViewModel, string, Task>? rememberRemoteImages = null,
@@ -132,7 +146,7 @@ public sealed partial class MessageItemViewModel : ObservableObject
         Message = message;
         IsRead = message.IsRead;
         IsFlagged = message.IsFlagged;
-        Attachments = [.. message.Attachments.OrderBy(a => a.Ordinal).Select(a => new AttachmentItemViewModel(message.AccountId, a, saveAttachment))];
+        Attachments = [.. message.Attachments.OrderBy(a => a.Ordinal).Select(a => new AttachmentItemViewModel(message.AccountId, a, openAttachment, saveAttachment))];
         Labels = BuildChips(message);
     }
 

@@ -47,6 +47,41 @@ public sealed class HtmlPreviewStoreTests : IDisposable
     }
 
     /// <summary>
+    /// Verifies an opened attachment keeps its name inside the preview directory.
+    /// </summary>
+    [Fact]
+    public async Task WriteAttachmentAsync_Name_WritesUnderOwnNameInPreviewDirectory()
+    {
+        var store = new HtmlPreviewStore(_root);
+
+        var path = await store.WriteAttachmentAsync(@"..\report.txt", new byte[] { 1, 2, 3 });
+
+        Path.GetFileName(path).Should().Be("report.txt");
+        var run = Path.GetDirectoryName(Path.GetDirectoryName(path))!;
+        Path.GetDirectoryName(run).Should().Be(_root);
+        Path.GetFileName(run).Should().StartWith("swiftlet-preview-");
+        (await File.ReadAllBytesAsync(path, TestContext.Current.CancellationToken)).Should().Equal(1, 2, 3);
+    }
+
+    /// <summary>
+    /// Verifies two attachments of the same name do not overwrite each other and are removed with the previews.
+    /// </summary>
+    [Fact]
+    public async Task WriteAttachmentAsync_SameNameTwice_KeepsBothUntilCleared()
+    {
+        var store = new HtmlPreviewStore(_root);
+
+        var first = await store.WriteAttachmentAsync("a.txt", new byte[] { 1 });
+        var second = await store.WriteAttachmentAsync("a.txt", new byte[] { 2 });
+
+        second.Should().NotBe(first);
+        File.Exists(first).Should().BeTrue();
+        store.Clear();
+        File.Exists(first).Should().BeFalse();
+        File.Exists(second).Should().BeFalse();
+    }
+
+    /// <summary>
     /// Verifies the previews of this run are removed.
     /// </summary>
     [Fact]

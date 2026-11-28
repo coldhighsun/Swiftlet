@@ -167,4 +167,12 @@ public interface IDialogService
     /// <param name="path">The folder.</param>
     /// <returns><see langword="true"/> if the system accepted the request.</returns>
     Task<bool> OpenFolderAsync(string path);
+
+    /// <summary>
+    /// Opens an attachment with the program the system uses for its type, through a temporary file.
+    /// </summary>
+    /// <param name="fileName">The file name.</param>
+    /// <param name="content">The file content.</param>
+    /// <returns><see langword="true"/> when the system accepted the request.</returns>
+    Task<bool> OpenAttachmentAsync(string fileName, ReadOnlyMemory<byte> content);
 }

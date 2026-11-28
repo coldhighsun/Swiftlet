@@ -550,30 +550,43 @@
                         <TextBlock Grid.Row="2" Grid.Column="1" Classes="caption" Text="{Binding SentAtText}" />
                       </Grid>
                     </Grid>
-                    <ItemsControl ItemsSource="{Binding Attachments}" IsVisible="{Binding HasAttachments}">
-                      <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                          <WrapPanel />
-                        </ItemsPanelTemplate>
-                      </ItemsControl.ItemsPanel>
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="main:AttachmentItemViewModel">
-                          <Button Command="{Binding SaveCommand}" Margin="0,0,8,8" Padding="12,8" CornerRadius="12"
-                                  Background="{DynamicResource Brush.WindowBg}" BorderThickness="1"
-                                  BorderBrush="{DynamicResource Brush.Border}"
-                                  AutomationProperties.Name="{Binding Label}">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                              <PathIcon Data="{StaticResource Icon.Attach}" />
-                              <StackPanel>
-                                <TextBlock Text="{Binding FileName}" MaxWidth="180" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Classes="caption" Text="{Binding SizeText}" />
+                    <!-- One row and the edge of a second: many attachments scroll instead of pushing the body out of sight. -->
+                    <ScrollViewer x:Name="AttachmentScroller" MaxHeight="76" HorizontalScrollBarVisibility="Disabled"
+                                  IsVisible="{Binding HasAttachments}" DataContextChanged="OnAttachmentsDataContextChanged">
+                      <ItemsControl ItemsSource="{Binding Attachments}" Margin="0,0,12,0">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate>
+                            <WrapPanel />
+                          </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate DataType="main:AttachmentItemViewModel">
+                            <!-- One card with two buttons: the file opens it, the arrow saves it. -->
+                            <Border Margin="0,0,8,8" CornerRadius="12" Padding="4"
+                                    Background="{DynamicResource Brush.WindowBg}" BorderThickness="1"
+                                    BorderBrush="{DynamicResource Brush.Border}">
+                              <StackPanel Orientation="Horizontal" Spacing="4">
+                                <Button Classes="attachment" Command="{Binding OpenCommand}" Padding="8,4" Background="Transparent" Cursor="Hand"
+                                        AutomationProperties.Name="{Binding Label}">
+                                  <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <PathIcon Data="{StaticResource Icon.Attach}" />
+                                    <StackPanel>
+                                      <TextBlock Text="{Binding FileName}" MaxWidth="180" TextTrimming="CharacterEllipsis" />
+                                      <TextBlock Classes="caption" Text="{Binding SizeText}" />
+                                    </StackPanel>
+                                  </StackPanel>
+                                </Button>
+                                <Button Classes="icon" Command="{Binding SaveCommand}" VerticalAlignment="Center"
+                                        ToolTip.Tip="{loc:Loc Reader_DownloadAttachment}"
+                                        AutomationProperties.Name="{loc:Loc Reader_DownloadAttachment}">
+                                  <PathIcon Data="{StaticResource Icon.Download}" />
+                                </Button>
                               </StackPanel>
-                              <PathIcon Data="{StaticResource Icon.Download}" />
-                            </StackPanel>
-                          </Button>
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                            </Border>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </ScrollViewer>
                     <Border Height="1" Margin="0,0,0,12" Background="{DynamicResource Brush.Border}" />
                   </StackPanel>
                   <!-- In the layout, not in a popup: the native web view below would cover one. -->

@@ -359,6 +359,19 @@ public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogSe
     }
 
     /// <inheritdoc />
+    public async Task<bool> OpenAttachmentAsync(string fileName, ReadOnlyMemory<byte> content)
+    {
+        var window = ActiveWindow;
+        if (window is null)
+        {
+            return false;
+        }
+
+        var path = await services.GetRequiredService<HtmlPreviewStore>().WriteAttachmentAsync(fileName, content);
+        return await window.Launcher.LaunchFileInfoAsync(new FileInfo(path));
+    }
+
+    /// <inheritdoc />
     public async Task<bool> OpenFolderAsync(string path)
     {
         var window = ActiveWindow ?? _settingsWindow;

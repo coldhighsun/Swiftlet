@@ -24,6 +24,8 @@
                  TextTrimming="CharacterEllipsis" />
       <TextBlock x:Name="PreviewMessage" Classes="secondary" Text="{Binding Message}" IsVisible="{Binding HasMessage}"
                  TextWrapping="Wrap" />
+      <TextBlock x:Name="PreviewHint" Classes="caption" Foreground="{DynamicResource Brush.AccentText}"
+                 Text="{Binding ActionHint}" TextWrapping="Wrap" />
     </StackPanel>
   </Border>
 </Window>

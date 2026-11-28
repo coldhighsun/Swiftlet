@@ -2,6 +2,7 @@ using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Swiftlet.Application.Abstractions;
 using Swiftlet.Desktop.Localization;
+using Swiftlet.Desktop.Services;
 
 namespace Swiftlet.Desktop.ViewModels.Main;
 
@@ -47,6 +48,9 @@ public sealed partial class AttachmentPreviewViewModel : ObservableObject
         _localizer = localizer;
         FileName = attachment.FileName;
         Details = attachment.SizeText;
+        ActionHint = AttachmentFiles.CanOpen(attachment.FileName)
+            ? _localizer["Preview_ClickToOpen"]
+            : _localizer["Preview_DownloadOnly"];
         Message = _localizer["Preview_Loading"];
     }
 
@@ -59,6 +63,11 @@ public sealed partial class AttachmentPreviewViewModel : ObservableObject
     /// Gets the readable file size.
     /// </summary>
     public string Details { get; }
+
+    /// <summary>
+    /// Gets the line that tells what the user can do with the attachment: click to open it, or download it.
+    /// </summary>
+    public string ActionHint { get; }
 
     /// <summary>
     /// Gets a value indicating whether a thumbnail is shown.

@@ -48,6 +48,8 @@
   <data name="Preview_Loading" xml:space="preserve"><value>正在加载预览…</value></data>
   <data name="Preview_NotAvailable" xml:space="preserve"><value>无法预览此文件</value></data>
   <data name="Preview_TooLarge" xml:space="preserve"><value>文件过大，无法预览</value></data>
+  <data name="Preview_ClickToOpen" xml:space="preserve"><value>点击附件即可打开</value></data>
+  <data name="Preview_DownloadOnly" xml:space="preserve"><value>该类型不能直接打开，请点右侧下载按钮</value></data>
   <data name="Preview_MoreEntries" xml:space="preserve"><value>……另有 {0} 项</value></data>
   <data name="Reader_LoadImages" xml:space="preserve"><value>加载图片</value></data>
   <data name="Reader_AlwaysAllowSender" xml:space="preserve"><value>总是加载 {0} 的图片</value></data>
@@ -70,6 +72,11 @@
   <data name="Error_Search" xml:space="preserve"><value>搜索失败</value></data>
   <data name="Error_LoadMessages" xml:space="preserve"><value>加载邮件失败</value></data>
   <data name="Error_SaveAttachment" xml:space="preserve"><value>保存附件失败</value></data>
+  <data name="Error_OpenAttachment" xml:space="preserve"><value>打开附件失败</value></data>
+  <data name="Status_AttachmentOpened" xml:space="preserve"><value>已打开 {0}</value></data>
+  <data name="Status_AttachmentNotOpened" xml:space="preserve"><value>系统无法打开 {0}，请下载后处理。</value></data>
+  <data name="Status_AttachmentOpenBlocked" xml:space="preserve"><value>{0} 可能运行程序，不能直接打开。如果信任发件人，请下载。</value></data>
+  <data name="Reader_DownloadAttachment" xml:space="preserve"><value>下载附件</value></data>
   <data name="Error_Flag" xml:space="preserve"><value>标记失败</value></data>
   <data name="Error_MarkRead" xml:space="preserve"><value>标记已读失败</value></data>
   <data name="Error_InlineImages" xml:space="preserve"><value>加载邮件内嵌图片失败</value></data>
