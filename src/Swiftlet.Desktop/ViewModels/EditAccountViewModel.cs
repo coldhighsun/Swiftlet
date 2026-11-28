@@ -27,6 +27,13 @@ public sealed record SyncIntervalOption(TimeSpan Interval, string Text);
 public sealed record ArchiveFolderOption(string? FullName, string Text);
 
 /// <summary>
+/// A selectable time after which mail in Trash is deleted permanently.
+/// </summary>
+/// <param name="Days">The number of days, or <see langword="null"/> to keep the mail.</param>
+/// <param name="Text">The text shown in the list.</param>
+public sealed record TrashRetentionOption(int? Days, string Text);
+
+/// <summary>
 /// The view model of the account settings dialog. <see cref="Load"/> must be called before the dialog is shown.
 /// </summary>
 public sealed partial class EditAccountViewModel : ObservableObject
@@ -35,6 +42,21 @@ public sealed partial class EditAccountViewModel : ObservableObject
     /// The intervals offered in the list, in minutes.
     /// </summary>
     private static readonly int[] IntervalMinutes = [1, 2, 5, 10, 15, 30, 60];
+
+    /// <summary>
+    /// The Trash retention periods offered in the list, in days.
+    /// </summary>
+    private static readonly int[] RetentionDays = [7, 15, 30, 90];
+
+    /// <summary>
+    /// Asks before saving something that deletes mail.
+    /// </summary>
+    private readonly IDialogService _dialogs;
+
+    /// <summary>
+    /// The Trash retention the account had when the dialog opened.
+    /// </summary>
+    private int? _loadedRetention;
 
     /// <summary>
     /// The request dispatcher.
@@ -65,16 +87,20 @@ public sealed partial class EditAccountViewModel : ObservableObject
     /// Initializes a new instance of the <see cref="EditAccountViewModel"/> class.
     /// </summary>
     /// <param name="dispatcher">The request dispatcher.</param>
+    /// <param name="dialogs">The dialog service.</param>
     /// <param name="localizer">The localizer.</param>
-    public EditAccountViewModel(IRequestDispatcher dispatcher, ILocalizer localizer)
+    public EditAccountViewModel(IRequestDispatcher dispatcher, IDialogService dialogs, ILocalizer localizer)
     {
         _dispatcher = dispatcher;
+        _dialogs = dialogs;
         _localizer = localizer;
         Email = string.Empty;
         DisplayName = string.Empty;
         DisplayNamePlaceholder = string.Empty;
         IntervalOptions = [];
         ArchiveFolderOptions = [];
+        TrashRetentionOptions = [];
+        TrashRetentionHint = string.Empty;
         Password = string.Empty;
         ImapHost = string.Empty;
         ImapPort = string.Empty;
@@ -129,6 +155,30 @@ public sealed partial class EditAccountViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     public partial ArchiveFolderOption? SelectedArchiveFolder { get; set; }
+
+    /// <summary>
+    /// Gets or sets the selectable Trash retention periods; the first entry keeps the mail.
+    /// </summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<TrashRetentionOption> TrashRetentionOptions { get; set; }
+
+    /// <summary>
+    /// Gets or sets the selected Trash retention period.
+    /// </summary>
+    [ObservableProperty]
+    public partial TrashRetentionOption? SelectedTrashRetention { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the account has a Trash folder, without which nothing can be cleaned up.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool HasTrashFolder { get; set; }
+
+    /// <summary>
+    /// Gets or sets the explanation shown below the Trash retention list.
+    /// </summary>
+    [ObservableProperty]
+    public partial string TrashRetentionHint { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether the account signs in with a password, so password and servers can be changed.
@@ -229,6 +279,19 @@ public sealed partial class EditAccountViewModel : ObservableObject
         ArchiveFolderOptions = CreateArchiveOptions(account.ArchiveFolderName, folders);
         SelectedArchiveFolder = ArchiveFolderOptions.First(o => o.FullName == account.ArchiveFolderName);
 
+        _loadedRetention = account.TrashRetentionDays;
+        var periods = RetentionDays.Concat(_loadedRetention is { } stored ? [stored] : []).Distinct().Order();
+        TrashRetentionOptions =
+        [
+            new TrashRetentionOption(null, _localizer["TrashRetention_Never"]),
+            .. periods.Select(d => new TrashRetentionOption(d, TrashRetentionText.Format(_localizer, d))),
+        ];
+        SelectedTrashRetention = TrashRetentionOptions.First(o => o.Days == _loadedRetention);
+        HasTrashFolder = folders.Any(f => f.Role == FolderRole.Trash);
+        TrashRetentionHint = HasTrashFolder
+            ? _localizer["EditAccount_TrashRetentionHint"]
+            : _localizer["EditAccount_TrashRetentionNoTrash"];
+
         IsPasswordAccount = account.AuthMethod == AuthMethod.Password;
         ImapHost = account.Imap.Host;
         ImapPort = account.Imap.Port.ToString(CultureInfo.InvariantCulture);
@@ -268,6 +331,18 @@ public sealed partial class EditAccountViewModel : ObservableObject
             smtp = new ServerEndpoint(SmtpHost.Trim(), smtpPort, SmtpUseSsl);
         }
 
+        // Only a change that deletes mail sooner needs a confirmation.
+        var retention = SelectedTrashRetention?.Days;
+        if (retention is { } days
+            && (_loadedRetention is not { } previous || days < previous)
+            && !await _dialogs.ConfirmAsync(
+                _localizer["Confirm_TrashRetention_Title"],
+                _localizer.Format("Confirm_TrashRetention_Message", Email, days),
+                _localizer["Confirm_TrashRetention_Ok"]))
+        {
+            return;
+        }
+
         var command = new UpdateAccountCommand(
             _accountId,
             DisplayName.Trim(),
@@ -276,7 +351,8 @@ public sealed partial class EditAccountViewModel : ObservableObject
             smtp,
             IsPasswordAccount && Password.Length > 0 ? Password : null,
             SelectedArchiveFolder?.FullName,
-            Color == _loadedColor ? null : Color);
+            Color == _loadedColor ? null : Color,
+            retention);
         IsBusy = true;
         using var cancellation = new CancellationTokenSource();
         _saveCancellation = cancellation;

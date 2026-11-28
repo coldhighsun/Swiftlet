@@ -88,6 +88,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<InboxWatcher>();
         services.AddHostedService<BackfillWorker>();
         services.AddHostedService<DeletionWorker>();
+        services.AddHostedService<TrashCleanupWorker>();
         services.AddHostedService<FlagPushWorker>();
         services.AddSingleton<AccountDatabaseMaintenance>();
         services.AddHostedService<DatabaseMaintenanceWorker>();

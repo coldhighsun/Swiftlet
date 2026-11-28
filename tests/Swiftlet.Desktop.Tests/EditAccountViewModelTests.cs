@@ -264,6 +264,104 @@ public class EditAccountViewModelTests
         dispatcher.Sent<UpdateAccountCommand>().Single().ArchiveFolderName.Should().Be(selected);
     }
 
+    [Fact]
+    public void Load_NoTrashRetention_SelectsNeverAndOffersTheUsualPeriods()
+    {
+        var account = TestData.Account();
+
+        var viewModel = Create(new FakeDispatcher(), account, [TestData.Folder(account, "Trash", FolderRole.Trash)]);
+
+        viewModel.TrashRetentionOptions.Select(o => o.Days).Should().Equal(null, 7, 15, 30, 90);
+        viewModel.TrashRetentionOptions.Select(o => o.Text).Should().Equal("从不", "7 天后", "15 天后", "30 天后", "90 天后");
+        viewModel.SelectedTrashRetention!.Days.Should().BeNull();
+        viewModel.HasTrashFolder.Should().BeTrue();
+        viewModel.TrashRetentionHint.Should().Contain("永久删除");
+    }
+
+    [Fact]
+    public void Load_UnusualRetention_OffersAndSelectsIt()
+    {
+        var account = TestData.Account();
+        account.ChangeTrashRetention(45, DateTimeOffset.UnixEpoch);
+
+        var viewModel = Create(new FakeDispatcher(), account);
+
+        viewModel.TrashRetentionOptions.Select(o => o.Days).Should().Equal(null, 7, 15, 30, 45, 90);
+        viewModel.SelectedTrashRetention!.Days.Should().Be(45);
+    }
+
+    [Fact]
+    public void Load_NoTrashFolder_SaysWhyTheChoiceIsDisabled()
+    {
+        var viewModel = Create(new FakeDispatcher(), TestData.Account());
+
+        viewModel.HasTrashFolder.Should().BeFalse();
+        viewModel.TrashRetentionHint.Should().Contain("没有找到");
+    }
+
+    [Theory]
+    [InlineData(null, 30)]
+    [InlineData(30, 7)]
+    public async Task SaveAsync_CleanupSwitchedOnOrShortened_AsksAndSendsWhenConfirmed(int? before, int after)
+    {
+        var (dispatcher, dialogs, viewModel) = CreateWithRetention(before);
+        dialogs.ConfirmResult = true;
+        viewModel.SelectedTrashRetention = viewModel.TrashRetentionOptions.Single(o => o.Days == after);
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        var confirmation = dialogs.Confirmations.Should().ContainSingle().Which;
+        confirmation.Message.Should().Contain("me@example.com").And.Contain(after.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        dispatcher.Sent<UpdateAccountCommand>().Single().TrashRetentionDays.Should().Be(after);
+    }
+
+    [Fact]
+    public async Task SaveAsync_CleanupNotConfirmed_SavesNothingAndStaysOpen()
+    {
+        var (dispatcher, dialogs, viewModel) = CreateWithRetention(null);
+        dialogs.ConfirmResult = false;
+        var closed = false;
+        viewModel.CloseRequested += (_, _) => closed = true;
+        viewModel.SelectedTrashRetention = viewModel.TrashRetentionOptions.Single(o => o.Days == 7);
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        dispatcher.Requests.Should().BeEmpty();
+        closed.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData(30, 30)]
+    [InlineData(30, 90)]
+    [InlineData(30, null)]
+    public async Task SaveAsync_NothingDeletedSooner_DoesNotAsk(int? before, int? after)
+    {
+        var (dispatcher, dialogs, viewModel) = CreateWithRetention(before);
+        viewModel.SelectedTrashRetention = viewModel.TrashRetentionOptions.Single(o => o.Days == after);
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        dialogs.Confirmations.Should().BeEmpty();
+        dispatcher.Sent<UpdateAccountCommand>().Single().TrashRetentionDays.Should().Be(after);
+    }
+
+    /// <summary>
+    /// Creates a view model of an account with a Trash folder and a retention.
+    /// </summary>
+    /// <param name="days">The stored retention.</param>
+    /// <returns>The collaborators and the view model.</returns>
+    private static (FakeDispatcher Dispatcher, FakeDialogService Dialogs, EditAccountViewModel ViewModel) CreateWithRetention(int? days)
+    {
+        var dispatcher = new FakeDispatcher();
+        dispatcher.On<UpdateAccountCommand>(_ => new UpdateAccountResult(false));
+        var dialogs = new FakeDialogService();
+        var account = TestData.Account();
+        account.ChangeTrashRetention(days, DateTimeOffset.UnixEpoch);
+        var viewModel = Create(dispatcher, account, [TestData.Folder(account, "Trash", FolderRole.Trash)], dialogs);
+        return (dispatcher, dialogs, viewModel);
+    }
+
     /// <summary>
     /// Creates a Chinese view model loaded with an account.
     /// </summary>
@@ -274,9 +372,10 @@ public class EditAccountViewModelTests
     private static EditAccountViewModel Create(
         FakeDispatcher dispatcher,
         MailAccount account,
-        IReadOnlyList<MailFolder>? folders = null)
+        IReadOnlyList<MailFolder>? folders = null,
+        FakeDialogService? dialogs = null)
     {
-        var viewModel = new EditAccountViewModel(dispatcher, TestLocalizer.Chinese());
+        var viewModel = new EditAccountViewModel(dispatcher, dialogs ?? new FakeDialogService(), TestLocalizer.Chinese());
         viewModel.Load(account, folders ?? []);
         return viewModel;
     }

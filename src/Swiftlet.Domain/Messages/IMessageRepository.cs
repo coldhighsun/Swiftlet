@@ -308,6 +308,15 @@ public interface IMessageRepository
     Task<int> CountPendingDeletionsAsync(Guid accountId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Gets the UIDs of the messages of a folder that are waiting to be deleted or moved.
+    /// </summary>
+    /// <param name="accountId">The account that owns the folder.</param>
+    /// <param name="folderId">The folder.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The UIDs.</returns>
+    Task<IReadOnlyList<uint>> GetPendingUidsAsync(Guid accountId, Guid folderId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gets the cached messages of a folder that have one of the given UIDs.
     /// </summary>
     /// <param name="accountId">The owning account.</param>

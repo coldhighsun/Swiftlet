@@ -769,7 +769,7 @@ public class UiSmokeTests
                     Func<string?> selected;
                     if (edit)
                     {
-                        var viewModel = new EditAccountViewModel(new FakeDispatcher(), TestLocalizer.Chinese());
+                        var viewModel = new EditAccountViewModel(new FakeDispatcher(), new FakeDialogService(), TestLocalizer.Chinese());
                         viewModel.Load(TestData.Account(), []);
                         window = new EditAccountWindow { DataContext = viewModel };
                         selected = () => viewModel.Color;
@@ -861,7 +861,7 @@ public class UiSmokeTests
             {
                 var localizer = language == "en" ? TestLocalizer.English() : TestLocalizer.Chinese();
                 LocalizationManager.Instance.SetPreference(language);
-                var viewModel = new EditAccountViewModel(new FakeDispatcher(), localizer);
+                var viewModel = new EditAccountViewModel(new FakeDispatcher(), new FakeDialogService(), localizer);
                 var account = oauth ? TestData.OAuthAccount() : TestData.Account();
                 viewModel.Load(account, [TestData.Folder(account, "Archive", Swiftlet.Domain.Folders.FolderRole.Archive)]);
                 var window = new EditAccountWindow { DataContext = viewModel };
@@ -875,6 +875,8 @@ public class UiSmokeTests
                 window.GetVisualDescendants().OfType<ComboBox>().Select(c => c.SelectedItem).Should()
                     .Contain(viewModel.ArchiveFolderOptions[0]);
                 visible.Should().Contain(localizer["EditAccount_ArchiveFolder"]);
+                visible.Should().Contain(localizer["EditAccount_TrashRetention"]);
+                visible.Should().Contain(viewModel.TrashRetentionHint);
                 window.Close();
             },
             TestContext.Current.CancellationToken);
@@ -2997,7 +2999,7 @@ public class UiSmokeTests
                 var startup = new StartupViewModel(
                     protection, localizer, new FakeDialogService(), new FakeUiThread(), _ => Task.FromResult<string?>(null));
                 await startup.RunCommand.ExecuteAsync(null);
-                var editAccount = new EditAccountViewModel(new FakeDispatcher(), localizer);
+                var editAccount = new EditAccountViewModel(new FakeDispatcher(), new FakeDialogService(), localizer);
                 editAccount.Load(account, []);
                 scenario.ViewModel.Filter.IsExpanded = true;
                 var contacts = await CreateContactsAsync(localizer);

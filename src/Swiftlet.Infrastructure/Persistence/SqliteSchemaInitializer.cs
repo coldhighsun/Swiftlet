@@ -109,6 +109,28 @@ public static class SqliteSchemaInitializer
         await EnsureSortOrderColumnAsync(context, cancellationToken);
         await EnsureExpandedColumnAsync(context, cancellationToken);
         await EnsureColorColumnAsync(context, cancellationToken);
+        await EnsureTrashRetentionColumnsAsync(context, cancellationToken);
+    }
+
+    /// <summary>
+    /// Adds the columns of the Trash cleanup to an Accounts table created by an earlier version; does nothing when they
+    /// exist. Existing accounts get no value, so their cleanup stays off.
+    /// </summary>
+    /// <param name="context">The global database context.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the columns exist.</returns>
+    private static async Task EnsureTrashRetentionColumnsAsync(GlobalDbContext context, CancellationToken cancellationToken)
+    {
+        await EnsureColumnAsync(
+            context,
+            "SELECT COUNT(*) AS Value FROM pragma_table_info('Accounts') WHERE name = 'TrashRetentionDays'",
+            "ALTER TABLE Accounts ADD COLUMN TrashRetentionDays INTEGER NULL;",
+            cancellationToken);
+        await EnsureColumnAsync(
+            context,
+            "SELECT COUNT(*) AS Value FROM pragma_table_info('Accounts') WHERE name = 'TrashCleanupEnabledAt'",
+            "ALTER TABLE Accounts ADD COLUMN TrashCleanupEnabledAt INTEGER NULL;",
+            cancellationToken);
     }
 
     /// <summary>
@@ -255,6 +277,11 @@ public static class SqliteSchemaInitializer
         await EnsureFlagSyncColumnAsync(context, cancellationToken);
         await EnsureDeletionColumnsAsync(context, cancellationToken);
         await EnsurePriorityColumnAsync(context, cancellationToken);
+        await EnsureColumnAsync(
+            context,
+            "SELECT COUNT(*) AS Value FROM pragma_table_info('Folders') WHERE name = 'TrashCheckpoints'",
+            "ALTER TABLE Folders ADD COLUMN TrashCheckpoints TEXT NOT NULL DEFAULT '[]';",
+            cancellationToken);
 
         // Same name EF gives the index, so a new database (created by EnsureCreated above) is unaffected.
         await context.Database.ExecuteSqlRawAsync(
@@ -371,7 +398,7 @@ public static class SqliteSchemaInitializer
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that completes when the column exists.</returns>
     private static async Task EnsureColumnAsync(
-        AccountDbContext context,
+        DbContext context,
         string countStatement,
         string alterStatement,
         CancellationToken cancellationToken)

@@ -203,6 +203,13 @@ public sealed class AccountPageViewModel(
     }
 
     /// <summary>
+    /// Gets how long mail stays in Trash.
+    /// </summary>
+    public string TrashRetentionText => Node.Account.TrashRetentionDays is { } days
+        ? Formatting.TrashRetentionText.Format(localizer, days)
+        : localizer["TrashRetention_Never"];
+
+    /// <summary>
     /// Gets when the account was added.
     /// </summary>
     public string AddedAtText => FormatTime(Node.Account.CreatedAt);

@@ -125,7 +125,7 @@
               <Border Classes="card">
                 <StackPanel Spacing="8">
                   <TextBlock Classes="section" Text="{loc:Loc AccountPage_Details}" />
-                  <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="8">
+                  <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="8">
                     <TextBlock Grid.Row="0" Classes="secondary" Text="{loc:Loc AccountPage_SignInMethod}" />
                     <SelectableTextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SignInMethodText}" TextWrapping="Wrap" />
                     <TextBlock Grid.Row="1" Classes="secondary" Text="{loc:Loc AccountPage_SenderName}" />
@@ -134,8 +134,10 @@
                     <SelectableTextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SyncIntervalDescription}" TextWrapping="Wrap" />
                     <TextBlock Grid.Row="3" Classes="secondary" Text="{loc:Loc EditAccount_ArchiveFolder}" />
                     <SelectableTextBlock Grid.Row="3" Grid.Column="1" Text="{Binding ArchiveFolderText}" TextWrapping="Wrap" />
-                    <TextBlock Grid.Row="4" Classes="secondary" Text="{loc:Loc AccountPage_AddedAt}" />
-                    <SelectableTextBlock Grid.Row="4" Grid.Column="1" Text="{Binding AddedAtText}" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="4" Classes="secondary" Text="{loc:Loc EditAccount_TrashRetention}" />
+                    <SelectableTextBlock Grid.Row="4" Grid.Column="1" Text="{Binding TrashRetentionText}" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="5" Classes="secondary" Text="{loc:Loc AccountPage_AddedAt}" />
+                    <SelectableTextBlock Grid.Row="5" Grid.Column="1" Text="{Binding AddedAtText}" TextWrapping="Wrap" />
                   </Grid>
                 </StackPanel>
               </Border>

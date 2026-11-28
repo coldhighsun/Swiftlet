@@ -516,6 +516,19 @@ internal sealed class MessageRepository(GlobalDbContext global, AccountContextPr
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<uint>> GetPendingUidsAsync(
+        Guid accountId,
+        Guid folderId,
+        CancellationToken cancellationToken = default)
+    {
+        var context = await contexts.GetAsync(accountId, cancellationToken);
+        return await context.Messages
+            .Where(m => m.FolderId == folderId && m.IsDeletePending)
+            .Select(m => m.Uid)
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<PendingDeletion>> GetByUidsAsync(
         Guid accountId,
         Guid folderId,

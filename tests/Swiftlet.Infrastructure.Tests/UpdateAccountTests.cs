@@ -243,6 +243,28 @@ public class UpdateAccountTests
     }
 
     [Fact]
+    public async Task Handle_TrashRetention_IsStoredAndSwitchedOffAgain()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var s = await Scenario.CreateAsync(ct);
+
+        // Act
+        await s.Handler.Handle(
+            new UpdateAccountCommand(s.Account.Id, "Work", TimeSpan.FromMinutes(5), TrashRetentionDays: 30), ct);
+        var on = await s.StoredAsync(ct);
+        await s.Handler.Handle(new UpdateAccountCommand(s.Account.Id, "Work", TimeSpan.FromMinutes(5)), ct);
+        var off = await s.StoredAsync(ct);
+
+        // Assert
+        on.TrashRetentionDays.Should().Be(30);
+        on.TrashCleanupEnabledAt.Should().NotBeNull();
+        off.TrashRetentionDays.Should().BeNull();
+        off.TrashCleanupEnabledAt.Should().BeNull();
+        s.Factory.ConnectCount.Should().Be(0);
+    }
+
+    [Fact]
     public async Task Handle_UnknownAccount_Throws()
     {
         // Arrange
