@@ -134,6 +134,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private bool _isLoadingMore;
 
     /// <summary>
+    /// The message a right-click is about to select, if any.
+    /// </summary>
+    private MessageItemViewModel? _contextSelection;
+
+    /// <summary>
+    /// The selected message when a right-click selected it and it has not been clicked since; a click marks it read.
+    /// </summary>
+    private MessageItemViewModel? _unopenedMessage;
+
+    /// <summary>
     /// The most recent selection side effect (marking as read).
     /// </summary>
     private Task _selectionTask = Task.CompletedTask;
@@ -244,6 +254,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             DeleteSelectedCommand.NotifyCanExecuteChanged();
             ArchiveSelectedCommand.NotifyCanExecuteChanged();
             ClassifySelectedCommand.NotifyCanExecuteChanged();
+            MarkSelectedUnreadCommand.NotifyCanExecuteChanged();
         };
     }
 
@@ -629,6 +640,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(DeleteSelectedCommand))]
     [NotifyCanExecuteChangedFor(nameof(ArchiveSelectedCommand))]
     [NotifyCanExecuteChangedFor(nameof(ClassifySelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(MarkSelectedUnreadCommand))]
     [NotifyPropertyChangedFor(nameof(IsNoMessageSelected))]
     public partial MessageItemViewModel? SelectedMessage { get; set; }
 
@@ -940,6 +952,43 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Marks the read messages among the selected ones as unread. The selection is kept, so they stay unread until they
+    /// are selected again.
+    /// </summary>
+    /// <returns>A task that completes when the states have been saved or the failure is reported.</returns>
+    [RelayCommand(CanExecute = nameof(CanMarkUnread), AllowConcurrentExecutions = true)]
+    private async Task MarkSelectedUnreadAsync()
+    {
+        var targets = ActionTargets().Where(t => t.IsRead).ToList();
+        foreach (var item in targets)
+        {
+            item.IsRead = false;
+        }
+
+        var saved = 0;
+        await GuardedAsync("Error_MarkUnread", async () =>
+        {
+            foreach (var item in targets)
+            {
+                await _dispatcher.SendAsync(new SetMessageReadCommand(item.Message.AccountId, item.Id, false));
+                saved++;
+            }
+        });
+
+        // Rolls back the messages whose new state could not be saved.
+        foreach (var item in targets.Skip(saved))
+        {
+            item.IsRead = true;
+        }
+
+        MarkSelectedUnreadCommand.NotifyCanExecuteChanged();
+        foreach (var accountId in targets.Select(t => t.Message.AccountId).Distinct())
+        {
+            StartUnreadRefresh(accountId);
+        }
+    }
+
+    /// <summary>
     /// Deletes the selected messages after the user confirmed. They leave the list at once; the mail server is told in the background.
     /// </summary>
     /// <returns>A task that completes when the deletion has been queued or cancelled.</returns>
@@ -1159,6 +1208,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// </summary>
     [ObservableProperty]
     public partial bool CanClearPriority { get; set; }
+
+    /// <summary>
+    /// Brings the "mark as unread" entry of the message menu up to date; called when the menu opens, because the read
+    /// state of a listed message can change without the selection changing.
+    /// </summary>
+    public void RefreshReadMenu()
+    {
+        MarkSelectedUnreadCommand.NotifyCanExecuteChanged();
+    }
 
     /// <summary>
     /// Brings the AI and priority entries of the message menu up to date; called when the menu opens.
@@ -1672,6 +1730,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private bool HasSelection => SelectedMessage is not null || SelectedMessages.Count > 0;
 
     /// <summary>
+    /// Gets a value indicating whether at least one of the selected messages is read.
+    /// </summary>
+    private bool CanMarkUnread => SelectedMessages.Count > 0
+        ? SelectedMessages.Any(m => m.IsRead)
+        : SelectedMessage is { IsRead: true };
+
+    /// <summary>
     /// Gets a value indicating whether messages are selected and AI is set up.
     /// </summary>
     private bool CanClassify => AiAssist?.IsAvailable == true && HasSelection;
@@ -1791,11 +1856,50 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Marks a newly selected unread message as read.
+    /// Announces that a right-click is about to select a message, which must not mark it read: the user may only want
+    /// the context menu. A message that is already selected is not affected.
+    /// </summary>
+    /// <param name="item">The message under the pointer.</param>
+    public void BeginContextSelection(MessageItemViewModel item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        _contextSelection = item == SelectedMessage || SelectedMessages.Contains(item) ? null : item;
+    }
+
+    /// <summary>
+    /// Marks a message read when it is clicked after a right-click selected it, because that click changes no selection.
+    /// </summary>
+    /// <param name="item">The clicked message.</param>
+    public void OpenClickedMessage(MessageItemViewModel item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        _contextSelection = null;
+        if (item != _unopenedMessage || item != SelectedMessage)
+        {
+            return;
+        }
+
+        _unopenedMessage = null;
+        if (!item.IsRead)
+        {
+            _selectionTask = Task.WhenAll(_selectionTask, MarkReadAsync(item));
+        }
+    }
+
+    /// <summary>
+    /// Marks a newly selected unread message as read, unless a right-click selected it.
     /// </summary>
     /// <param name="value">The new selection.</param>
     partial void OnSelectedMessageChanged(MessageItemViewModel? value)
     {
+        // A cleared selection says nothing yet about the right-click: replacing a selection may pass through it.
+        var byContextMenu = value is not null && value == _contextSelection;
+        if (value is not null)
+        {
+            _contextSelection = null;
+            _unopenedMessage = byContextMenu ? value : null;
+        }
+
         using (value is null ? null : BeginMessageScope(value))
         {
             _logger.LogDebug("Selected message {MessageId}", value?.Id);
@@ -1805,7 +1909,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         FollowNewMail(value);
         AiAssist?.Show(value?.Message);
         var sideEffects = new List<Task>();
-        if (value is { IsRead: false })
+        if (value is { IsRead: false } && !byContextMenu)
         {
             sideEffects.Add(MarkReadAsync(value));
         }

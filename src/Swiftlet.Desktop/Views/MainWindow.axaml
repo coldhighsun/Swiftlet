@@ -283,7 +283,7 @@
           </Border>
 
           <Grid>
-            <ListBox Classes="messages" Background="Transparent" ItemsSource="{Binding Messages}" SelectedItem="{Binding SelectedMessage}"
+            <ListBox x:Name="MessageList" Classes="messages" Background="Transparent" ItemsSource="{Binding Messages}" SelectedItem="{Binding SelectedMessage}"
                      SelectionMode="Multiple" SelectedItems="{Binding SelectedMessages}"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                      ScrollViewer.ScrollChanged="OnMessageListScrollChanged">
@@ -297,6 +297,7 @@
                             IsVisible="{Binding AiAssist.IsAvailable, FallbackValue=False}" />
                   <MenuItem Header="{loc:Loc Menu_Message_ClearPriority}" Command="{Binding ClearPriorityCommand}"
                             IsVisible="{Binding CanClearPriority}" />
+                  <MenuItem Header="{loc:Loc Menu_Message_MarkUnread}" Command="{Binding MarkSelectedUnreadCommand}" />
                   <MenuItem Header="{loc:Loc Toolbar_Archive}" Command="{Binding ArchiveSelectedCommand}" />
                   <MenuItem Header="{loc:Loc Toolbar_Delete}" Command="{Binding DeleteSelectedCommand}" />
                   <MenuItem Header="{loc:Loc Menu_Message_AddContact}" ItemsSource="{Binding ContactTargets}"

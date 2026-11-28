@@ -357,6 +357,142 @@ public class MainWindowViewModelTests
     }
 
     /// <summary>
+    /// Marking a read message unread keeps it selected and unread, and raises the counts.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task MarkSelectedUnread_ReadSelection_MarksOnlyReadMessagesAndRaisesCounts()
+    {
+        var scenario = new Scenario();
+        scenario.Dispatcher.On<SetMessageReadCommand>(c =>
+        {
+            scenario.Messages.Single(m => m.Id == c.MessageId).SetRead(c.IsRead);
+            return Unit.Value;
+        });
+        await scenario.StartAsync();
+        var read = scenario.ViewModel.Messages[0];
+        var unread = scenario.ViewModel.Messages[1];
+        scenario.ViewModel.SelectedMessage = read;
+        scenario.ViewModel.SelectedMessages.Add(read);
+        scenario.ViewModel.SelectedMessages.Add(unread);
+        await scenario.ViewModel.WhenIdleAsync();
+        scenario.ViewModel.MarkSelectedUnreadCommand.CanExecute(null).Should().BeTrue();
+
+        await scenario.ViewModel.MarkSelectedUnreadCommand.ExecuteAsync(null);
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.Dispatcher.Sent<SetMessageReadCommand>().Where(c => !c.IsRead)
+            .Should().ContainSingle().Which.MessageId.Should().Be(read.Id);
+        scenario.ViewModel.SelectedMessage.Should().BeSameAs(read);
+        read.IsUnread.Should().BeTrue();
+        scenario.ViewModel.UnifiedInbox.UnreadCount.Should().Be(2);
+        scenario.ViewModel.MarkSelectedUnreadCommand.CanExecute(null).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// The entry is unavailable while nothing that is read is selected.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task MarkSelectedUnread_NothingReadSelected_CannotExecute()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        scenario.ViewModel.MarkSelectedUnreadCommand.CanExecute(null).Should().BeFalse();
+
+        scenario.ViewModel.SelectedMessages.Add(scenario.ViewModel.Messages[1]);
+
+        scenario.ViewModel.MarkSelectedUnreadCommand.CanExecute(null).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// A failure to mark a message unread is shown and the message stays read.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task MarkSelectedUnread_Fails_KeepsMessageReadAndShowsError()
+    {
+        var scenario = new Scenario();
+        scenario.Dispatcher.On<SetMessageReadCommand>(c => c.IsRead ? Unit.Value : throw new IOException("disk full"));
+        await scenario.StartAsync();
+        var item = scenario.ViewModel.Messages[0];
+        scenario.ViewModel.SelectedMessage = item;
+        await scenario.ViewModel.WhenIdleAsync();
+
+        await scenario.ViewModel.MarkSelectedUnreadCommand.ExecuteAsync(null);
+
+        item.IsRead.Should().BeTrue();
+        scenario.ViewModel.StatusText.Should().Contain("disk full").And.Contain("标记未读失败");
+    }
+
+    /// <summary>
+    /// A message selected by a right-click stays unread; clicking it afterwards opens it and marks it read.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task SelectByRightClick_UnreadMessage_StaysUnreadUntilClicked()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        var item = scenario.ViewModel.Messages[0];
+
+        scenario.ViewModel.BeginContextSelection(item);
+        scenario.ViewModel.SelectedMessage = item;
+        await scenario.ViewModel.WhenIdleAsync();
+
+        item.IsUnread.Should().BeTrue();
+        scenario.Dispatcher.Sent<SetMessageReadCommand>().Should().BeEmpty();
+
+        scenario.ViewModel.OpenClickedMessage(item);
+        await scenario.ViewModel.WhenIdleAsync();
+
+        item.IsRead.Should().BeTrue();
+        scenario.Dispatcher.Sent<SetMessageReadCommand>().Should().ContainSingle().Which.IsRead.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// A right-click only affects the selection it causes: selecting the message again later marks it read.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task SelectByRightClick_SelectedAgainLater_IsMarkedRead()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        var item = scenario.ViewModel.Messages[0];
+        scenario.ViewModel.BeginContextSelection(item);
+        scenario.ViewModel.SelectedMessage = item;
+        scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[1];
+
+        scenario.ViewModel.SelectedMessage = item;
+        await scenario.ViewModel.WhenIdleAsync();
+
+        item.IsRead.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// A right-click on a message that is already selected must not change what selecting it later does, and clicking a
+    /// message marked unread by the user leaves it unread.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task OpenClickedMessage_MarkedUnreadByUser_StaysUnread()
+    {
+        var scenario = new Scenario();
+        await scenario.StartAsync();
+        var item = scenario.ViewModel.Messages[0];
+        scenario.ViewModel.SelectedMessage = item;
+        await scenario.ViewModel.WhenIdleAsync();
+        await scenario.ViewModel.MarkSelectedUnreadCommand.ExecuteAsync(null);
+
+        scenario.ViewModel.BeginContextSelection(item);
+        scenario.ViewModel.OpenClickedMessage(item);
+        await scenario.ViewModel.WhenIdleAsync();
+
+        item.IsUnread.Should().BeTrue();
+    }
+
+    /// <summary>
     /// Opening an unread message lowers the counts without waiting for a reload.
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>

@@ -125,6 +125,8 @@
   <data name="Confirm_TrashRetention_Title" xml:space="preserve"><value>Empty Trash automatically</value></data>
   <data name="Confirm_TrashRetention_Message" xml:space="preserve"><value>Messages that have been in the Trash of {0} for {1} days will be deleted permanently from the server. This cannot be undone.</value></data>
   <data name="Confirm_TrashRetention_Ok" xml:space="preserve"><value>Turn on</value></data>
+  <data name="Menu_Message_MarkUnread" xml:space="preserve"><value>Mark as unread</value></data>
+  <data name="Error_MarkUnread" xml:space="preserve"><value>Failed to mark as unread</value></data>
   <data name="Menu_Folder_MarkAllRead" xml:space="preserve"><value>Mark all as read</value></data>
   <data name="Menu_Folder_Empty" xml:space="preserve"><value>Delete all messages</value></data>
   <data name="Error_EmptyFolder" xml:space="preserve"><value>Failed to delete the folder contents</value></data>
