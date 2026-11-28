@@ -76,6 +76,7 @@
   <data name="Status_AttachmentOpened" xml:space="preserve"><value>Opened {0}</value></data>
   <data name="Status_AttachmentNotOpened" xml:space="preserve"><value>The system could not open {0}. Download it instead.</value></data>
   <data name="Status_AttachmentOpenBlocked" xml:space="preserve"><value>{0} could run a program, so it is not opened from here. Download it if you trust the sender.</value></data>
+  <data name="Status_MessageGone" xml:space="preserve"><value>This message is no longer where it was. Nothing was changed.</value></data>
   <data name="Reader_DownloadAttachment" xml:space="preserve"><value>Download attachment</value></data>
   <data name="Error_Flag" xml:space="preserve"><value>Failed to update star</value></data>
   <data name="Error_MarkRead" xml:space="preserve"><value>Failed to mark as read</value></data>

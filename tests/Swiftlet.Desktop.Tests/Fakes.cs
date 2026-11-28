@@ -357,6 +357,17 @@ internal sealed class FakeDialogService : IDialogService
         return Task.FromResult(ContactFile);
     }
 
+    /// <summary>
+    /// Gets the message windows that were asked for.
+    /// </summary>
+    public List<Swiftlet.Desktop.ViewModels.Main.MessageWindowViewModel> MessageWindows { get; } = [];
+
+    /// <inheritdoc />
+    public void ShowMessage(Swiftlet.Desktop.ViewModels.Main.MessageWindowViewModel viewModel)
+    {
+        MessageWindows.Add(viewModel);
+    }
+
     /// <inheritdoc />
     public Task ShowComposeAsync(IReadOnlyList<MailAccount> accounts, ComposeRequest request)
     {

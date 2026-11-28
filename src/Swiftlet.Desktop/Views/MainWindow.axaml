@@ -286,7 +286,7 @@
             <ListBox x:Name="MessageList" Classes="messages" Background="Transparent" ItemsSource="{Binding Messages}" SelectedItem="{Binding SelectedMessage}"
                      SelectionMode="Multiple" SelectedItems="{Binding SelectedMessages}"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                     ScrollViewer.ScrollChanged="OnMessageListScrollChanged">
+                     ScrollViewer.ScrollChanged="OnMessageListScrollChanged" DoubleTapped="OnMessageListDoubleTapped">
               <ListBox.KeyBindings>
                 <KeyBinding Gesture="Delete" Command="{Binding DeleteSelectedCommand}" />
               </ListBox.KeyBindings>
@@ -507,119 +507,7 @@
             <ContentControl Content="{Binding SelectedMessage}">
             <ContentControl.DataTemplates>
               <DataTemplate DataType="main:MessageItemViewModel">
-                <DockPanel Margin="16">
-                  <DockPanel.DataTemplates>
-                    <!-- One address of the header: clicking it offers what can be done with it. -->
-                    <DataTemplate DataType="main:MessageAddressViewModel">
-                      <Button Classes="icon address" ToolTip.Tip="{Binding Text}" AutomationProperties.Name="{Binding Text}">
-                        <Button.Flyout>
-                          <MenuFlyout Placement="BottomEdgeAlignedLeft">
-                            <MenuItem Header="{Binding ContactText}" Command="{Binding ContactCommand}"
-                                      IsVisible="{Binding CanBeContact}" x:DataType="main:MessageAddressViewModel" />
-                            <MenuItem Header="{loc:Loc Menu_Address_Write}" Command="{Binding WriteCommand}"
-                                      IsVisible="{Binding CanBeContact}" x:DataType="main:MessageAddressViewModel" />
-                            <MenuItem Header="{loc:Loc Menu_Address_Copy}" Command="{Binding CopyCommand}"
-                                      x:DataType="main:MessageAddressViewModel" />
-                          </MenuFlyout>
-                        </Button.Flyout>
-                        <TextBlock Text="{Binding Text}" TextTrimming="CharacterEllipsis" />
-                      </Button>
-                    </DataTemplate>
-                  </DockPanel.DataTemplates>
-                  <StackPanel DockPanel.Dock="Top" Spacing="12">
-                    <TextBlock Classes="title" Text="{Binding Subject}" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
-                               ToolTip.Tip="{Binding Subject}" />
-                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-                      <Border Width="40" Height="40" CornerRadius="20" Background="{Binding SenderBrush}" VerticalAlignment="Top">
-                        <TextBlock Text="{Binding SenderInitial}" Foreground="White" FontSize="16" HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
-                      </Border>
-                      <Grid Grid.Column="1" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="2">
-                        <TextBlock Grid.Row="0" Classes="secondary" VerticalAlignment="Center" Text="{loc:Loc Reader_From}" />
-                        <!-- The negative margins cancel the button padding, so the addresses line up with the time. -->
-                        <ContentControl Grid.Row="0" Grid.Column="1" Margin="-4,0,0,0" Content="{Binding SenderAddress}"
-                                        HorizontalAlignment="Left" />
-                        <TextBlock Grid.Row="1" Classes="caption" Margin="0,3,0,0" VerticalAlignment="Top" Text="{loc:Loc Reader_To}" />
-                        <!-- A mail to very many people scrolls instead of pushing the body out of sight. -->
-                        <ScrollViewer Grid.Row="1" Grid.Column="1" Margin="-4,0,0,0" MaxHeight="72" HorizontalScrollBarVisibility="Disabled">
-                          <ItemsControl x:Name="RecipientList" Classes="recipients" ItemsSource="{Binding RecipientAddresses}">
-                            <ItemsControl.ItemsPanel>
-                              <ItemsPanelTemplate>
-                                <WrapPanel />
-                              </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                          </ItemsControl>
-                        </ScrollViewer>
-                        <TextBlock Grid.Row="2" Classes="caption" Text="{loc:Loc Reader_Time}" />
-                        <TextBlock Grid.Row="2" Grid.Column="1" Classes="caption" Text="{Binding SentAtText}" />
-                      </Grid>
-                    </Grid>
-                    <!-- One row and the edge of a second: many attachments scroll instead of pushing the body out of sight. -->
-                    <ScrollViewer x:Name="AttachmentScroller" MaxHeight="76" HorizontalScrollBarVisibility="Disabled"
-                                  IsVisible="{Binding HasAttachments}" DataContextChanged="OnAttachmentsDataContextChanged">
-                      <ItemsControl ItemsSource="{Binding Attachments}" Margin="0,0,12,0">
-                        <ItemsControl.ItemsPanel>
-                          <ItemsPanelTemplate>
-                            <WrapPanel />
-                          </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                          <DataTemplate DataType="main:AttachmentItemViewModel">
-                            <!-- One card with two buttons: the file opens it, the arrow saves it. -->
-                            <Border Margin="0,0,8,8" CornerRadius="12" Padding="4"
-                                    Background="{DynamicResource Brush.WindowBg}" BorderThickness="1"
-                                    BorderBrush="{DynamicResource Brush.Border}">
-                              <StackPanel Orientation="Horizontal" Spacing="4">
-                                <Button Classes="attachment" Command="{Binding OpenCommand}" Padding="8,4" Background="Transparent" Cursor="Hand"
-                                        AutomationProperties.Name="{Binding Label}">
-                                  <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <PathIcon Data="{StaticResource Icon.Attach}" />
-                                    <StackPanel>
-                                      <TextBlock Text="{Binding FileName}" MaxWidth="180" TextTrimming="CharacterEllipsis" />
-                                      <TextBlock Classes="caption" Text="{Binding SizeText}" />
-                                    </StackPanel>
-                                  </StackPanel>
-                                </Button>
-                                <Button Classes="icon" Command="{Binding SaveCommand}" VerticalAlignment="Center"
-                                        ToolTip.Tip="{loc:Loc Reader_DownloadAttachment}"
-                                        AutomationProperties.Name="{loc:Loc Reader_DownloadAttachment}">
-                                  <PathIcon Data="{StaticResource Icon.Download}" />
-                                </Button>
-                              </StackPanel>
-                            </Border>
-                          </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                      </ItemsControl>
-                    </ScrollViewer>
-                    <Border Height="1" Margin="0,0,0,12" Background="{DynamicResource Brush.Border}" />
-                  </StackPanel>
-                  <!-- In the layout, not in a popup: the native web view below would cover one. -->
-                  <views:AiPanel DockPanel.Dock="Top" ctl:Entrance.Effect="Fade"
-                                 DataContext="{Binding $parent[Window].((main:MainWindowViewModel)DataContext).AiAssist}"
-                                 IsVisible="{Binding IsOpen, FallbackValue=False}" />
-                  <Border DockPanel.Dock="Top" IsVisible="{Binding HasBlockedRemoteImages}" ctl:Entrance.Effect="Fade" Padding="12,8" Margin="0,0,0,8"
-                          Background="{DynamicResource Brush.WarningBg}" CornerRadius="8">
-                    <DockPanel>
-                      <SplitButton DockPanel.Dock="Right" Content="{loc:Loc Reader_LoadImages}" Command="{Binding LoadRemoteImagesCommand}">
-                        <SplitButton.Flyout>
-                          <MenuFlyout Placement="BottomEdgeAlignedRight">
-                            <MenuItem Header="{Binding AlwaysAllowSenderText}" Command="{Binding AlwaysAllowSenderCommand}"
-                                      IsVisible="{Binding CanRememberSender}" />
-                            <MenuItem Header="{Binding AlwaysAllowDomainText}" Command="{Binding AlwaysAllowDomainCommand}"
-                                      IsVisible="{Binding CanRememberSender}" />
-                          </MenuFlyout>
-                        </SplitButton.Flyout>
-                      </SplitButton>
-                      <TextBlock Text="{loc:Loc Reader_RemoteImagesBlocked}" VerticalAlignment="Center" TextWrapping="Wrap" />
-                    </DockPanel>
-                  </Border>
-                  <Grid>
-                    <ctl:HtmlBodyView Document="{Binding HtmlDocument}" IsVisible="{Binding HasHtml}" />
-                    <ScrollViewer IsVisible="{Binding !HasHtml}">
-                      <SelectableTextBlock Text="{Binding BodyText}" TextWrapping="Wrap" />
-                    </ScrollViewer>
-                  </Grid>
-                </DockPanel>
+                <views:MessageView AiAssist="{Binding $parent[Window].((main:MainWindowViewModel)DataContext).AiAssist}" />
               </DataTemplate>
             </ContentControl.DataTemplates>
             </ContentControl>

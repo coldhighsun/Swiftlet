@@ -1,0 +1,47 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:main="using:Swiftlet.Desktop.ViewModels.Main"
+        xmlns:views="using:Swiftlet.Desktop.Views"
+        xmlns:loc="using:Swiftlet.Desktop.Localization"
+        x:Class="Swiftlet.Desktop.Views.MessageWindow"
+        Icon="avares://Swiftlet/Assets/swiftlet.ico"
+        x:DataType="main:MessageWindowViewModel"
+        Title="{Binding Item.Subject}" Width="1000" Height="720" MinWidth="520" MinHeight="420"
+        WindowState="Maximized" WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource Brush.Surface}">
+  <DockPanel>
+    <Border DockPanel.Dock="Bottom" Padding="12,4" BorderThickness="0,1,0,0" Background="{DynamicResource Brush.SidebarBg}"
+            BorderBrush="{DynamicResource Brush.Border}">
+      <TextBlock x:Name="StatusLine" Classes="caption" Text="{Binding Main.StatusText}" TextTrimming="CharacterEllipsis" />
+    </Border>
+    <WrapPanel DockPanel.Dock="Top" Margin="8">
+      <Button Classes="icon" Command="{Binding ReplyCommand}"
+              ToolTip.Tip="{loc:Loc Toolbar_Reply}" AutomationProperties.Name="{loc:Loc Toolbar_Reply}">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <PathIcon Data="{StaticResource Icon.Reply}" />
+          <TextBlock Text="{loc:Loc Toolbar_Reply}" />
+        </StackPanel>
+      </Button>
+      <Button Classes="icon" Command="{Binding ForwardCommand}"
+              ToolTip.Tip="{loc:Loc Toolbar_Forward}" AutomationProperties.Name="{loc:Loc Toolbar_Forward}">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <PathIcon Data="{StaticResource Icon.Forward}" />
+          <TextBlock Text="{loc:Loc Toolbar_Forward}" />
+        </StackPanel>
+      </Button>
+      <Button Classes="icon" Command="{Binding ToggleFlagCommand}"
+              ToolTip.Tip="{loc:Loc Toolbar_Star}" AutomationProperties.Name="{loc:Loc Toolbar_Star}">
+        <PathIcon Classes="star" Classes.flagged="{Binding Item.IsFlagged}" />
+      </Button>
+      <Button Classes="icon" Command="{Binding ArchiveCommand}"
+              ToolTip.Tip="{loc:Loc Toolbar_Archive}" AutomationProperties.Name="{loc:Loc Toolbar_Archive}">
+        <PathIcon Data="{StaticResource Icon.Archive}" />
+      </Button>
+      <Button Classes="icon" Command="{Binding DeleteCommand}"
+              ToolTip.Tip="{loc:Loc Toolbar_Delete}" AutomationProperties.Name="{loc:Loc Toolbar_Delete}">
+        <PathIcon Data="{StaticResource Icon.Delete}" />
+      </Button>
+    </WrapPanel>
+    <views:MessageView DataContext="{Binding Item}" />
+  </DockPanel>
+</Window>

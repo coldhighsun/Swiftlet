@@ -6,9 +6,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Swiftlet.Desktop.Controls;
 using Avalonia.VisualTree;
-using Swiftlet.Application.Abstractions;
 using Swiftlet.Desktop.Hosting;
-using Swiftlet.Desktop.Services;
 using Swiftlet.Desktop.ViewModels.Main;
 
 namespace Swiftlet.Desktop.Views;
@@ -34,11 +32,6 @@ public partial class MainWindow : Window
     private readonly AttachmentHoverController _attachmentHover;
 
     /// <summary>
-    /// The message whose attachments the reading pane listed last.
-    /// </summary>
-    private Guid? _attachmentsMessageId;
-
-    /// <summary>
     /// Initializes a new instance of the <see cref="MainWindow"/> class.
     /// </summary>
     public MainWindow()
@@ -51,18 +44,7 @@ public partial class MainWindow : Window
         // Tunnelling runs before the list changes its selection, which is what the view model has to know in advance.
         MessageList.AddHandler(PointerPressedEvent, OnMessagePressed, RoutingStrategies.Tunnel);
 
-        _attachmentHover = new AttachmentHoverController(
-            LoadAttachmentPreviewAsync,
-            attachment => ((MainWindowViewModel)DataContext!).CreateAttachmentPreview(attachment),
-            new AvaloniaAttachmentPreviewPresenter());
-
-        // The attachment buttons live in a data template, so the pointer is tracked on the window and the button under it is looked up.
-        AddHandler(PointerMovedEvent, OnPointerMovedOverAttachments, RoutingStrategies.Bubble, handledEventsToo: true);
-        AddHandler(PointerPressedEvent, (_, _) => _attachmentHover.Leave(), RoutingStrategies.Tunnel, handledEventsToo: true);
-        // Scrolling moves the attachments under a resting pointer without a pointer movement.
-        AddHandler(PointerWheelChangedEvent, (_, _) => _attachmentHover.Leave(), RoutingStrategies.Tunnel, handledEventsToo: true);
-        PointerExited += (_, _) => _attachmentHover.Leave();
-        Deactivated += (_, _) => _attachmentHover.Leave();
+        _attachmentHover = AttachmentHoverBehavior.Attach(this, () => DataContext as MainWindowViewModel);
     }
 
     /// <summary>
@@ -105,17 +87,18 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Shows the attachments of another message from the top. The reading pane reuses its controls, which would keep the
-    /// scroll position; a reload of the same message keeps it on purpose.
+    /// Opens the window of a double-clicked message. The first click has selected it already, so it counts as read; a
+    /// double click that leaves another message selected (the scroll bar, taking a row out of the selection) does nothing.
     /// </summary>
-    /// <param name="sender">The scroll viewer of the attachments.</param>
+    /// <param name="sender">The message list.</param>
     /// <param name="e">The event arguments.</param>
-    private void OnAttachmentsDataContextChanged(object? sender, EventArgs e)
+    private void OnMessageListDoubleTapped(object? sender, TappedEventArgs e)
     {
-        if (sender is ScrollViewer { DataContext: MessageItemViewModel item } scroller && item.Message.Id != _attachmentsMessageId)
+        if (DataContext is MainWindowViewModel viewModel
+            && (e.Source as Visual)?.FindAncestorOfType<ListBoxItem>(includeSelf: true)?.DataContext is MessageItemViewModel item
+            && ReferenceEquals(item, viewModel.SelectedMessage))
         {
-            _attachmentsMessageId = item.Message.Id;
-            scroller.Offset = default;
+            viewModel.OpenMessageWindow(item);
         }
     }
 
@@ -155,38 +138,6 @@ public partial class MainWindow : Window
         viewModel?.RefreshContactTargets();
         viewModel?.RefreshPriorityMenu();
         viewModel?.RefreshReadMenu();
-    }
-
-    /// <summary>
-    /// Loads the preview of an attachment through the current view model.
-    /// </summary>
-    /// <param name="attachment">The attachment.</param>
-    /// <param name="cancellationToken">Cancelled when the pointer leaves the attachment.</param>
-    /// <returns>The preview, or <see langword="null"/> when none could be loaded.</returns>
-    private Task<AttachmentPreview?> LoadAttachmentPreviewAsync(AttachmentItemViewModel attachment, CancellationToken cancellationToken)
-    {
-        return DataContext is MainWindowViewModel viewModel
-            ? viewModel.LoadAttachmentPreviewAsync(attachment, cancellationToken)
-            : Task.FromResult<AttachmentPreview?>(null);
-    }
-
-    /// <summary>
-    /// Starts or stops the attachment preview depending on whether the pointer is over the button of an attachment that
-    /// opens it; the download button beside it has its own tooltip.
-    /// </summary>
-    /// <param name="sender">The event sender.</param>
-    /// <param name="e">The event arguments.</param>
-    private void OnPointerMovedOverAttachments(object? sender, PointerEventArgs e)
-    {
-        var button = (e.Source as Visual)?.FindAncestorOfType<Button>(includeSelf: true);
-        if (button?.DataContext is AttachmentItemViewModel attachment && button.Classes.Contains("attachment"))
-        {
-            _attachmentHover.Enter(attachment, button);
-        }
-        else
-        {
-            _attachmentHover.Leave();
-        }
     }
 
     /// <summary>

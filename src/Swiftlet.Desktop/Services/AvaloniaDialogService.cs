@@ -18,6 +18,7 @@ using Swiftlet.Desktop.ViewModels.Compose;
 using Swiftlet.Desktop.ViewModels.Contacts;
 using Swiftlet.Desktop.ViewModels.Settings;
 using Swiftlet.Desktop.ViewModels.Update;
+using Swiftlet.Desktop.ViewModels.Main;
 using Swiftlet.Desktop.Views;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Folders;
@@ -292,6 +293,25 @@ public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogSe
         window.Show();
         window.Activate();
         await closed.Task;
+    }
+
+    /// <inheritdoc />
+    public void ShowMessage(MessageWindowViewModel viewModel)
+    {
+        ArgumentNullException.ThrowIfNull(viewModel);
+        if (Lifetime?.Windows.OfType<MessageWindow>().FirstOrDefault(w => ReferenceEquals(w.DataContext, viewModel)) is { } open)
+        {
+            if (open.WindowState == WindowState.Minimized)
+            {
+                open.WindowState = WindowState.Maximized;
+            }
+
+            open.Activate();
+            return;
+        }
+
+        // Not owned by the main window, so it stays usable while that one is hidden in the tray.
+        new MessageWindow { DataContext = viewModel }.Show();
     }
 
     /// <inheritdoc />
