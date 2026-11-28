@@ -2129,6 +2129,61 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies rows of the unified inbox name their account inside the row, also for a long address in the narrowest
+    /// window, and the rows of a folder do not.
+    /// </summary>
+    /// <param name="dark">Whether the dark theme is used.</param>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task MainWindow_UnifiedInboxWithTwoAccounts_MarksRows(bool dark)
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var scenario = new MainWindowViewModelTests.Scenario();
+                var second = TestData.Account($"{new string('a', 48)}@work.example.com");
+                var inbox = TestData.Folder(second, "INBOX", Swiftlet.Domain.Folders.FolderRole.Inbox);
+                scenario.Messages.Add(TestData.Message(second, inbox, 3, "Hello 3"));
+                scenario.Dispatcher.On<Swiftlet.Application.Queries.GetAccountsQuery>(
+                    _ => new List<Swiftlet.Domain.Accounts.MailAccount> { scenario.Account, second });
+                await scenario.StartAsync();
+                var application = Avalonia.Application.Current!;
+                application.RequestedThemeVariant = dark ? Avalonia.Styling.ThemeVariant.Dark : Avalonia.Styling.ThemeVariant.Light;
+                try
+                {
+                    var window = new MainWindow { DataContext = scenario.ViewModel, Width = 800, Height = 480 };
+                    Render(window, $"main-window-account-marks-{(dark ? "dark" : "light")}");
+
+                    var rows = window.GetVisualDescendants().OfType<ListBoxItem>().ToList();
+                    rows.Should().HaveCount(3);
+                    foreach (var row in rows)
+                    {
+                        var item = (MessageItemViewModel)row.DataContext!;
+                        var mark = row.GetVisualDescendants().OfType<Grid>().Single(g => g.Name == "AccountTag");
+                        mark.IsEffectivelyVisible.Should().BeTrue();
+                        mark.GetVisualDescendants().OfType<TextBlock>().Single().Text.Should().Be(item.AccountTag!.Name);
+                        mark.TranslatePoint(new Point(mark.Bounds.Width, 0), row)!.Value.X.Should().BeLessThanOrEqualTo(row.Bounds.Width);
+                    }
+
+                    scenario.ViewModel.SelectedNode = scenario.ViewModel.Accounts[0].Folders
+                        .Single(f => f.Folder.Id == scenario.Inbox.Id);
+                    await scenario.ViewModel.WhenIdleAsync();
+                    Dispatcher.UIThread.RunJobs();
+
+                    window.GetVisualDescendants().OfType<Grid>().Where(g => g.Name == "AccountTag")
+                        .Should().NotBeEmpty().And.OnlyContain(g => !g.IsEffectivelyVisible);
+                    window.Close();
+                }
+                finally
+                {
+                    application.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Default;
+                }
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Verifies the selected row has the subtle accent background and an accent bar, and the list has no grey fill.
     /// </summary>
     [Fact]
