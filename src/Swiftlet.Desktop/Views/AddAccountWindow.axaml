@@ -2,60 +2,63 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Swiftlet.Desktop.ViewModels"
         xmlns:loc="using:Swiftlet.Desktop.Localization"
+        xmlns:controls="using:Swiftlet.Desktop.Controls"
         x:Class="Swiftlet.Desktop.Views.AddAccountWindow"
         Icon="avares://Swiftlet/Assets/swiftlet.ico"
         x:DataType="vm:AddAccountViewModel"
         Title="{loc:Loc AddAccount_Title}" Width="480" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterOwner">
-  <StackPanel Margin="24" Spacing="12">
-    <PathIcon Data="{StaticResource Icon.Logo}" Width="48" Height="40" HorizontalAlignment="Center"
-              Foreground="{DynamicResource Brush.Accent}" />
-    <!-- Above both ways of signing in, because it applies to either. -->
-    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-      <TextBlock Text="{loc:Loc Account_Color}" VerticalAlignment="Center" />
-      <ListBox Grid.Column="1" x:Name="ColorSwatches" Classes="swatches" ItemsSource="{Binding ColorOptions}"
-               SelectedItem="{Binding Color}" AutomationProperties.Name="{loc:Loc Account_Color}" />
-    </Grid>
-    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-      <!-- Google sign-in is hidden until the project has its own Google client (see CLAUDE.md, "Remaining work").
-           To restore it, show this button again and move the Microsoft button back to the second column only. -->
-      <Button Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" IsVisible="False"
-              Content="{loc:Loc AddAccount_SignInGoogle}" Command="{Binding SignInWithGoogleCommand}" />
-      <Button Grid.Column="0" Grid.ColumnSpan="2" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-              Content="{loc:Loc AddAccount_SignInMicrosoft}" Command="{Binding SignInWithMicrosoftCommand}" />
-    </Grid>
-    <Grid ColumnDefinitions="*,Auto,*" ColumnSpacing="12">
-      <Border Height="1" VerticalAlignment="Center" Background="{DynamicResource Brush.Border}" />
-      <TextBlock Grid.Column="1" Classes="caption" Text="{loc:Loc AddAccount_OrPassword}" />
-      <Border Grid.Column="2" Height="1" VerticalAlignment="Center" Background="{DynamicResource Brush.Border}" />
-    </Grid>
-    <TextBox Text="{Binding DisplayName}" PlaceholderText="{loc:Loc AddAccount_DisplayName}" />
-    <TextBox Text="{Binding Email}" PlaceholderText="{loc:Loc AddAccount_Email}" />
-    <TextBox Text="{Binding Password}" PlaceholderText="{loc:Loc AddAccount_Password}" PasswordChar="●" />
-    <TextBlock Classes="caption" Text="{Binding ProviderHint}" TextWrapping="Wrap"
-               IsVisible="{Binding ProviderHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-    <HyperlinkButton Classes="link" Content="{Binding AppPasswordLinkText}" HorizontalAlignment="Left"
-                     NavigateUri="{Binding AppPasswordPage}" IsVisible="{Binding ShowAppPasswordLink}" />
+  <controls:DialogFrame>
+    <StackPanel Margin="24" Spacing="12">
+      <PathIcon Data="{StaticResource Icon.Logo}" Width="48" Height="40" HorizontalAlignment="Center"
+                Foreground="{DynamicResource Brush.Accent}" />
+      <!-- Above both ways of signing in, because it applies to either. -->
+      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+        <TextBlock Text="{loc:Loc Account_Color}" VerticalAlignment="Center" />
+        <ListBox Grid.Column="1" x:Name="ColorSwatches" Classes="swatches" ItemsSource="{Binding ColorOptions}"
+                 SelectedItem="{Binding Color}" AutomationProperties.Name="{loc:Loc Account_Color}" />
+      </Grid>
+      <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+        <!-- Google sign-in is hidden until the project has its own Google client (see CLAUDE.md, "Remaining work").
+             To restore it, show this button again and move the Microsoft button back to the second column only. -->
+        <Button Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" IsVisible="False"
+                Content="{loc:Loc AddAccount_SignInGoogle}" Command="{Binding SignInWithGoogleCommand}" />
+        <Button Grid.Column="0" Grid.ColumnSpan="2" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                Content="{loc:Loc AddAccount_SignInMicrosoft}" Command="{Binding SignInWithMicrosoftCommand}" />
+      </Grid>
+      <Grid ColumnDefinitions="*,Auto,*" ColumnSpacing="12">
+        <Border Height="1" VerticalAlignment="Center" Background="{DynamicResource Brush.Border}" />
+        <TextBlock Grid.Column="1" Classes="caption" Text="{loc:Loc AddAccount_OrPassword}" />
+        <Border Grid.Column="2" Height="1" VerticalAlignment="Center" Background="{DynamicResource Brush.Border}" />
+      </Grid>
+      <TextBox Text="{Binding DisplayName}" PlaceholderText="{loc:Loc AddAccount_DisplayName}" />
+      <TextBox Text="{Binding Email}" PlaceholderText="{loc:Loc AddAccount_Email}" />
+      <TextBox Text="{Binding Password}" PlaceholderText="{loc:Loc AddAccount_Password}" PasswordChar="●" />
+      <TextBlock Classes="caption" Text="{Binding ProviderHint}" TextWrapping="Wrap"
+                 IsVisible="{Binding ProviderHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <HyperlinkButton Classes="link" Content="{Binding AppPasswordLinkText}" HorizontalAlignment="Left"
+                       NavigateUri="{Binding AppPasswordPage}" IsVisible="{Binding ShowAppPasswordLink}" />
 
-    <Button Content="{loc:Loc AddAccount_ServerSettings}" Command="{Binding ToggleAdvancedCommand}" HorizontalAlignment="Left" />
-    <Grid IsVisible="{Binding ShowAdvanced}" ColumnDefinitions="Auto,*,80,Auto" RowDefinitions="Auto,Auto" RowSpacing="8" ColumnSpacing="8">
-      <TextBlock Grid.Row="0" Grid.Column="0" Text="IMAP" VerticalAlignment="Center" />
-      <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding ImapHost}" PlaceholderText="imap.example.com" />
-      <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding ImapPort}" />
-      <CheckBox Grid.Row="0" Grid.Column="3" Content="SSL" IsChecked="{Binding ImapUseSsl}" />
-      <TextBlock Grid.Row="1" Grid.Column="0" Text="SMTP" VerticalAlignment="Center" />
-      <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding SmtpHost}" PlaceholderText="smtp.example.com" />
-      <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding SmtpPort}" />
-      <CheckBox Grid.Row="1" Grid.Column="3" Content="SSL" IsChecked="{Binding SmtpUseSsl}" />
-    </Grid>
+      <Button Content="{loc:Loc AddAccount_ServerSettings}" Command="{Binding ToggleAdvancedCommand}" HorizontalAlignment="Left" />
+      <Grid IsVisible="{Binding ShowAdvanced}" ColumnDefinitions="Auto,*,80,Auto" RowDefinitions="Auto,Auto" RowSpacing="8" ColumnSpacing="8">
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="IMAP" VerticalAlignment="Center" />
+        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding ImapHost}" PlaceholderText="imap.example.com" />
+        <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding ImapPort}" />
+        <CheckBox Grid.Row="0" Grid.Column="3" Content="SSL" IsChecked="{Binding ImapUseSsl}" />
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="SMTP" VerticalAlignment="Center" />
+        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding SmtpHost}" PlaceholderText="smtp.example.com" />
+        <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding SmtpPort}" />
+        <CheckBox Grid.Row="1" Grid.Column="3" Content="SSL" IsChecked="{Binding SmtpUseSsl}" />
+      </Grid>
 
-    <TextBlock Classes="error" Text="{Binding ErrorMessage}" TextWrapping="Wrap"
-               IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-    <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
+      <TextBlock Classes="error" Text="{Binding ErrorMessage}" TextWrapping="Wrap"
+                 IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
 
-    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-      <Button Content="{loc:Loc Common_Cancel}" Command="{Binding CancelCommand}" IsCancel="True" />
-      <Button Content="{loc:Loc AddAccount_Add}" Command="{Binding AddCommand}" IsDefault="True" Classes="accent" />
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+        <Button Content="{loc:Loc Common_Cancel}" Command="{Binding CancelCommand}" IsCancel="True" />
+        <Button Content="{loc:Loc AddAccount_Add}" Command="{Binding AddCommand}" IsDefault="True" Classes="accent" />
+      </StackPanel>
     </StackPanel>
-  </StackPanel>
+  </controls:DialogFrame>
 </Window>

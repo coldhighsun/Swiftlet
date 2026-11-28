@@ -2,66 +2,69 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Swiftlet.Desktop.ViewModels"
         xmlns:loc="using:Swiftlet.Desktop.Localization"
+        xmlns:controls="using:Swiftlet.Desktop.Controls"
         x:Class="Swiftlet.Desktop.Views.EditAccountWindow"
         Icon="avares://Swiftlet/Assets/swiftlet.ico"
         x:DataType="vm:EditAccountViewModel"
         Title="{loc:Loc EditAccount_Title}" Width="480" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterOwner">
-  <StackPanel Margin="24" Spacing="12">
-    <TextBlock Classes="section" Text="{Binding Email}" TextTrimming="CharacterEllipsis" />
+  <controls:DialogFrame>
+    <StackPanel Margin="24" Spacing="12">
+      <TextBlock Classes="section" Text="{Binding Email}" TextTrimming="CharacterEllipsis" />
 
-    <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="8">
-      <TextBlock Text="{loc:Loc EditAccount_DisplayName}" VerticalAlignment="Center" TextWrapping="Wrap" />
-      <TextBox Grid.Column="1" Text="{Binding DisplayName}" PlaceholderText="{Binding DisplayNamePlaceholder}" MaxLength="200"
-               AutomationProperties.Name="{loc:Loc EditAccount_DisplayName}" />
-      <TextBlock Grid.Row="1" Text="{loc:Loc EditAccount_SyncInterval}" VerticalAlignment="Center" TextWrapping="Wrap" />
-      <ComboBox Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding IntervalOptions}"
-                SelectedItem="{Binding SelectedInterval}" AutomationProperties.Name="{loc:Loc EditAccount_SyncInterval}">
-        <ComboBox.ItemTemplate>
-          <DataTemplate DataType="vm:SyncIntervalOption">
-            <TextBlock Text="{Binding Text}" />
-          </DataTemplate>
-        </ComboBox.ItemTemplate>
-      </ComboBox>
-      <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Classes="caption" Text="{loc:Loc EditAccount_SyncIntervalHint}" TextWrapping="Wrap" />
-      <TextBlock Grid.Row="3" Text="{loc:Loc EditAccount_ArchiveFolder}" VerticalAlignment="Center" TextWrapping="Wrap" />
-      <ComboBox Grid.Row="3" Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding ArchiveFolderOptions}"
-                SelectedItem="{Binding SelectedArchiveFolder}" AutomationProperties.Name="{loc:Loc EditAccount_ArchiveFolder}">
-        <ComboBox.ItemTemplate>
-          <DataTemplate DataType="vm:ArchiveFolderOption">
-            <TextBlock Text="{Binding Text}" TextTrimming="CharacterEllipsis" />
-          </DataTemplate>
-        </ComboBox.ItemTemplate>
-      </ComboBox>
-      <TextBlock Grid.Row="4" Text="{loc:Loc Account_Color}" VerticalAlignment="Center" TextWrapping="Wrap" />
-      <ListBox Grid.Row="4" Grid.Column="1" x:Name="ColorSwatches" Classes="swatches" ItemsSource="{Binding ColorOptions}"
-               SelectedItem="{Binding Color}" AutomationProperties.Name="{loc:Loc Account_Color}" />
-    </Grid>
-
-    <TextBlock Classes="caption" Text="{loc:Loc EditAccount_OAuthHint}" TextWrapping="Wrap" IsVisible="{Binding !IsPasswordAccount}" />
-
-    <StackPanel Spacing="8" IsVisible="{Binding IsPasswordAccount}">
-      <TextBox Text="{Binding Password}" PlaceholderText="{loc:Loc EditAccount_NewPassword}" PasswordChar="●" />
-      <TextBlock Classes="section" Text="{loc:Loc AddAccount_ServerSettings}" Margin="0,4,0,0" />
-      <Grid ColumnDefinitions="Auto,*,80,Auto" RowDefinitions="Auto,Auto" RowSpacing="8" ColumnSpacing="8">
-        <TextBlock Grid.Row="0" Grid.Column="0" Text="IMAP" VerticalAlignment="Center" />
-        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding ImapHost}" PlaceholderText="imap.example.com" />
-        <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding ImapPort}" />
-        <CheckBox Grid.Row="0" Grid.Column="3" Content="SSL" IsChecked="{Binding ImapUseSsl}" />
-        <TextBlock Grid.Row="1" Grid.Column="0" Text="SMTP" VerticalAlignment="Center" />
-        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding SmtpHost}" PlaceholderText="smtp.example.com" />
-        <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding SmtpPort}" />
-        <CheckBox Grid.Row="1" Grid.Column="3" Content="SSL" IsChecked="{Binding SmtpUseSsl}" />
+      <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="8">
+        <TextBlock Text="{loc:Loc EditAccount_DisplayName}" VerticalAlignment="Center" TextWrapping="Wrap" />
+        <TextBox Grid.Column="1" Text="{Binding DisplayName}" PlaceholderText="{Binding DisplayNamePlaceholder}" MaxLength="200"
+                 AutomationProperties.Name="{loc:Loc EditAccount_DisplayName}" />
+        <TextBlock Grid.Row="1" Text="{loc:Loc EditAccount_SyncInterval}" VerticalAlignment="Center" TextWrapping="Wrap" />
+        <ComboBox Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding IntervalOptions}"
+                  SelectedItem="{Binding SelectedInterval}" AutomationProperties.Name="{loc:Loc EditAccount_SyncInterval}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate DataType="vm:SyncIntervalOption">
+              <TextBlock Text="{Binding Text}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Classes="caption" Text="{loc:Loc EditAccount_SyncIntervalHint}" TextWrapping="Wrap" />
+        <TextBlock Grid.Row="3" Text="{loc:Loc EditAccount_ArchiveFolder}" VerticalAlignment="Center" TextWrapping="Wrap" />
+        <ComboBox Grid.Row="3" Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding ArchiveFolderOptions}"
+                  SelectedItem="{Binding SelectedArchiveFolder}" AutomationProperties.Name="{loc:Loc EditAccount_ArchiveFolder}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate DataType="vm:ArchiveFolderOption">
+              <TextBlock Text="{Binding Text}" TextTrimming="CharacterEllipsis" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <TextBlock Grid.Row="4" Text="{loc:Loc Account_Color}" VerticalAlignment="Center" TextWrapping="Wrap" />
+        <ListBox Grid.Row="4" Grid.Column="1" x:Name="ColorSwatches" Classes="swatches" ItemsSource="{Binding ColorOptions}"
+                 SelectedItem="{Binding Color}" AutomationProperties.Name="{loc:Loc Account_Color}" />
       </Grid>
-    </StackPanel>
 
-    <TextBlock Classes="error" Text="{Binding ErrorMessage}" TextWrapping="Wrap"
-               IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-    <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
+      <TextBlock Classes="caption" Text="{loc:Loc EditAccount_OAuthHint}" TextWrapping="Wrap" IsVisible="{Binding !IsPasswordAccount}" />
 
-    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-      <Button Content="{loc:Loc Common_Cancel}" Command="{Binding CancelCommand}" IsCancel="True" />
-      <Button Content="{loc:Loc EditAccount_Save}" Command="{Binding SaveCommand}" IsDefault="True" Classes="accent" />
+      <StackPanel Spacing="8" IsVisible="{Binding IsPasswordAccount}">
+        <TextBox Text="{Binding Password}" PlaceholderText="{loc:Loc EditAccount_NewPassword}" PasswordChar="●" />
+        <TextBlock Classes="section" Text="{loc:Loc AddAccount_ServerSettings}" Margin="0,4,0,0" />
+        <Grid ColumnDefinitions="Auto,*,80,Auto" RowDefinitions="Auto,Auto" RowSpacing="8" ColumnSpacing="8">
+          <TextBlock Grid.Row="0" Grid.Column="0" Text="IMAP" VerticalAlignment="Center" />
+          <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding ImapHost}" PlaceholderText="imap.example.com" />
+          <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding ImapPort}" />
+          <CheckBox Grid.Row="0" Grid.Column="3" Content="SSL" IsChecked="{Binding ImapUseSsl}" />
+          <TextBlock Grid.Row="1" Grid.Column="0" Text="SMTP" VerticalAlignment="Center" />
+          <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding SmtpHost}" PlaceholderText="smtp.example.com" />
+          <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding SmtpPort}" />
+          <CheckBox Grid.Row="1" Grid.Column="3" Content="SSL" IsChecked="{Binding SmtpUseSsl}" />
+        </Grid>
+      </StackPanel>
+
+      <TextBlock Classes="error" Text="{Binding ErrorMessage}" TextWrapping="Wrap"
+                 IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
+
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+        <Button Content="{loc:Loc Common_Cancel}" Command="{Binding CancelCommand}" IsCancel="True" />
+        <Button Content="{loc:Loc EditAccount_Save}" Command="{Binding SaveCommand}" IsDefault="True" Classes="accent" />
+      </StackPanel>
     </StackPanel>
-  </StackPanel>
+  </controls:DialogFrame>
 </Window>

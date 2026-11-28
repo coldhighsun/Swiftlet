@@ -2,60 +2,63 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Swiftlet.Desktop.ViewModels"
         xmlns:loc="using:Swiftlet.Desktop.Localization"
+        xmlns:controls="using:Swiftlet.Desktop.Controls"
         x:Class="Swiftlet.Desktop.Views.LabelManagerWindow"
         Icon="avares://Swiftlet/Assets/swiftlet.ico"
         x:DataType="vm:LabelManagerViewModel"
-        Title="{loc:Loc Labels_Title}" Width="560" Height="460" MinWidth="480" MinHeight="320"
+        Title="{loc:Loc Labels_Title}" Width="560" Height="500" MinWidth="480" MinHeight="360"
         WindowStartupLocation="CenterOwner">
-  <DockPanel Margin="16">
-    <StackPanel DockPanel.Dock="Top" Spacing="8">
-      <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-        <TextBox Grid.Column="0" Text="{Binding NewName}" PlaceholderText="{loc:Loc Labels_NamePlaceholder}" MaxLength="50">
-          <TextBox.KeyBindings>
-            <KeyBinding Gesture="Enter" Command="{Binding AddCommand}" />
-          </TextBox.KeyBindings>
-        </TextBox>
-        <ComboBox Grid.Column="1" Width="72" ItemsSource="{Binding ColorOptions}" SelectedItem="{Binding NewColor}">
-          <ComboBox.ItemTemplate>
-            <DataTemplate x:DataType="x:String">
-              <Border Width="20" Height="20" CornerRadius="10" Background="{Binding}" ToolTip.Tip="{Binding}" />
+  <controls:DialogFrame>
+    <DockPanel Margin="16">
+      <StackPanel DockPanel.Dock="Top" Spacing="8">
+        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+          <TextBox Grid.Column="0" Text="{Binding NewName}" PlaceholderText="{loc:Loc Labels_NamePlaceholder}" MaxLength="50">
+            <TextBox.KeyBindings>
+              <KeyBinding Gesture="Enter" Command="{Binding AddCommand}" />
+            </TextBox.KeyBindings>
+          </TextBox>
+          <ComboBox Grid.Column="1" Width="72" ItemsSource="{Binding ColorOptions}" SelectedItem="{Binding NewColor}">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="x:String">
+                <Border Width="20" Height="20" CornerRadius="10" Background="{Binding}" ToolTip.Tip="{Binding}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <Button Grid.Column="2" Content="{loc:Loc Labels_Add}" Command="{Binding AddCommand}" Classes="accent" />
+        </Grid>
+        <TextBlock Classes="error" Text="{Binding ErrorText}" TextWrapping="Wrap"
+                   IsVisible="{Binding ErrorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <Separator />
+      </StackPanel>
+
+      <Button DockPanel.Dock="Bottom" HorizontalAlignment="Right" Margin="0,12,0,0"
+              Content="{loc:Loc Common_Close}" Command="{Binding CloseCommand}" IsCancel="True" />
+
+      <ScrollViewer>
+        <ItemsControl ItemsSource="{Binding Labels}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:LabelItemViewModel">
+              <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8" Margin="0,0,0,8">
+                <TextBox Grid.Column="0" Text="{Binding Name}" MaxLength="50" />
+                <ComboBox Grid.Column="1" Width="72" ItemsSource="{Binding ColorOptions}" SelectedItem="{Binding Color}">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                      <Border Width="20" Height="20" CornerRadius="10" Background="{Binding}" ToolTip.Tip="{Binding}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+                <Button Grid.Column="2" Content="{loc:Loc Labels_Save}" CommandParameter="{Binding}"
+                        Command="{Binding $parent[ItemsControl].((vm:LabelManagerViewModel)DataContext).SaveCommand}" />
+                <Button Grid.Column="3" Classes="icon danger" CommandParameter="{Binding}"
+                        Command="{Binding $parent[ItemsControl].((vm:LabelManagerViewModel)DataContext).DeleteCommand}"
+                        ToolTip.Tip="{loc:Loc Labels_Delete}" AutomationProperties.Name="{loc:Loc Labels_Delete}">
+                  <PathIcon Data="{StaticResource Icon.Delete}" />
+                </Button>
+              </Grid>
             </DataTemplate>
-          </ComboBox.ItemTemplate>
-        </ComboBox>
-        <Button Grid.Column="2" Content="{loc:Loc Labels_Add}" Command="{Binding AddCommand}" Classes="accent" />
-      </Grid>
-      <TextBlock Classes="error" Text="{Binding ErrorText}" TextWrapping="Wrap"
-                 IsVisible="{Binding ErrorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-      <Separator />
-    </StackPanel>
-
-    <Button DockPanel.Dock="Bottom" HorizontalAlignment="Right" Margin="0,12,0,0"
-            Content="{loc:Loc Common_Close}" Command="{Binding CloseCommand}" IsCancel="True" />
-
-    <ScrollViewer>
-      <ItemsControl ItemsSource="{Binding Labels}">
-        <ItemsControl.ItemTemplate>
-          <DataTemplate x:DataType="vm:LabelItemViewModel">
-            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8" Margin="0,0,0,8">
-              <TextBox Grid.Column="0" Text="{Binding Name}" MaxLength="50" />
-              <ComboBox Grid.Column="1" Width="72" ItemsSource="{Binding ColorOptions}" SelectedItem="{Binding Color}">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate x:DataType="x:String">
-                    <Border Width="20" Height="20" CornerRadius="10" Background="{Binding}" ToolTip.Tip="{Binding}" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-              <Button Grid.Column="2" Content="{loc:Loc Labels_Save}" CommandParameter="{Binding}"
-                      Command="{Binding $parent[ItemsControl].((vm:LabelManagerViewModel)DataContext).SaveCommand}" />
-              <Button Grid.Column="3" Classes="icon danger" CommandParameter="{Binding}"
-                      Command="{Binding $parent[ItemsControl].((vm:LabelManagerViewModel)DataContext).DeleteCommand}"
-                      ToolTip.Tip="{loc:Loc Labels_Delete}" AutomationProperties.Name="{loc:Loc Labels_Delete}">
-                <PathIcon Data="{StaticResource Icon.Delete}" />
-              </Button>
-            </Grid>
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
-    </ScrollViewer>
-  </DockPanel>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </DockPanel>
+  </controls:DialogFrame>
 </Window>
