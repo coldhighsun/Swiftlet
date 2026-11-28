@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Input;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -898,20 +899,23 @@ public class UiSmokeTests
     }
 
     /// <summary>
-    /// Verifies the settings window lists the saved remote image rules with the count and the editing controls, in both languages.
+    /// Verifies the settings window lists the saved remote image rules with their kind, removes them by button and
+    /// Delete key and adds one with Enter, in both languages.
     /// </summary>
     /// <param name="language">The UI language.</param>
     /// <param name="heading">The expected section heading.</param>
-    /// <param name="count">The expected count text.</param>
+    /// <param name="address">The expected mark of an address rule.</param>
+    /// <param name="domain">The expected mark of a domain rule.</param>
     /// <param name="add">The expected caption of the add button.</param>
-    /// <param name="remove">The expected caption of the remove button.</param>
+    /// <param name="remove">The expected name of the remove buttons.</param>
     [Theory]
-    [InlineData("zh-Hans", "远程图片", "显示 3 / 共 3 条", "添加", "删除所选")]
-    [InlineData("en", "Remote images", "Showing 3 of 3", "Add", "Remove selected")]
-    public async Task SettingsWindow_RemoteImageRules_ShowsListCountAndButtons(
+    [InlineData("zh-Hans", "远程图片", "地址", "域名", "添加", "删除")]
+    [InlineData("en", "Remote images", "Address", "Domain", "Add", "Remove")]
+    public async Task SettingsWindow_RemoteImageRules_ShowsRowsAndRemovesThem(
         string language,
         string heading,
-        string count,
+        string address,
+        string domain,
         string add,
         string remove)
     {
@@ -932,12 +936,67 @@ public class UiSmokeTests
 
                 var list = window.GetVisualDescendants().OfType<ListBox>().Single();
                 list.ItemCount.Should().Be(3);
-                var texts = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
-                texts.Should().Contain(heading);
-                texts.Should().Contain(count);
-                var buttons = window.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).ToList();
-                buttons.Should().Contain([add, remove]);
+                var texts = window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible)
+                    .Select(t => t.Text).ToList();
+                texts.Should().Contain([heading, "shop.com", address, domain]);
+                var buttons = window.GetVisualDescendants().OfType<Button>().ToList();
+                buttons.Select(b => b.Content as string).Should().Contain(add);
+                var removeButtons = buttons.Where(b => AutomationProperties.GetName(b) == remove).ToList();
+                removeButtons.Should().HaveCount(3);
+
+                removeButtons[0].Command!.Execute(removeButtons[0].CommandParameter);
+                Dispatcher.UIThread.RunJobs();
+
+                rules.RemoveCalls.Should().Equal("news@other.org");
+                list.ItemCount.Should().Be(2);
+
+                list.SelectedIndex = 0;
+                list.ContainerFromIndex(0)!.Focus();
+                window.KeyPressQwerty(PhysicalKey.Delete, RawInputModifiers.None);
+                Dispatcher.UIThread.RunJobs();
+
+                rules.RemoveCalls.Should().Equal("news@other.org", "promo.example.net");
+
+                var input = window.GetVisualDescendants().OfType<TextBox>()
+                    .Single(t => t.IsEffectivelyVisible && t.Text is not { Length: > 0 } && t.InnerLeftContent is null);
+                input.Focus();
+                viewModel.NewRemoteImageRule = "new.example.com";
+                Dispatcher.UIThread.RunJobs();
+                window.KeyPressQwerty(PhysicalKey.Enter, RawInputModifiers.None);
+                Dispatcher.UIThread.RunJobs();
+
+                rules.Rules.Should().Contain("new.example.com");
                 window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the privacy page says that nothing is saved instead of showing an empty list.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    /// <param name="empty">The expected empty text.</param>
+    [Theory]
+    [InlineData("zh-Hans", "还没有允许的发件人。")]
+    [InlineData("en", "No senders are allowed yet.")]
+    public async Task SettingsWindow_NoRemoteImageRules_ShowsEmptyState(string language, string empty)
+    {
+        await DispatchAsync(
+            () =>
+            {
+                LocalizationManager.Instance.SetPreference(language);
+                var viewModel = new SettingsViewModel(
+                    new FakeAppSettings(), LocalizationManager.Instance, new FakeRemoteImageRules());
+                var window = new SettingsWindow { DataContext = viewModel };
+                Render(window, $"settings-remote-images-empty-{language}", language);
+                SelectSettingsPage(window, 2, $"settings-remote-images-empty-{language}");
+
+                window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible)
+                    .Select(t => t.Text).Should().Contain(empty);
+                window.GetVisualDescendants().OfType<ListBox>().Should().OnlyContain(l => !l.IsEffectivelyVisible);
+                window.GetVisualDescendants().OfType<TextBox>().Count(t => t.IsEffectivelyVisible).Should().Be(1);
+                window.Close();
+                return Task.CompletedTask;
             },
             TestContext.Current.CancellationToken);
     }

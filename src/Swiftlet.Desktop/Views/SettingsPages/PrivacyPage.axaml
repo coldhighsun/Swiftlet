@@ -11,14 +11,61 @@
         <StackPanel Spacing="8">
           <TextBlock Classes="section" Text="{loc:Loc Settings_RemoteImages}" />
           <TextBlock Classes="caption" Text="{loc:Loc Settings_RemoteImagesHint}" TextWrapping="Wrap" />
-          <TextBox Text="{Binding RemoteImageFilter}" PlaceholderText="{loc:Loc Settings_RemoteImagesFilter}" />
-          <ListBox ItemsSource="{Binding RemoteImageRules}" SelectedItem="{Binding SelectedRemoteImageRule}" MaxHeight="240" MinHeight="80" />
-          <TextBlock Classes="caption" Text="{Binding RemoteImageRuleCountText}" />
-          <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-            <TextBox Text="{Binding NewRemoteImageRule}" PlaceholderText="{loc:Loc Settings_RemoteImagesPlaceholder}" />
-            <Button Grid.Column="1" Content="{loc:Loc Settings_RemoteImagesAdd}" Command="{Binding AddRemoteImageRuleCommand}" />
-            <Button Grid.Column="2" Content="{loc:Loc Settings_RemoteImagesRemove}" Command="{Binding RemoveRemoteImageRuleCommand}" />
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,4,0,0">
+            <TextBox Text="{Binding NewRemoteImageRule}" PlaceholderText="{loc:Loc Settings_RemoteImagesPlaceholder}"
+                     AutomationProperties.Name="{loc:Loc Settings_RemoteImagesPlaceholder}">
+              <TextBox.KeyBindings>
+                <KeyBinding Gesture="Enter" Command="{Binding AddRemoteImageRuleCommand}" />
+              </TextBox.KeyBindings>
+            </TextBox>
+            <Button Grid.Column="1" Classes="accent" MinWidth="72" HorizontalContentAlignment="Center"
+                    VerticalAlignment="Stretch" VerticalContentAlignment="Center"
+                    Content="{loc:Loc Settings_RemoteImagesAdd}" Command="{Binding AddRemoteImageRuleCommand}" />
           </Grid>
+          <TextBlock Classes="caption error" Text="{Binding RemoteImageError}" TextWrapping="Wrap"
+                     IsVisible="{Binding RemoteImageError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <TextBox Text="{Binding RemoteImageFilter}" PlaceholderText="{loc:Loc Settings_RemoteImagesFilter}"
+                   AutomationProperties.Name="{loc:Loc Settings_RemoteImagesFilter}" Margin="0,8,0,0"
+                   IsVisible="{Binding ShowRemoteImageSearch}">
+            <TextBox.InnerLeftContent>
+              <PathIcon Data="{StaticResource Icon.Search}" Width="14" Height="14" Margin="8,0,0,0"
+                        Foreground="{DynamicResource Brush.TextSecondary}" />
+            </TextBox.InnerLeftContent>
+          </TextBox>
+          <Border Classes="rules" IsVisible="{Binding HasVisibleRemoteImageRules}">
+            <!-- The negative margin hides the separator under the last row behind the frame. -->
+            <ListBox Classes="rules" ItemsSource="{Binding RemoteImageRules}"
+                     SelectedItem="{Binding SelectedRemoteImageRule}" MaxHeight="264" Margin="0,0,0,-1"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+              <ListBox.KeyBindings>
+                <KeyBinding Gesture="Delete" Command="{Binding RemoveRemoteImageRuleCommand}"
+                            CommandParameter="{Binding SelectedRemoteImageRule}" />
+              </ListBox.KeyBindings>
+              <ListBox.ItemTemplate>
+                <DataTemplate DataType="settings:RemoteImageRuleViewModel">
+                  <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                    <TextBlock Text="{Binding Rule}" ToolTip.Tip="{Binding Rule}" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                    <Border Grid.Column="1" Classes="tag" VerticalAlignment="Center">
+                      <TextBlock Classes="caption" Text="{Binding KindText}" />
+                    </Border>
+                    <Button Grid.Column="2" Classes="icon" CommandParameter="{Binding}"
+                            Command="{Binding $parent[UserControl].((settings:SettingsViewModel)DataContext).RemoveRemoteImageRuleCommand}"
+                            ToolTip.Tip="{loc:Loc Settings_RemoteImagesRemove}"
+                            AutomationProperties.Name="{loc:Loc Settings_RemoteImagesRemove}">
+                      <PathIcon Data="{StaticResource Icon.Delete}" Width="16" Height="16" />
+                    </Button>
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </Border>
+          <Border Classes="rules" Padding="16,24" IsVisible="{Binding !HasVisibleRemoteImageRules}">
+            <TextBlock Classes="secondary" Text="{Binding RemoteImageEmptyText}" TextWrapping="Wrap"
+                       TextAlignment="Center" />
+          </Border>
+          <TextBlock Classes="caption" Text="{Binding RemoteImageRuleCountText}"
+                     IsVisible="{Binding IsRemoteImageListTruncated}" />
         </StackPanel>
       </Border>
       <Border Classes="card" IsVisible="{Binding DatabaseStatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">

@@ -141,6 +141,37 @@
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}" />
   </Style>
 
+  <!-- Saved rules: a framed list of rows with separators, and the small mark naming the kind of a rule. -->
+  <Style Selector="Border.rules">
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+  <Style Selector="ListBox.rules">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ListBox.rules ListBoxItem">
+    <Setter Property="Padding" Value="12,4,4,4" />
+  </Style>
+  <Style Selector="ListBox.rules ListBoxItem /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+    <Setter Property="CornerRadius" Value="0" />
+  </Style>
+  <Style Selector="ListBox.rules ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Brush.AccentSubtle}" />
+  </Style>
+  <Style Selector="ListBox.rules ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Brush.AccentSubtle}" />
+  </Style>
+  <Style Selector="Border.tag">
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="8,0" />
+  </Style>
+
   <!-- Page navigation: a sidebar of entries next to the selected page. The template is replaced so the sidebar can have
        its own background. -->
   <Style Selector="TabControl.nav">

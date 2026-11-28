@@ -203,7 +203,11 @@
   <data name="Settings_RemoteImagesCount" xml:space="preserve"><value>显示 {0} / 共 {1} 条</value></data>
   <data name="Settings_RemoteImagesPlaceholder" xml:space="preserve"><value>地址或域名，例如 news@shop.com 或 shop.com</value></data>
   <data name="Settings_RemoteImagesAdd" xml:space="preserve"><value>添加</value></data>
-  <data name="Settings_RemoteImagesRemove" xml:space="preserve"><value>删除所选</value></data>
+  <data name="Settings_RemoteImagesRemove" xml:space="preserve"><value>删除</value></data>
+  <data name="Settings_RemoteImagesKindAddress" xml:space="preserve"><value>地址</value></data>
+  <data name="Settings_RemoteImagesKindDomain" xml:space="preserve"><value>域名</value></data>
+  <data name="Settings_RemoteImagesEmpty" xml:space="preserve"><value>还没有允许的发件人。</value></data>
+  <data name="Settings_RemoteImagesNoMatch" xml:space="preserve"><value>没有匹配的规则。</value></data>
   <data name="Settings_RemoteImagesInvalid" xml:space="preserve"><value>请输入有效的发件人地址或域名，例如 news@shop.com 或 shop.com。</value></data>
   <data name="Startup_Title" xml:space="preserve"><value>正在准备邮件数据</value></data>
   <data name="Startup_Converting" xml:space="preserve"><value>正在加密本地邮件数据（第 {0} / 共 {1} 个）</value></data>
