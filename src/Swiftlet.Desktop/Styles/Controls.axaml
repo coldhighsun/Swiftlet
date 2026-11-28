@@ -106,6 +106,10 @@
   <Style Selector="CheckBox">
     <Setter Property="CornerRadius" Value="4" />
   </Style>
+  <!-- The accents of the dark theme are light, where the white check mark of the base theme is hard to see. -->
+  <Style Selector="CheckBox:checked:not(:disabled) /template/ Path#CheckGlyph">
+    <Setter Property="Fill" Value="{DynamicResource Brush.OnAccent}" />
+  </Style>
 
   <Style Selector="Button.icon">
     <Setter Property="Background" Value="Transparent" />
