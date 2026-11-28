@@ -69,12 +69,15 @@
           <Border Classes="card">
             <StackPanel Spacing="8">
               <TextBlock Classes="section" Text="{loc:Loc AccountPage_SyncStatus}" />
-              <TextBlock Text="{Binding SyncSummary}" TextWrapping="Wrap" />
+              <!-- The earlier success stands beside the summary: on a line of its own it moved the page at every sync. -->
+              <WrapPanel x:Name="SyncSummaryRow" ItemSpacing="12">
+                <TextBlock Text="{Binding SyncSummary}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                <TextBlock Classes="caption" Text="{Binding LastSuccessText}" IsVisible="{Binding HasLastSuccess}"
+                           TextWrapping="Wrap" VerticalAlignment="Center" />
+              </WrapPanel>
               <SelectableTextBlock Foreground="{DynamicResource Brush.Danger}" Text="{Binding SyncError}"
                                    IsVisible="{Binding HasSyncError}" TextWrapping="Wrap" />
               <TextBlock Classes="error" Text="{Binding FailedFoldersText}" IsVisible="{Binding HasFailedFolders}"
-                         TextWrapping="Wrap" />
-              <TextBlock Classes="caption" Text="{Binding LastSuccessText}" IsVisible="{Binding HasLastSuccess}"
                          TextWrapping="Wrap" />
             </StackPanel>
           </Border>
