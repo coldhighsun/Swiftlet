@@ -66,7 +66,9 @@ public sealed class AiClientFactoryTests : IDisposable
     }
 
     /// <summary>
-    /// Variables read by the SDK neither redirect the request nor add credentials.
+    /// Variables read by the SDK neither redirect the request nor add credentials. The custom headers variable has to be
+    /// removed, because the SDK caches it for the whole process: whether the headers reach this request would otherwise
+    /// depend on the order of the tests.
     /// </summary>
     /// <returns>A task that completes when the test finished.</returns>
     [Fact]
@@ -92,6 +94,7 @@ public sealed class AiClientFactoryTests : IDisposable
 
             await client.GetResponseAsync("hi", cancellationToken: TestContext.Current.CancellationToken);
 
+            Environment.GetEnvironmentVariable("ANTHROPIC_CUSTOM_HEADERS").Should().BeNull();
             var request = server.Requests.Should().ContainSingle().Subject;
             request.Headers["x-api-key"].Should().Be("key-1");
             string.Join('\n', request.Headers.Values).Should().NotContain("environment");
