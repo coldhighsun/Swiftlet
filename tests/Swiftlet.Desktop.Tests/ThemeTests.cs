@@ -180,7 +180,7 @@ public class ThemeTests
             {
                 using var stream = Avalonia.Platform.AssetLoader.Open(new Uri("avares://Swiftlet/Assets/swiftlet.ico"));
                 new WindowIcon(stream).Should().NotBeNull();
-                foreach (var window in (Window[])[new MainWindow(), new ComposeWindow(), new AddAccountWindow(), new SettingsWindow(), new LabelManagerWindow(), new StartupWindow()])
+                foreach (var window in (Window[])[new MainWindow(), new ComposeWindow(), new AddAccountWindow(), new SettingsWindow(), new LabelManagerWindow(), new StartupWindow(), new SplashWindow()])
                 {
                     window.Icon.Should().NotBeNull(window.GetType().Name);
                 }

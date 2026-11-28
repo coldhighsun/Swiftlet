@@ -209,6 +209,11 @@
   <data name="Settings_RemoteImagesEmpty" xml:space="preserve"><value>No senders are allowed yet.</value></data>
   <data name="Settings_RemoteImagesNoMatch" xml:space="preserve"><value>No rule matches your search.</value></data>
   <data name="Settings_RemoteImagesInvalid" xml:space="preserve"><value>Enter a valid sender address or domain, for example news@shop.com or shop.com.</value></data>
+  <data name="Splash_CheckingDatabase" xml:space="preserve"><value>Checking mail data…</value></data>
+  <data name="Splash_OpeningDatabase" xml:space="preserve"><value>Opening the mail database…</value></data>
+  <data name="Splash_OpeningAccount" xml:space="preserve"><value>Opening account databases ({0} of {1})…</value></data>
+  <data name="Splash_StartingServices" xml:space="preserve"><value>Starting background services…</value></data>
+  <data name="Splash_LoadingWindow" xml:space="preserve"><value>Loading the main window…</value></data>
   <data name="Startup_Title" xml:space="preserve"><value>Preparing mail data</value></data>
   <data name="Startup_Converting" xml:space="preserve"><value>Encrypting local mail data ({0} of {1})</value></data>
   <data name="Startup_NotEnoughSpace" xml:space="preserve"><value>There is not enough free disk space to encrypt the mail data.</value></data>

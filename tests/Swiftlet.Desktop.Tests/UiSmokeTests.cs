@@ -582,6 +582,38 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies the splash screen shows the application name, version and current step, and closes from code.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    /// <param name="step">The expected step text.</param>
+    [Theory]
+    [InlineData("en", "Opening account databases (2 of 4)…")]
+    [InlineData("zh-Hans", "正在打开账户数据库（2/4）…")]
+    public async Task SplashWindow_StepReported_ShowsVersionAndStep(string language, string step)
+    {
+        await DispatchAsync(
+            () =>
+            {
+                var localizer = language == "en" ? TestLocalizer.English() : TestLocalizer.Chinese();
+                var viewModel = new SplashViewModel(localizer, new FakeUiThread());
+                var window = new SplashWindow { DataContext = viewModel };
+                LocalizationManager.Instance.SetPreference(language);
+                viewModel.Report(new Swiftlet.Desktop.Hosting.StartupProgress(Swiftlet.Desktop.Hosting.StartupStage.OpeningAccount, 2, 4));
+
+                Render(window, $"splash-{language}", language);
+
+                window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text)
+                    .Should().Contain("Swiftlet").And.Contain(viewModel.Version).And.Contain(step);
+                var closed = false;
+                window.Closed += (_, _) => closed = true;
+                window.Close();
+                closed.Should().BeTrue();
+                return Task.CompletedTask;
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Verifies the reading pane shows its placeholder when nothing is selected.
     /// </summary>
     [Fact]
