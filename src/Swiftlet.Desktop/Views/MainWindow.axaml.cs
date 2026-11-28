@@ -48,6 +48,9 @@ public partial class MainWindow : Window
         Opened += OnOpenedAsync;
         Closed += OnClosed;
 
+        // Tunnelling runs before the list changes its selection, which is what the view model has to know in advance.
+        MessageList.AddHandler(PointerPressedEvent, OnMessagePressed, RoutingStrategies.Tunnel);
+
         _attachmentHover = new AttachmentHoverController(
             LoadAttachmentPreviewAsync,
             attachment => ((MainWindowViewModel)DataContext!).CreateAttachmentPreview(attachment),
@@ -117,6 +120,30 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Tells the view model how a message row was pressed: a right-click selects it without marking it read.
+    /// </summary>
+    /// <param name="sender">The message list.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OnMessagePressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel
+            || (e.Source as Visual)?.FindAncestorOfType<ListBoxItem>(includeSelf: true)?.DataContext is not MessageItemViewModel item)
+        {
+            return;
+        }
+
+        var point = e.GetCurrentPoint(this).Properties;
+        if (point.IsRightButtonPressed)
+        {
+            viewModel.BeginContextSelection(item);
+        }
+        else if (point.IsLeftButtonPressed && e.KeyModifiers == KeyModifiers.None)
+        {
+            viewModel.OpenClickedMessage(item);
+        }
+    }
+
+    /// <summary>
     /// Fills the "move to" and "add to contacts" submenus for the selection the context menu was opened on.
     /// </summary>
     /// <param name="sender">The event sender.</param>
@@ -127,6 +154,7 @@ public partial class MainWindow : Window
         viewModel?.RefreshMoveTargets();
         viewModel?.RefreshContactTargets();
         viewModel?.RefreshPriorityMenu();
+        viewModel?.RefreshReadMenu();
     }
 
     /// <summary>

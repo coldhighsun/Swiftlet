@@ -2049,6 +2049,62 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies a right-click selects a message without marking it read, a left click then reads it, and the menu entry
+    /// marks it unread again.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_MessageContextMenu_MarksMessageUnread()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference("en");
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Localizer.SetPreference("en");
+                await scenario.StartAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-unread-menu", "en");
+                var list = window.GetVisualDescendants().OfType<ListBox>().Single();
+
+                var row = list.GetVisualDescendants().OfType<ListBoxItem>().First();
+                var rowPoint = row.TranslatePoint(new Point(10, 10), window)!.Value;
+                window.MouseDown(rowPoint, MouseButton.Right);
+                window.MouseUp(rowPoint, MouseButton.Right);
+                Dispatcher.UIThread.RunJobs();
+                await scenario.ViewModel.WhenIdleAsync();
+                var entry = list.ContextMenu!.Items.OfType<MenuItem>().Single(i => Equals(i.Header, "Mark as unread"));
+                var selected = scenario.ViewModel.SelectedMessage!;
+                selected.IsUnread.Should().BeTrue();
+                entry.IsEffectivelyEnabled.Should().BeFalse();
+                list.ContextMenu.Close();
+                Dispatcher.UIThread.RunJobs();
+
+                window.MouseDown(rowPoint, MouseButton.Left);
+                window.MouseUp(rowPoint, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+                await scenario.ViewModel.WhenIdleAsync();
+                selected.IsRead.Should().BeTrue();
+
+                window.MouseDown(rowPoint, MouseButton.Right);
+                window.MouseUp(rowPoint, MouseButton.Right);
+                Dispatcher.UIThread.RunJobs();
+                entry.IsEffectivelyEnabled.Should().BeTrue();
+                var point = entry.TranslatePoint(new Point(10, 10), window)!.Value;
+                window.MouseMove(point);
+                window.MouseDown(point, MouseButton.Left);
+                window.MouseUp(point, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+                await scenario.ViewModel.WhenIdleAsync();
+
+                scenario.Dispatcher.Sent<Swiftlet.Application.Messages.SetMessageReadCommand>()
+                    .Last().IsRead.Should().BeFalse();
+                scenario.ViewModel.SelectedMessage!.IsUnread.Should().BeTrue();
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Verifies folder nodes offer marking all as read while they have unread mail, and deleting all messages except for All Mail.
     /// </summary>
     [Fact]
