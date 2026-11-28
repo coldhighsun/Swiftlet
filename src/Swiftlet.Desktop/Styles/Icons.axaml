@@ -39,6 +39,8 @@
   <!-- Plus and copy, drawn for this application. -->
   <StreamGeometry x:Key="Icon.Add">F1 M9.5,3.5 H10.5 V9.5 H16.5 V10.5 H10.5 V16.5 H9.5 V10.5 H3.5 V9.5 H9.5 Z</StreamGeometry>
   <StreamGeometry x:Key="Icon.Copy">F0 M9,2 H15 C16.1,2 17,2.9 17,4 V12 C17,13.1 16.1,14 15,14 H9 C7.9,14 7,13.1 7,12 V4 C7,2.9 7.9,2 9,2 Z M9,3 C8.45,3 8,3.45 8,4 V12 C8,12.55 8.45,13 9,13 H15 C15.55,13 16,12.55 16,12 V4 C16,3.45 15.55,3 15,3 Z M4,6 C4,5.2 4.4,4.6 5,4.25 V14 C5,15.1 5.9,16 7,16 H14.75 C14.4,16.6 13.8,17 13,17 H7 C5.35,17 4,15.65 4,14 Z</StreamGeometry>
+  <!-- A dial with a needle, drawn for this application. -->
+  <StreamGeometry x:Key="Icon.Gauge">F0 M10,2 C14.42,2 18,5.58 18,10 C18,14.42 14.42,18 10,18 C5.58,18 2,14.42 2,10 C2,5.58 5.58,2 10,2 Z M10,3 C6.13,3 3,6.13 3,10 C3,13.87 6.13,17 10,17 C13.87,17 17,13.87 17,10 C17,6.13 13.87,3 10,3 Z M13.15,6.15 L13.85,6.85 L11.41,9.29 C11.47,9.5 11.5,9.74 11.5,10 C11.5,10.83 10.83,11.5 10,11.5 C9.17,11.5 8.5,10.83 8.5,10 C8.5,9.17 9.17,8.5 10,8.5 C10.26,8.5 10.5,8.53 10.71,8.59 Z</StreamGeometry>
   <!-- The Swiftlet logo, drawn for this application. -->
   <StreamGeometry x:Key="Icon.Logo">M2,5 C7,5 10.5,7 12,10 C13.5,7 17,5 22,5 C18.5,7 16,9.5 15,12.5 C14.3,14.4 13.5,15.5 13,16 L15,21 L12,18.5 L9,21 L11,16 C10.5,15.5 9.7,14.4 9,12.5 C8,9.5 5.5,7 2,5 Z</StreamGeometry>
 </ResourceDictionary>

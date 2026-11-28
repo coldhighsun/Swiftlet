@@ -577,6 +577,20 @@ internal sealed class FakeAppSettings : IAppSettings
     }
 
     /// <inheritdoc />
+    public bool UseHardwareRendering { get; set; } = true;
+
+    /// <inheritdoc />
+    public void SetUseHardwareRendering(bool value)
+    {
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+
+        UseHardwareRendering = value;
+    }
+
+    /// <inheritdoc />
     public string TrayUnreadStyle { get; set; } = Swiftlet.Desktop.Settings.TrayUnreadStyle.Dot;
 
     /// <inheritdoc />

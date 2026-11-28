@@ -1009,6 +1009,12 @@ public class UiSmokeTests
                 generalBoxes[2].IsChecked.Should().BeFalse("the hidden start is off by default");
                 window.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).Should().Contain(close);
 
+                SelectSettingsPage(window, 3, $"settings-performance-{language}");
+
+                var performanceBoxes = window.GetVisualDescendants().OfType<CheckBox>().ToList();
+                performanceBoxes.Select(b => b.IsChecked).Should().Equal(
+                    [true], "hardware rendering is on by default");
+
                 SelectSettingsPage(window, 1, $"settings-sync-{language}");
 
                 var boxes = window.GetVisualDescendants().OfType<CheckBox>().ToList();
@@ -1031,8 +1037,8 @@ public class UiSmokeTests
     /// <param name="pages">The expected names of the pages, separated by '|'.</param>
     /// <param name="openLogs">The expected caption of the log folder button.</param>
     [Theory]
-    [InlineData("zh-Hans", "通用|同步|隐私与安全|AI|关于", "打开日志目录")]
-    [InlineData("en", "General|Sync|Privacy & security|AI|About", "Open log folder")]
+    [InlineData("zh-Hans", "通用|同步|隐私与安全|性能|AI|关于", "打开日志目录")]
+    [InlineData("en", "General|Sync|Privacy & security|Performance|AI|About", "Open log folder")]
     public async Task SettingsWindow_AboutPage_ShowsVersionLinksAndFolders(string language, string pages, string openLogs)
     {
         await Session.Dispatch(
@@ -1056,14 +1062,14 @@ public class UiSmokeTests
                 items.Select(Avalonia.Automation.AutomationProperties.GetName).Should().Equal(pages.Split('|'));
                 items.Should().OnlyContain(i => i.IsEffectivelyVisible && i.Bounds.Width > 0);
 
-                SelectSettingsPage(window, 3, $"settings-ai-{language}");
+                SelectSettingsPage(window, 4, $"settings-ai-{language}");
 
                 window.GetVisualDescendants().OfType<ComboBox>().Where(c => c.IsEffectivelyVisible)
                     .Select(c => c.IsEditable).Should().Equal(false, true);
                 window.GetVisualDescendants().OfType<ComboBox>().Single(c => c.IsEditable && c.IsEffectivelyVisible)
                     .Text.Should().Be("claude-opus-5-5");
 
-                SelectSettingsPage(window, 4, $"settings-about-{language}");
+                SelectSettingsPage(window, 5, $"settings-about-{language}");
 
                 window.GetVisualDescendants().OfType<SelectableTextBlock>().Select(t => t.Text).Should().Contain(about.VersionText);
                 window.GetVisualDescendants().OfType<HyperlinkButton>().Select(l => l.NavigateUri).Should().Equal(
@@ -1100,7 +1106,7 @@ public class UiSmokeTests
                 var window = new SettingsWindow { DataContext = viewModel };
                 Render(window, $"settings-update-window-{language}", language);
 
-                SelectSettingsPage(window, 4, $"settings-about-update-{language}");
+                SelectSettingsPage(window, 5, $"settings-about-update-{language}");
 
                 window.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == show)
                     .IsEffectivelyVisible.Should().BeTrue();
@@ -1203,7 +1209,7 @@ public class UiSmokeTests
                 Render(window, "settings-no-about", "en");
 
                 window.GetVisualDescendants().OfType<TabItem>().Select(i => i.IsEffectivelyVisible)
-                    .Should().Equal(true, true, true, false, false);
+                    .Should().Equal(true, true, true, true, false, false);
                 window.Close();
                 return Task.CompletedTask;
             },
@@ -2473,7 +2479,7 @@ public class UiSmokeTests
                             new FakeAppSettings(), localizer, new FakeRemoteImageRules(), protection, about: about),
                     };
                     Render(settings, "dark-settings-general");
-                    foreach (var (index, page) in ((int, string)[])[(1, "sync"), (2, "privacy"), (3, "about")])
+                    foreach (var (index, page) in ((int, string)[])[(1, "sync"), (2, "privacy"), (3, "performance"), (5, "about")])
                     {
                         SelectSettingsPage(settings, index, $"dark-settings-{page}");
                     }

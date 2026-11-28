@@ -68,6 +68,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         CloseToTray = settings.CloseToTray;
         ShowNewMailNotifications = settings.ShowNewMailNotifications;
         StartMinimized = settings.StartMinimized;
+        UseHardwareRendering = settings.UseHardwareRendering;
         RefreshRemoteImageRules();
         _protection = protection;
         _themeApplier = themeApplier;
@@ -307,6 +308,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     public partial bool StartMinimized { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether the graphics card draws the application from the next start on.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool UseHardwareRendering { get; set; }
+
+    /// <summary>
     /// Gets or sets the localized error of the last failed save, or <see langword="null"/>.
     /// </summary>
     [ObservableProperty]
@@ -429,6 +436,30 @@ public sealed partial class SettingsViewModel : ObservableObject
             // The file could not be written; show it and put the checkbox back so it matches what is stored.
             ErrorText = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
             StartMinimized = _settings.StartMinimized;
+        }
+    }
+
+    /// <summary>
+    /// Saves the new value as soon as the checkbox changes.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    partial void OnUseHardwareRenderingChanged(bool value)
+    {
+        if (value == _settings.UseHardwareRendering)
+        {
+            return;
+        }
+
+        ErrorText = null;
+        try
+        {
+            _settings.SetUseHardwareRendering(value);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The file could not be written; show it and put the checkbox back so it matches what is stored.
+            ErrorText = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
+            UseHardwareRendering = _settings.UseHardwareRendering;
         }
     }
 
