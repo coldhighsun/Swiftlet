@@ -57,6 +57,9 @@ Type: files; Name: "{app}\Swiftlet.Desktop.dll"
 Type: files; Name: "{app}\Swiftlet.Desktop.deps.json"
 Type: files; Name: "{app}\Swiftlet.Desktop.runtimeconfig.json"
 Type: files; Name: "{app}\zh-Hans\Swiftlet.Desktop.resources.dll"
+; Native symbol files that earlier packages shipped.
+Type: files; Name: "{app}\libHarfBuzzSharp.pdb"
+Type: files; Name: "{app}\libSkiaSharp.pdb"
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion

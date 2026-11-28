@@ -27,4 +27,13 @@
     <PackageReference Include="Serilog.Extensions.Hosting" />
     <PackageReference Include="Serilog.Sinks.File" />
   </ItemGroup>
+  <!--
+    Some NuGet packages ship native symbol files (libSkiaSharp.pdb, libHarfBuzzSharp.pdb) that the app
+    does not need. Our own symbols are embedded (DebugType), so no .pdb belongs in a published package.
+  -->
+  <Target Name="RemoveSymbolFilesFromPublish" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.pdb'" />
+    </ItemGroup>
+  </Target>
 </Project>
