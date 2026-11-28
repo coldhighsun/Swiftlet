@@ -1449,6 +1449,7 @@ public class UiSmokeTests
                     .Select(c => c.SelectedItem).Should().Equal(
                         selector.SelectedOption,
                         viewModel.SelectedTheme,
+                        viewModel.SelectedColorScheme,
                         viewModel.SelectedContactNameOrder,
                         viewModel.SelectedTrayUnreadStyle);
                 var generalBoxes = window.GetVisualDescendants().OfType<CheckBox>().ToList();
@@ -2324,6 +2325,66 @@ public class UiSmokeTests
                 }
 
                 window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the main window and the settings picker render in every color scheme and both themes.
+    /// </summary>
+    /// <param name="scheme">The color scheme.</param>
+    /// <param name="dark">Whether the dark theme is used.</param>
+    [Theory]
+    [InlineData("ocean", false)]
+    [InlineData("indigo", false)]
+    [InlineData("indigo", true)]
+    [InlineData("forest", false)]
+    [InlineData("forest", true)]
+    [InlineData("sand", false)]
+    [InlineData("sand", true)]
+    [InlineData("graphite", false)]
+    [InlineData("graphite", true)]
+    public async Task Windows_ColorScheme_Render(string scheme, bool dark)
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference("zh-Hans");
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Localizer.SetPreference("zh-Hans");
+                await scenario.StartAsync();
+
+                // Nothing is awaited from here on, so no other test sees the changed colors.
+                var application = Avalonia.Application.Current!;
+                var applier = new Swiftlet.Desktop.Services.AvaloniaThemeApplier();
+                application.RequestedThemeVariant = dark ? Avalonia.Styling.ThemeVariant.Dark : Avalonia.Styling.ThemeVariant.Light;
+                try
+                {
+                    applier.ApplyColorScheme(scheme);
+                    var suffix = $"{scheme}-{(dark ? "dark" : "light")}";
+                    var window = new MainWindow { DataContext = scenario.ViewModel };
+                    window.Show();
+                    Snapshot(window, $"scheme-main-{suffix}");
+
+                    var settings = new SettingsViewModel(
+                        new FakeAppSettings { ColorScheme = scheme }, LocalizationManager.Instance, new FakeRemoteImageRules());
+                    var dialog = new SettingsWindow { DataContext = settings };
+                    dialog.Show();
+                    Dispatcher.UIThread.RunJobs();
+                    var picker = dialog.GetVisualDescendants().OfType<ComboBox>()
+                        .Single(c => c.ItemsSource == settings.ColorSchemeOptions);
+                    picker.SelectedItem.Should().BeSameAs(settings.SelectedColorScheme);
+                    Snapshot(dialog, $"scheme-settings-{suffix}");
+
+                    settings.Detach();
+                    dialog.Close();
+                    window.Close();
+                }
+                finally
+                {
+                    applier.ApplyColorScheme("ocean");
+                    application.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Default;
+                }
             },
             TestContext.Current.CancellationToken);
     }

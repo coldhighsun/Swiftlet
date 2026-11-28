@@ -1,0 +1,38 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- The indigo color scheme. It lies over Colors.axaml and defines the same keys. -->
+  <ResourceDictionary.ThemeDictionaries>
+    <ResourceDictionary x:Key="Light">
+      <SolidColorBrush x:Key="Brush.Accent">#4655B5</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.AccentHover">#3A489E</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.AccentText">#3A489E</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.OnAccent">#FFFFFF</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.AccentSubtle">#E8EAF8</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.WindowBg">#F7F7FB</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.SidebarBg">#EFF0F7</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.Surface">#FFFFFF</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.Border">#E0E2EC</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.TextPrimary">#1A1D2E</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.TextSecondary">#585D73</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.Danger">#C0392B</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.Star">#D98E04</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.WarningBg">#FFF4D6</SolidColorBrush>
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="Dark">
+      <SolidColorBrush x:Key="Brush.Accent">#97A6F5</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.AccentHover">#AEBAF8</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.AccentText">#97A6F5</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.OnAccent">#10153A</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.AccentSubtle">#262B4A</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.WindowBg">#14151D</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.SidebarBg">#191B25</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.Surface">#1F222E</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.Border">#303446</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.TextPrimary">#E8E9F3</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.TextSecondary">#A3A8BE</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.Danger">#FF7A6B</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.Star">#F2B33D</SolidColorBrush>
+      <SolidColorBrush x:Key="Brush.WarningBg">#3A2F12</SolidColorBrush>
+    </ResourceDictionary>
+  </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

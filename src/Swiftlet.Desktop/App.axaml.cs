@@ -67,7 +67,9 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
             // The saved theme is applied before the first window, so nothing flashes in the other one.
             if (services.GetService<IAppSettings>() is { } settings)
             {
-                services.GetService<IThemeApplier>()?.Apply(settings.Theme);
+                var theme = services.GetService<IThemeApplier>();
+                theme?.Apply(settings.Theme);
+                theme?.ApplyColorScheme(settings.ColorScheme);
                 Motion.Apply(this, settings.EnableAnimations);
 
                 // The settings window changes the choice on the UI thread, so it applies at once.

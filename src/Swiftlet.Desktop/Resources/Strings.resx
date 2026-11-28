@@ -256,6 +256,12 @@
   <data name="Settings_ThemeSystem" xml:space="preserve"><value>Follow system</value></data>
   <data name="Settings_ThemeLight" xml:space="preserve"><value>Light</value></data>
   <data name="Settings_ThemeDark" xml:space="preserve"><value>Dark</value></data>
+  <data name="Settings_ColorScheme" xml:space="preserve"><value>Color scheme</value></data>
+  <data name="Settings_ColorSchemeOcean" xml:space="preserve"><value>Ocean</value></data>
+  <data name="Settings_ColorSchemeIndigo" xml:space="preserve"><value>Indigo</value></data>
+  <data name="Settings_ColorSchemeForest" xml:space="preserve"><value>Forest</value></data>
+  <data name="Settings_ColorSchemeSand" xml:space="preserve"><value>Sand</value></data>
+  <data name="Settings_ColorSchemeGraphite" xml:space="preserve"><value>Graphite</value></data>
   <data name="Settings_SectionGeneral" xml:space="preserve"><value>General</value></data>
   <data name="Settings_SectionSync" xml:space="preserve"><value>Sync</value></data>
   <data name="Settings_SectionData" xml:space="preserve"><value>Data security</value></data>

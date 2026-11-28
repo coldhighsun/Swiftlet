@@ -138,6 +138,17 @@ public interface IAppSettings : ISyncSettings
     void SetTheme(string value);
 
     /// <summary>
+    /// Gets the saved color scheme, one of the <see cref="Settings.ColorScheme"/> values.
+    /// </summary>
+    string ColorScheme { get; }
+
+    /// <summary>
+    /// Changes the color scheme and saves the choice.
+    /// </summary>
+    /// <param name="value">One of the <see cref="Settings.ColorScheme"/> values.</param>
+    void SetColorScheme(string value);
+
+    /// <summary>
     /// Gets where the main window was last, or <see langword="null"/> when nothing was saved.
     /// </summary>
     WindowPlacement? MainWindowPlacement { get; }
@@ -245,6 +256,11 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
     private volatile string _theme;
 
     /// <summary>
+    /// The in-memory color scheme.
+    /// </summary>
+    private volatile string _colorScheme;
+
+    /// <summary>
     /// The in-memory tray icon style.
     /// </summary>
     private volatile string _trayUnreadStyle;
@@ -293,6 +309,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
         _enableAnimations = file.EnableAnimations ?? true;
         _theme = ThemePreference.Normalize(
             file.Theme is { ValueKind: JsonValueKind.String } theme ? theme.GetString() : null);
+        _colorScheme = Settings.ColorScheme.Normalize(
+            file.ColorScheme is { ValueKind: JsonValueKind.String } scheme ? scheme.GetString() : null);
         _trayUnreadStyle = Settings.TrayUnreadStyle.Normalize(
             file.TrayUnreadStyle is { ValueKind: JsonValueKind.String } style ? style.GetString() : null);
         _contactNameOrder = Settings.ContactNameOrder.Normalize(
@@ -322,6 +340,7 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
     /// <param name="UseHardwareRendering">Whether the graphics card may draw the application.</param>
     /// <param name="ReleaseWebViewWhenHidden">Whether the web view is released while the main window is hidden.</param>
     /// <param name="EnableAnimations">Whether the user interface is animated.</param>
+    /// <param name="ColorScheme">The color scheme; raw JSON for the same reason as the theme.</param>
     private sealed record SettingsFile(
         string? Language,
         bool? SyncServerDeletions,
@@ -338,7 +357,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
         JsonElement? Ai = null,
         bool? UseHardwareRendering = null,
         bool? ReleaseWebViewWhenHidden = null,
-        bool? EnableAnimations = null);
+        bool? EnableAnimations = null,
+        JsonElement? ColorScheme = null);
 
     /// <inheritdoc />
     public bool RemoveServerDeletedMessages => _removeServerDeletedMessages;
@@ -348,6 +368,9 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
 
     /// <inheritdoc />
     public string Theme => _theme;
+
+    /// <inheritdoc />
+    public string ColorScheme => _colorScheme;
 
     /// <inheritdoc />
     public bool CloseToTray => _closeToTray;
@@ -595,6 +618,17 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
         }
     }
 
+    /// <inheritdoc />
+    public void SetColorScheme(string value)
+    {
+        var scheme = Settings.ColorScheme.Normalize(value);
+        lock (_gate)
+        {
+            Write(Snapshot() with { ColorScheme = JsonSerializer.SerializeToElement(scheme) });
+            _colorScheme = scheme;
+        }
+    }
+
     /// <summary>
     /// Builds the file content from the values in memory; call it while holding <see cref="_gate"/>.
     /// </summary>
@@ -617,7 +651,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
             JsonSerializer.SerializeToElement(_ai, AiOptions),
             _useHardwareRendering,
             _releaseWebViewWhenHidden,
-            _enableAnimations);
+            _enableAnimations,
+            JsonSerializer.SerializeToElement(_colorScheme));
     }
 
     /// <summary>

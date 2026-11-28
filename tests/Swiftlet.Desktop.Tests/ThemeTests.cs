@@ -1,10 +1,13 @@
 using AwesomeAssertions;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
+using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Swiftlet.Desktop.Services;
+using Swiftlet.Desktop.Settings;
 using Swiftlet.Desktop.Views;
 
 namespace Swiftlet.Desktop.Tests;
@@ -40,21 +43,31 @@ public class ThemeTests
     ];
 
     /// <summary>
-    /// Verifies both theme variants define every token.
+    /// Gets every color scheme the user can choose.
     /// </summary>
-    [Fact]
-    public async Task Colors_EveryToken_IsDefinedForBothThemes()
+    public static TheoryData<string> Schemes => new(ColorScheme.All);
+
+    /// <summary>
+    /// Verifies both theme variants of every color scheme define every token.
+    /// </summary>
+    /// <param name="scheme">The color scheme.</param>
+    [Theory]
+    [MemberData(nameof(Schemes))]
+    public async Task Colors_EveryToken_IsDefinedForBothThemes(string scheme)
     {
         await UiSmokeTests.Session.Dispatch(
             () =>
             {
+                // The dictionary itself is inspected: a token missing from a scheme would silently fall back to the default.
+                var dictionary = (ResourceDictionary)AvaloniaXamlLoader.Load(
+                    AvaloniaThemeApplier.DictionaryUri(scheme) ?? new Uri("avares://Swiftlet/Styles/Colors.axaml"));
                 foreach (var variant in (ThemeVariant[])[ThemeVariant.Light, ThemeVariant.Dark])
                 {
+                    var colors = (ResourceDictionary)dictionary.ThemeDictionaries[variant];
                     foreach (var token in Tokens)
                     {
-                        Avalonia.Application.Current!.TryGetResource(token, variant, out var value)
-                            .Should().BeTrue($"{token} must exist in {variant}");
-                        value.Should().BeAssignableTo<ISolidColorBrush>($"{token} in {variant}");
+                        colors.TryGetResource(token, variant, out var value).Should().BeTrue($"{token} must exist in {scheme} {variant}");
+                        value.Should().BeAssignableTo<ISolidColorBrush>($"{token} in {scheme} {variant}");
                     }
                 }
             },
@@ -62,29 +75,99 @@ public class ThemeTests
     }
 
     /// <summary>
-    /// Verifies every pair of text and background used by the design stays readable in both themes.
+    /// Verifies every pair of text and background used by the design stays readable in every color scheme and theme.
     /// </summary>
-    [Fact]
-    public async Task Colors_TextOnBackgrounds_MeetContrast()
+    /// <param name="scheme">The color scheme.</param>
+    [Theory]
+    [MemberData(nameof(Schemes))]
+    public async Task Colors_TextOnBackgrounds_MeetContrast(string scheme)
+    {
+        await UiSmokeTests.Session.Dispatch(
+            () => WithScheme(
+                scheme,
+                () =>
+                {
+                    string[] texts = ["Brush.TextPrimary", "Brush.TextSecondary", "Brush.AccentText"];
+                    string[] backgrounds = ["Brush.WindowBg", "Brush.SidebarBg", "Brush.Surface", "Brush.AccentSubtle"];
+                    var pairs = texts.SelectMany(t => backgrounds.Select(b => (Text: t, Background: b))).ToList();
+                    pairs.Add(("Brush.OnAccent", "Brush.Accent"));
+                    pairs.Add(("Brush.OnAccent", "Brush.AccentHover"));
+                    pairs.Add(("Brush.Danger", "Brush.Surface"));
+                    pairs.Add(("Brush.TextPrimary", "Brush.WarningBg"));
+
+                    foreach (var variant in (ThemeVariant[])[ThemeVariant.Light, ThemeVariant.Dark])
+                    {
+                        foreach (var (text, background) in pairs)
+                        {
+                            Contrast(Color(text, variant), Color(background, variant))
+                                .Should().BeGreaterThanOrEqualTo(MinimumContrast, $"{text} on {background} in {scheme} {variant}");
+                        }
+                    }
+                }),
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the color shown beside a scheme in the picker is the accent of that scheme.
+    /// </summary>
+    /// <param name="scheme">The color scheme.</param>
+    [Theory]
+    [MemberData(nameof(Schemes))]
+    public async Task ColorScheme_Swatch_IsTheLightAccent(string scheme)
+    {
+        await UiSmokeTests.Session.Dispatch(
+            () => WithScheme(
+                scheme,
+                () => Avalonia.Media.Color.Parse(ColorScheme.Swatch(scheme)).Should().Be(Color("Brush.Accent", ThemeVariant.Light))),
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies a chosen color scheme recolors open windows, the controls of the base theme included, and the default
+    /// scheme brings the original colors back.
+    /// </summary>
+    /// <param name="dark">Whether the dark theme is used.</param>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ThemeApplier_ColorScheme_RecolorsOpenWindows(bool dark)
     {
         await UiSmokeTests.Session.Dispatch(
             () =>
             {
-                string[] texts = ["Brush.TextPrimary", "Brush.TextSecondary", "Brush.AccentText"];
-                string[] backgrounds = ["Brush.WindowBg", "Brush.SidebarBg", "Brush.Surface", "Brush.AccentSubtle"];
-                var pairs = texts.SelectMany(t => backgrounds.Select(b => (Text: t, Background: b))).ToList();
-                pairs.Add(("Brush.OnAccent", "Brush.Accent"));
-                pairs.Add(("Brush.OnAccent", "Brush.AccentHover"));
-                pairs.Add(("Brush.Danger", "Brush.Surface"));
-                pairs.Add(("Brush.TextPrimary", "Brush.WarningBg"));
+                var variant = dark ? ThemeVariant.Dark : ThemeVariant.Light;
+                var button = new Button { Content = "Send", Classes = { "accent" } };
+                var box = new CheckBox { Content = "x", IsChecked = true };
+                var window = new Window { Content = new StackPanel { Children = { button, box } }, RequestedThemeVariant = variant };
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+                var applier = new AvaloniaThemeApplier();
 
-                foreach (var variant in (ThemeVariant[])[ThemeVariant.Light, ThemeVariant.Dark])
+                void Check(string accent)
                 {
-                    foreach (var (text, background) in pairs)
-                    {
-                        Contrast(Color(text, variant), Color(background, variant))
-                            .Should().BeGreaterThanOrEqualTo(MinimumContrast, $"{text} on {background} in {variant}");
-                    }
+                    Dispatcher.UIThread.RunJobs();
+                    var expected = Avalonia.Media.Color.Parse(accent);
+                    Color("Brush.Accent", variant).Should().Be(expected);
+                    button.GetVisualDescendants().OfType<ContentPresenter>().First().Background
+                        .Should().BeAssignableTo<ISolidColorBrush>().Which.Color.Should().Be(expected);
+                    box.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "NormalRectangle").Background
+                        .Should().BeAssignableTo<ISolidColorBrush>().Which.Color.Should().Be(expected);
+                }
+
+                try
+                {
+                    Check(dark ? "#4FB8D4" : "#0E7C9B");
+                    applier.ApplyColorScheme(ColorScheme.Indigo);
+                    Check(dark ? "#97A6F5" : "#4655B5");
+                    applier.ApplyColorScheme(ColorScheme.Sand);
+                    Check(dark ? "#E8A06A" : "#A4541F");
+                    applier.ApplyColorScheme(ColorScheme.Ocean);
+                    Check(dark ? "#4FB8D4" : "#0E7C9B");
+                }
+                finally
+                {
+                    applier.ApplyColorScheme(ColorScheme.Ocean);
+                    window.Close();
                 }
             },
             TestContext.Current.CancellationToken);
@@ -278,6 +361,25 @@ public class ThemeTests
     private static string SourceFile([System.Runtime.CompilerServices.CallerFilePath] string path = "")
     {
         return path;
+    }
+
+    /// <summary>
+    /// Runs a check with a color scheme applied and restores the default one afterwards.
+    /// </summary>
+    /// <param name="scheme">The color scheme.</param>
+    /// <param name="check">The check.</param>
+    private static void WithScheme(string scheme, Action check)
+    {
+        var applier = new AvaloniaThemeApplier();
+        applier.ApplyColorScheme(scheme);
+        try
+        {
+            check();
+        }
+        finally
+        {
+            applier.ApplyColorScheme(ColorScheme.Ocean);
+        }
     }
 
     /// <summary>

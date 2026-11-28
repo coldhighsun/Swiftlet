@@ -864,6 +864,104 @@ public class SettingsViewModelTests
     }
 
     /// <summary>
+    /// Verifies a settings file without a color scheme uses the default one.
+    /// </summary>
+    [Fact]
+    public void AppSettings_ColorSchemeMissing_IsOcean()
+    {
+        WithSettingsFile(null, path => new AppSettings(path).ColorScheme.Should().Be(ColorScheme.Ocean));
+    }
+
+    /// <summary>
+    /// Verifies a saved color scheme survives a restart and the saving of other settings.
+    /// </summary>
+    [Fact]
+    public void AppSettings_ColorSchemeSaved_SurvivesOtherSavesAndReload()
+    {
+        WithSettingsFile(null, path =>
+        {
+            var settings = new AppSettings(path);
+            settings.SetColorScheme(ColorScheme.Forest);
+
+            settings.Save("en");
+            settings.SetTheme(ThemePreference.Dark);
+
+            new AppSettings(path).ColorScheme.Should().Be(ColorScheme.Forest);
+        });
+    }
+
+    /// <summary>
+    /// Verifies an unknown or wrongly typed color scheme uses the default one and keeps the other settings.
+    /// </summary>
+    /// <param name="json">The settings file content.</param>
+    [Theory]
+    [InlineData("{\"language\":\"en\",\"colorScheme\":\"neon\"}")]
+    [InlineData("{\"language\":\"en\",\"colorScheme\":5}")]
+    [InlineData("{\"language\":\"en\",\"colorScheme\":{}}")]
+    public void AppSettings_ColorSchemeUnusable_IsOceanAndKeepsOtherSettings(string json)
+    {
+        WithSettingsFile(json, path =>
+        {
+            var settings = new AppSettings(path);
+
+            settings.ColorScheme.Should().Be(ColorScheme.Ocean);
+            settings.Load().Should().Be("en");
+        });
+    }
+
+    /// <summary>
+    /// Verifies the view model offers every scheme, starts from the stored one and saves and applies a new choice.
+    /// </summary>
+    [Fact]
+    public void SelectedColorScheme_Changed_SavesAndApplies()
+    {
+        var settings = new FakeAppSettings { ColorScheme = ColorScheme.Sand };
+        var applier = new FakeThemeApplier();
+        var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules(), themeApplier: applier);
+        viewModel.ColorSchemeOptions.Select(o => o.Code).Should().Equal(ColorScheme.All);
+        viewModel.ColorSchemeOptions.Select(o => o.DisplayName).Should().Equal("Ocean", "Indigo", "Forest", "Sand", "Graphite");
+        viewModel.SelectedColorScheme.Code.Should().Be(ColorScheme.Sand);
+        applier.AppliedSchemes.Should().BeEmpty();
+
+        viewModel.SelectedColorScheme = viewModel.ColorSchemeOptions.Single(o => o.Code == ColorScheme.Indigo);
+
+        settings.ColorScheme.Should().Be(ColorScheme.Indigo);
+        applier.AppliedSchemes.Should().Equal(ColorScheme.Indigo);
+        applier.Applied.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies a failed color scheme save is reported, the choice returns to the stored one and nothing is applied.
+    /// </summary>
+    [Fact]
+    public void SelectedColorScheme_SaveFails_RevertsAndShowsError()
+    {
+        var settings = new FakeAppSettings { Failure = new IOException("disk full") };
+        var applier = new FakeThemeApplier();
+        var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules(), themeApplier: applier);
+
+        viewModel.SelectedColorScheme = viewModel.ColorSchemeOptions.Single(o => o.Code == ColorScheme.Indigo);
+
+        viewModel.SelectedColorScheme.Code.Should().Be(ColorScheme.Ocean);
+        viewModel.ErrorText.Should().Contain("disk full");
+        applier.AppliedSchemes.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies the names of the color schemes follow a language switch.
+    /// </summary>
+    [Fact]
+    public void LanguageSwitched_ColorSchemes_AreRelabelled()
+    {
+        var localizer = TestLocalizer.English();
+        var viewModel = new SettingsViewModel(new FakeAppSettings(), localizer, new FakeRemoteImageRules());
+
+        localizer.SetPreference("zh-Hans");
+
+        viewModel.ColorSchemeOptions.Select(o => o.DisplayName).Should().Equal("海青", "靛蓝", "松绿", "暖砂", "石墨");
+    }
+
+    /// <summary>
     /// Verifies the texts built by the view model follow a language switch made in the window itself.
     /// </summary>
     [Fact]

@@ -256,6 +256,12 @@
   <data name="Settings_ThemeSystem" xml:space="preserve"><value>跟随系统</value></data>
   <data name="Settings_ThemeLight" xml:space="preserve"><value>浅色</value></data>
   <data name="Settings_ThemeDark" xml:space="preserve"><value>深色</value></data>
+  <data name="Settings_ColorScheme" xml:space="preserve"><value>配色</value></data>
+  <data name="Settings_ColorSchemeOcean" xml:space="preserve"><value>海青</value></data>
+  <data name="Settings_ColorSchemeIndigo" xml:space="preserve"><value>靛蓝</value></data>
+  <data name="Settings_ColorSchemeForest" xml:space="preserve"><value>松绿</value></data>
+  <data name="Settings_ColorSchemeSand" xml:space="preserve"><value>暖砂</value></data>
+  <data name="Settings_ColorSchemeGraphite" xml:space="preserve"><value>石墨</value></data>
   <data name="Settings_SectionGeneral" xml:space="preserve"><value>通用</value></data>
   <data name="Settings_SectionSync" xml:space="preserve"><value>同步</value></data>
   <data name="Settings_SectionData" xml:space="preserve"><value>数据安全</value></data>
