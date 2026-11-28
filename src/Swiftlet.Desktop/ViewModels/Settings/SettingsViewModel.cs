@@ -275,7 +275,12 @@ public sealed partial class SettingsViewModel : ObservableObject
         About?.RefreshLanguage();
         Ai?.RefreshLanguage();
         OnPropertyChanged(nameof(DatabaseStatusText));
-        UpdateRemoteImageRuleCount();
+        foreach (var rule in RemoteImageRules)
+        {
+            rule.RefreshLanguage();
+        }
+
+        UpdateRemoteImageRuleTexts();
     }
 
     /// <summary>
@@ -571,7 +576,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <summary>
     /// Gets the saved remote image rules that match the filter (at most the first 200).
     /// </summary>
-    public ObservableCollection<string> RemoteImageRules { get; } = [];
+    public ObservableCollection<RemoteImageRuleViewModel> RemoteImageRules { get; } = [];
 
     /// <summary>
     /// Gets or sets the text that narrows the rule list.
@@ -583,19 +588,48 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// Gets or sets the rule selected in the list.
     /// </summary>
     [ObservableProperty]
-    public partial string? SelectedRemoteImageRule { get; set; }
+    public partial RemoteImageRuleViewModel? SelectedRemoteImageRule { get; set; }
 
     /// <summary>
     /// Gets or sets the address or domain typed for a new rule.
     /// </summary>
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddRemoteImageRuleCommand))]
     public partial string NewRemoteImageRule { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the text describing how many rules match, for example "3 of 250".
+    /// Gets or sets the localized problem of the last change to the rules, or <see langword="null"/>.
+    /// </summary>
+    [ObservableProperty]
+    public partial string? RemoteImageError { get; set; }
+
+    /// <summary>
+    /// Gets or sets the text describing how many rules are listed out of those that match, for example "200 of 250".
     /// </summary>
     [ObservableProperty]
     public partial string RemoteImageRuleCountText { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets a value indicating whether the search box is useful: there are rules, or a filter that can be cleared.
+    /// </summary>
+    public bool ShowRemoteImageSearch => _ruleTotal > 0 || !string.IsNullOrEmpty(RemoteImageFilter);
+
+    /// <summary>
+    /// Gets a value indicating whether any rule is listed.
+    /// </summary>
+    public bool HasVisibleRemoteImageRules => RemoteImageRules.Count > 0;
+
+    /// <summary>
+    /// Gets a value indicating whether more rules match than are listed.
+    /// </summary>
+    public bool IsRemoteImageListTruncated => RemoteImageRules.Count < _ruleTotal;
+
+    /// <summary>
+    /// Gets the text shown in place of an empty list: nothing is saved, or nothing matches the filter.
+    /// </summary>
+    public string RemoteImageEmptyText => string.IsNullOrWhiteSpace(RemoteImageFilter)
+        ? _localizer["Settings_RemoteImagesEmpty"]
+        : _localizer["Settings_RemoteImagesNoMatch"];
 
     /// <summary>
     /// Reloads the visible rules when the filter changes.
@@ -607,16 +641,34 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Removes the shown problem once the typed rule changes.
+    /// </summary>
+    /// <param name="value">The new text.</param>
+    partial void OnNewRemoteImageRuleChanged(string value)
+    {
+        RemoteImageError = null;
+    }
+
+    /// <summary>
+    /// Says whether there is anything to add.
+    /// </summary>
+    /// <returns><see langword="true"/> when something is typed.</returns>
+    private bool CanAddRemoteImageRule()
+    {
+        return !string.IsNullOrWhiteSpace(NewRemoteImageRule);
+    }
+
+    /// <summary>
     /// Validates and saves the typed rule.
     /// </summary>
     /// <returns>A task that completes when the rule is saved or the problem is shown.</returns>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanAddRemoteImageRule))]
     private async Task AddRemoteImageRuleAsync()
     {
-        ErrorText = null;
+        RemoteImageError = null;
         if (!RemoteImageRule.TryNormalize(NewRemoteImageRule, out var rule))
         {
-            ErrorText = _localizer["Settings_RemoteImagesInvalid"];
+            RemoteImageError = _localizer["Settings_RemoteImagesInvalid"];
             return;
         }
 
@@ -629,32 +681,33 @@ public sealed partial class SettingsViewModel : ObservableObject
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // This is the UI boundary: show the failure in the window instead of crashing.
-            ErrorText = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
+            RemoteImageError = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
         }
     }
 
     /// <summary>
-    /// Deletes the selected rule.
+    /// Deletes a listed rule.
     /// </summary>
+    /// <param name="item">The rule to delete; <see langword="null"/> does nothing.</param>
     /// <returns>A task that completes when the rule is deleted or the problem is shown.</returns>
     [RelayCommand]
-    private async Task RemoveRemoteImageRuleAsync()
+    private async Task RemoveRemoteImageRuleAsync(RemoteImageRuleViewModel? item)
     {
-        if (SelectedRemoteImageRule is not { } rule)
+        if (item is null)
         {
             return;
         }
 
-        ErrorText = null;
+        RemoteImageError = null;
         try
         {
-            await _remoteImageRules.RemoveAsync(rule);
+            await _remoteImageRules.RemoveAsync(item.Rule);
             RefreshRemoteImageRules();
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // This is the UI boundary: show the failure in the window instead of crashing.
-            ErrorText = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
+            RemoteImageError = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
         }
     }
 
@@ -667,19 +720,23 @@ public sealed partial class SettingsViewModel : ObservableObject
         RemoteImageRules.Clear();
         foreach (var rule in rules)
         {
-            RemoteImageRules.Add(rule);
+            RemoteImageRules.Add(new RemoteImageRuleViewModel(rule, _localizer));
         }
 
         _ruleTotal = total;
-        UpdateRemoteImageRuleCount();
+        UpdateRemoteImageRuleTexts();
+        OnPropertyChanged(nameof(ShowRemoteImageSearch));
+        OnPropertyChanged(nameof(HasVisibleRemoteImageRules));
+        OnPropertyChanged(nameof(IsRemoteImageListTruncated));
     }
 
     /// <summary>
-    /// Describes how many rules are listed out of those that match.
+    /// Rewrites the texts about the listed rules.
     /// </summary>
-    private void UpdateRemoteImageRuleCount()
+    private void UpdateRemoteImageRuleTexts()
     {
         RemoteImageRuleCountText = _localizer.Format("Settings_RemoteImagesCount", RemoteImageRules.Count, _ruleTotal);
+        OnPropertyChanged(nameof(RemoteImageEmptyText));
     }
 
     /// <summary>

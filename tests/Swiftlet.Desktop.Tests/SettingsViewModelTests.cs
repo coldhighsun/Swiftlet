@@ -80,7 +80,7 @@ public class SettingsViewModelTests
 
         var viewModel = new SettingsViewModel(new FakeAppSettings(), TestLocalizer.English(), rules);
 
-        viewModel.RemoteImageRules.Should().Equal("news@other.org", "shop.com");
+        viewModel.RemoteImageRules.Select(r => r.Rule).Should().Equal("news@other.org", "shop.com");
         viewModel.RemoteImageRuleCountText.Should().Be("Showing 2 of 2");
     }
 
@@ -99,9 +99,9 @@ public class SettingsViewModelTests
         await viewModel.AddRemoteImageRuleCommand.ExecuteAsync(null);
 
         rules.AddCalls.Should().Equal("news@shop.com");
-        viewModel.RemoteImageRules.Should().Equal("news@shop.com");
+        viewModel.RemoteImageRules.Select(r => r.Rule).Should().Equal("news@shop.com");
         viewModel.NewRemoteImageRule.Should().BeEmpty();
-        viewModel.ErrorText.Should().BeNull();
+        viewModel.RemoteImageError.Should().BeNull();
     }
 
     /// <summary>
@@ -119,7 +119,8 @@ public class SettingsViewModelTests
         await viewModel.AddRemoteImageRuleCommand.ExecuteAsync(null);
 
         rules.AddCalls.Should().BeEmpty();
-        viewModel.ErrorText.Should().Be("Enter a valid sender address or domain, for example news@shop.com or shop.com.");
+        viewModel.RemoteImageError.Should().Be("Enter a valid sender address or domain, for example news@shop.com or shop.com.");
+        viewModel.ErrorText.Should().BeNull();
         viewModel.NewRemoteImageRule.Should().Be("not a domain");
     }
 
@@ -137,8 +138,8 @@ public class SettingsViewModelTests
         viewModel.NewRemoteImageRule = "Shop.com";
         await viewModel.AddRemoteImageRuleCommand.ExecuteAsync(null);
 
-        viewModel.RemoteImageRules.Should().Equal("shop.com");
-        viewModel.ErrorText.Should().BeNull();
+        viewModel.RemoteImageRules.Select(r => r.Rule).Should().Equal("shop.com");
+        viewModel.RemoteImageError.Should().BeNull();
     }
 
     /// <summary>
@@ -155,34 +156,33 @@ public class SettingsViewModelTests
 
         await viewModel.AddRemoteImageRuleCommand.ExecuteAsync(null);
 
-        viewModel.ErrorText.Should().Contain("Failed to save settings").And.Contain("disk full");
+        viewModel.RemoteImageError.Should().Contain("Failed to save settings").And.Contain("disk full");
         viewModel.RemoteImageRules.Should().BeEmpty();
     }
 
     /// <summary>
-    /// Verifies the selected rule is deleted and disappears from the list.
+    /// Verifies a listed rule is deleted and disappears from the list.
     /// </summary>
     [Fact]
-    public async Task RemoveRemoteImageRuleCommand_SelectedRule_DeletesIt()
+    public async Task RemoveRemoteImageRuleCommand_ListedRule_DeletesIt()
     {
         var rules = new FakeRemoteImageRules();
         await rules.AddAsync("shop.com", TestContext.Current.CancellationToken);
         await rules.AddAsync("other.org", TestContext.Current.CancellationToken);
         var viewModel = new SettingsViewModel(new FakeAppSettings(), TestLocalizer.English(), rules);
-        viewModel.SelectedRemoteImageRule = "shop.com";
 
-        await viewModel.RemoveRemoteImageRuleCommand.ExecuteAsync(null);
+        await viewModel.RemoveRemoteImageRuleCommand.ExecuteAsync(
+            viewModel.RemoteImageRules.Single(r => r.Rule == "shop.com"));
 
         rules.RemoveCalls.Should().Equal("shop.com");
-        viewModel.RemoteImageRules.Should().Equal("other.org");
-        viewModel.RemoteImageRuleCountText.Should().Be("Showing 1 of 1");
+        viewModel.RemoteImageRules.Select(r => r.Rule).Should().Equal("other.org");
     }
 
     /// <summary>
-    /// Verifies removing with nothing selected does nothing.
+    /// Verifies removing without a rule does nothing.
     /// </summary>
     [Fact]
-    public async Task RemoveRemoteImageRuleCommand_NothingSelected_DoesNothing()
+    public async Task RemoveRemoteImageRuleCommand_NoRule_DoesNothing()
     {
         var rules = new FakeRemoteImageRules();
         await rules.AddAsync("shop.com", TestContext.Current.CancellationToken);
@@ -191,7 +191,107 @@ public class SettingsViewModelTests
         await viewModel.RemoveRemoteImageRuleCommand.ExecuteAsync(null);
 
         rules.RemoveCalls.Should().BeEmpty();
-        viewModel.RemoteImageRules.Should().Equal("shop.com");
+        viewModel.RemoteImageRules.Select(r => r.Rule).Should().Equal("shop.com");
+    }
+
+    /// <summary>
+    /// Verifies there is nothing to add until something is typed.
+    /// </summary>
+    /// <param name="input">The typed text.</param>
+    /// <param name="expected">Whether the rule can be added.</param>
+    [Theory]
+    [InlineData("", false)]
+    [InlineData("   ", false)]
+    [InlineData("shop.com", true)]
+    public void AddRemoteImageRuleCommand_Input_EnablesOnlyWithText(string input, bool expected)
+    {
+        var viewModel = new SettingsViewModel(new FakeAppSettings(), TestLocalizer.English(), new FakeRemoteImageRules())
+        {
+            NewRemoteImageRule = input,
+        };
+
+        viewModel.AddRemoteImageRuleCommand.CanExecute(null).Should().Be(expected);
+    }
+
+    /// <summary>
+    /// Verifies the shown problem disappears once the typed rule changes.
+    /// </summary>
+    [Fact]
+    public async Task NewRemoteImageRule_Changed_ClearsError()
+    {
+        var viewModel = new SettingsViewModel(new FakeAppSettings(), TestLocalizer.English(), new FakeRemoteImageRules())
+        {
+            NewRemoteImageRule = "not a domain",
+        };
+        await viewModel.AddRemoteImageRuleCommand.ExecuteAsync(null);
+
+        viewModel.NewRemoteImageRule = "shop.com";
+
+        viewModel.RemoteImageError.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Verifies a rule with an at sign is marked as an address and any other one as a domain, in the current language.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    /// <param name="address">The expected mark of an address rule.</param>
+    /// <param name="domain">The expected mark of a domain rule.</param>
+    [Theory]
+    [InlineData("en", "Address", "Domain")]
+    [InlineData("zh-Hans", "地址", "域名")]
+    public async Task RemoteImageRules_Kinds_AreNamed(string language, string address, string domain)
+    {
+        var rules = new FakeRemoteImageRules();
+        await rules.AddAsync("news@other.org", TestContext.Current.CancellationToken);
+        await rules.AddAsync("shop.com", TestContext.Current.CancellationToken);
+        var localizer = language == "en" ? TestLocalizer.English() : TestLocalizer.Chinese();
+
+        var viewModel = new SettingsViewModel(new FakeAppSettings(), localizer, rules);
+
+        viewModel.RemoteImageRules.Select(r => r.IsDomain).Should().Equal(false, true);
+        viewModel.RemoteImageRules.Select(r => r.KindText).Should().Equal(address, domain);
+    }
+
+    /// <summary>
+    /// Verifies without rules the empty text is shown and there is nothing to search, until one is added and removed.
+    /// </summary>
+    [Fact]
+    public async Task RemoteImageRules_NoneSaved_ShowsEmptyStateAndNoSearch()
+    {
+        var viewModel = new SettingsViewModel(new FakeAppSettings(), TestLocalizer.English(), new FakeRemoteImageRules());
+
+        viewModel.HasVisibleRemoteImageRules.Should().BeFalse();
+        viewModel.ShowRemoteImageSearch.Should().BeFalse();
+        viewModel.IsRemoteImageListTruncated.Should().BeFalse();
+        viewModel.RemoteImageEmptyText.Should().Be("No senders are allowed yet.");
+
+        viewModel.NewRemoteImageRule = "shop.com";
+        await viewModel.AddRemoteImageRuleCommand.ExecuteAsync(null);
+
+        viewModel.HasVisibleRemoteImageRules.Should().BeTrue();
+        viewModel.ShowRemoteImageSearch.Should().BeTrue();
+
+        await viewModel.RemoveRemoteImageRuleCommand.ExecuteAsync(viewModel.RemoteImageRules[0]);
+
+        viewModel.HasVisibleRemoteImageRules.Should().BeFalse();
+        viewModel.ShowRemoteImageSearch.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies a filter that matches nothing says so and keeps the search box.
+    /// </summary>
+    [Fact]
+    public async Task RemoteImageFilter_NoMatch_ShowsNoMatchTextAndKeepsSearch()
+    {
+        var rules = new FakeRemoteImageRules();
+        await rules.AddAsync("shop.com", TestContext.Current.CancellationToken);
+        var viewModel = new SettingsViewModel(new FakeAppSettings(), TestLocalizer.English(), rules);
+
+        viewModel.RemoteImageFilter = "nothing";
+
+        viewModel.HasVisibleRemoteImageRules.Should().BeFalse();
+        viewModel.ShowRemoteImageSearch.Should().BeTrue();
+        viewModel.RemoteImageEmptyText.Should().Be("No rule matches your search.");
     }
 
     /// <summary>
@@ -210,7 +310,7 @@ public class SettingsViewModelTests
 
         viewModel.RemoteImageFilter = "SHOP";
 
-        viewModel.RemoteImageRules.Should().Equal("news@shop.net", "shop.com");
+        viewModel.RemoteImageRules.Select(r => r.Rule).Should().Equal("news@shop.net", "shop.com");
         viewModel.RemoteImageRuleCountText.Should().Be("Showing 2 of 2");
 
         viewModel.RemoteImageFilter = string.Empty;
@@ -233,7 +333,8 @@ public class SettingsViewModelTests
         var viewModel = new SettingsViewModel(new FakeAppSettings(), TestLocalizer.English(), rules);
 
         viewModel.RemoteImageRules.Should().HaveCount(200);
-        viewModel.RemoteImageRules[0].Should().Be("site000.example.com");
+        viewModel.RemoteImageRules[0].Rule.Should().Be("site000.example.com");
+        viewModel.IsRemoteImageListTruncated.Should().BeTrue();
         viewModel.RemoteImageRuleCountText.Should().Be("Showing 200 of 250");
     }
 

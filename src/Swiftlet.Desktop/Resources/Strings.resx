@@ -201,9 +201,13 @@
   <data name="Settings_RemoteImagesHint" xml:space="preserve"><value>Images are loaded automatically for mail from these senders (an address) or sender domains (including subdomains). Loading remote images tells the sender that you opened the mail.</value></data>
   <data name="Settings_RemoteImagesFilter" xml:space="preserve"><value>Search rules</value></data>
   <data name="Settings_RemoteImagesCount" xml:space="preserve"><value>Showing {0} of {1}</value></data>
-  <data name="Settings_RemoteImagesPlaceholder" xml:space="preserve"><value>Address or domain, for example news@shop.com or shop.com</value></data>
+  <data name="Settings_RemoteImagesPlaceholder" xml:space="preserve"><value>Address or domain, e.g. news@shop.com</value></data>
   <data name="Settings_RemoteImagesAdd" xml:space="preserve"><value>Add</value></data>
-  <data name="Settings_RemoteImagesRemove" xml:space="preserve"><value>Remove selected</value></data>
+  <data name="Settings_RemoteImagesRemove" xml:space="preserve"><value>Remove</value></data>
+  <data name="Settings_RemoteImagesKindAddress" xml:space="preserve"><value>Address</value></data>
+  <data name="Settings_RemoteImagesKindDomain" xml:space="preserve"><value>Domain</value></data>
+  <data name="Settings_RemoteImagesEmpty" xml:space="preserve"><value>No senders are allowed yet.</value></data>
+  <data name="Settings_RemoteImagesNoMatch" xml:space="preserve"><value>No rule matches your search.</value></data>
   <data name="Settings_RemoteImagesInvalid" xml:space="preserve"><value>Enter a valid sender address or domain, for example news@shop.com or shop.com.</value></data>
   <data name="Startup_Title" xml:space="preserve"><value>Preparing mail data</value></data>
   <data name="Startup_Converting" xml:space="preserve"><value>Encrypting local mail data ({0} of {1})</value></data>
