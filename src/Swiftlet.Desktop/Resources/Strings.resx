@@ -255,8 +255,10 @@
   <data name="Settings_StartAtLoginFailed" xml:space="preserve"><value>Could not change the sign-in setting</value></data>
   <data name="Settings_StartMinimized" xml:space="preserve"><value>Start hidden in the tray</value></data>
   <data name="Settings_StartMinimizedHint" xml:space="preserve"><value>The main window is not shown when the app starts; open it from the tray icon. Needs a tray icon on your desktop. Starting the app again also brings the window back.</value></data>
-  <data name="Settings_HardwareRendering" xml:space="preserve"><value>Use hardware rendering</value></data>
-  <data name="Settings_HardwareRenderingHint" xml:space="preserve"><value>Draws the app with the graphics card. Turning it off uses noticeably less memory, but scrolling and resizing need more processor time; it can also help when windows are drawn incorrectly. Takes effect after a restart (quit from the tray icon; closing the window may not be enough).</value></data>
+  <data name="Settings_SaveMemory" xml:space="preserve"><value>Save memory</value></data>
+  <data name="Settings_SaveMemoryHint" xml:space="preserve"><value>Checked options use less memory; each one explains its cost.</value></data>
+  <data name="Settings_SoftwareRendering" xml:space="preserve"><value>Use software rendering</value></data>
+  <data name="Settings_SoftwareRenderingHint" xml:space="preserve"><value>Draws the app with the processor instead of the graphics card. This uses noticeably less memory, but scrolling and resizing need more processor time; it can also help when windows are drawn incorrectly. Takes effect after a restart (quit from the tray icon; closing the window may not be enough).</value></data>
   <data name="Settings_ReleaseWebView" xml:space="preserve"><value>Free the message viewer while hidden in the tray</value></data>
   <data name="Settings_ReleaseWebViewHint" xml:space="preserve"><value>Closes the component that displays HTML mail while the main window is hidden, which frees memory. When the window is shown again, the open message is loaded anew: it appears a moment later and starts at the top.</value></data>
   <data name="Settings_TrayUnread" xml:space="preserve"><value>Unread in tray</value></data>

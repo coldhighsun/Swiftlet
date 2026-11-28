@@ -83,7 +83,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         CloseToTray = settings.CloseToTray;
         ShowNewMailNotifications = settings.ShowNewMailNotifications;
         StartMinimized = settings.StartMinimized;
-        UseHardwareRendering = settings.UseHardwareRendering;
+        UseSoftwareRendering = !settings.UseHardwareRendering;
         ReleaseWebViewWhenHidden = settings.ReleaseWebViewWhenHidden;
         RefreshRemoteImageRules();
         _protection = protection;
@@ -340,10 +340,11 @@ public sealed partial class SettingsViewModel : ObservableObject
     public partial bool StartAtLogin { get; set; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether the graphics card draws the application from the next start on.
+    /// Gets or sets a value indicating whether the processor draws the application from the next start on. It is the
+    /// inverse of the stored hardware rendering choice, so that every checkbox on the page saves memory when checked.
     /// </summary>
     [ObservableProperty]
-    public partial bool UseHardwareRendering { get; set; }
+    public partial bool UseSoftwareRendering { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether the web view is released while the main window is hidden.
@@ -529,9 +530,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// Saves the new value as soon as the checkbox changes.
     /// </summary>
     /// <param name="value">The new value.</param>
-    partial void OnUseHardwareRenderingChanged(bool value)
+    partial void OnUseSoftwareRenderingChanged(bool value)
     {
-        if (value == _settings.UseHardwareRendering)
+        if (value == !_settings.UseHardwareRendering)
         {
             return;
         }
@@ -539,13 +540,13 @@ public sealed partial class SettingsViewModel : ObservableObject
         ErrorText = null;
         try
         {
-            _settings.SetUseHardwareRendering(value);
+            _settings.SetUseHardwareRendering(!value);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // The file could not be written; show it and put the checkbox back so it matches what is stored.
             ErrorText = _localizer.Format("Error_Format", _localizer["Settings_SaveFailed"], ex.Message);
-            UseHardwareRendering = _settings.UseHardwareRendering;
+            UseSoftwareRendering = !_settings.UseHardwareRendering;
         }
     }
 

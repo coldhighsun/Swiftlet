@@ -1245,7 +1245,7 @@ public class UiSmokeTests
 
                 var performanceBoxes = window.GetVisualDescendants().OfType<CheckBox>().ToList();
                 performanceBoxes.Select(b => b.IsChecked).Should().Equal(
-                    [true, false], "hardware rendering is on and releasing the web view is off by default");
+                    [false, false], "neither memory saving option is on by default");
 
                 SelectSettingsPage(window, 1, $"settings-sync-{language}");
 
