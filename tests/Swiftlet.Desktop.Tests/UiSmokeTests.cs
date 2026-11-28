@@ -2413,6 +2413,57 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies the content below the sync status stays where it is when a sync starts, after a success as after a
+    /// failure.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    /// <param name="failed">Whether the sync before the running one failed.</param>
+    [Theory]
+    [InlineData("zh-Hans", false)]
+    [InlineData("en", false)]
+    [InlineData("zh-Hans", true)]
+    [InlineData("en", true)]
+    public async Task MainWindow_AccountSyncing_KeepsContentInPlace(string language, bool failed)
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                LocalizationManager.Instance.SetPreference(language);
+                var succeeded = DateTimeOffset.UnixEpoch;
+                var idle = new Swiftlet.Application.Sync.AccountSyncStatus(
+                    false,
+                    succeeded,
+                    [],
+                    failed ? succeeded.AddDays(1) : null,
+                    failed ? "The server is not reachable." : null,
+                    false);
+                var scenario = new MainWindowViewModelTests.Scenario { SyncStatus = idle };
+                scenario.Localizer.SetPreference(language);
+                await scenario.StartAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel, Width = 800, Height = 600 };
+                Render(window, "main-window-account-sync-before", language);
+                scenario.ViewModel.SelectedNode = scenario.ViewModel.Accounts[0];
+                await scenario.ViewModel.WhenIdleAsync();
+                var suffix = $"{language}-{(failed ? "failed" : "succeeded")}";
+                Snapshot(window, $"main-window-account-idle-{suffix}");
+                var statistics = window.GetVisualDescendants().OfType<Swiftlet.Desktop.Views.AccountPage>().Single()
+                    .FindControl<Control>("StatisticsCard")!;
+                var top = statistics.TranslatePoint(default, window)!.Value.Y;
+
+                scenario.SyncStatus = idle with { IsSyncing = true };
+                scenario.SyncEvents.RaiseSyncStatus(scenario.Account.Id);
+                await scenario.ViewModel.WhenIdleAsync();
+                Snapshot(window, $"main-window-account-syncing-{suffix}");
+
+                scenario.ViewModel.AccountPage!.HasLastSuccess.Should().BeTrue();
+                statistics.TranslatePoint(default, window)!.Value.Y.Should().Be(top);
+
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Verifies the search conditions are hidden until the filter button is pressed, stay inside the narrowest window and
     /// are bound to the view model.
     /// </summary>
