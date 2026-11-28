@@ -47,6 +47,11 @@ public sealed partial class EditAccountViewModel : ObservableObject
     private readonly ILocalizer _localizer;
 
     /// <summary>
+    /// The color the account had when the dialog opened; only a different one is saved.
+    /// </summary>
+    private string? _loadedColor;
+
+    /// <summary>
     /// The identifier of the edited account.
     /// </summary>
     private Guid _accountId;
@@ -186,6 +191,18 @@ public sealed partial class EditAccountViewModel : ObservableObject
     public partial bool IsBusy { get; set; }
 
     /// <summary>
+    /// Gets or sets the colors offered: the palette, plus the current color if it is not in it.
+    /// </summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<string> ColorOptions { get; set; } = AccountColors.Palette;
+
+    /// <summary>
+    /// Gets or sets the color of the account as <c>#RRGGBB</c>.
+    /// </summary>
+    [ObservableProperty]
+    public partial string? Color { get; set; }
+
+    /// <summary>
     /// Fills the dialog with the current settings of an account.
     /// </summary>
     /// <param name="account">The account to edit.</param>
@@ -196,6 +213,11 @@ public sealed partial class EditAccountViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(folders);
 
         _accountId = account.Id;
+        _loadedColor = account.EffectiveColor;
+        ColorOptions = AccountColors.Palette.Contains(_loadedColor, StringComparer.OrdinalIgnoreCase)
+            ? AccountColors.Palette
+            : [.. AccountColors.Palette, _loadedColor];
+        Color = _loadedColor;
         Email = account.EmailAddress;
         DisplayName = account.HasCustomDisplayName ? account.DisplayName : string.Empty;
         DisplayNamePlaceholder = account.HasCustomDisplayName ? account.EmailAddress.Split('@')[0] : account.DisplayName;
@@ -253,7 +275,8 @@ public sealed partial class EditAccountViewModel : ObservableObject
             imap,
             smtp,
             IsPasswordAccount && Password.Length > 0 ? Password : null,
-            SelectedArchiveFolder?.FullName);
+            SelectedArchiveFolder?.FullName,
+            Color == _loadedColor ? null : Color);
         IsBusy = true;
         using var cancellation = new CancellationTokenSource();
         _saveCancellation = cancellation;

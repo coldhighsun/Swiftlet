@@ -108,6 +108,27 @@ public static class SqliteSchemaInitializer
         await EnsureArchiveFolderColumnAsync(context, cancellationToken);
         await EnsureSortOrderColumnAsync(context, cancellationToken);
         await EnsureExpandedColumnAsync(context, cancellationToken);
+        await EnsureColorColumnAsync(context, cancellationToken);
+    }
+
+    /// <summary>
+    /// Adds the <c>Color</c> column to an Accounts table created by an earlier version; does nothing when it exists.
+    /// Existing accounts get no value, so they keep the color derived from their address.
+    /// </summary>
+    /// <param name="context">The global database context.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the column exists.</returns>
+    private static async Task EnsureColorColumnAsync(GlobalDbContext context, CancellationToken cancellationToken)
+    {
+        var existing = await context.Database
+            .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM pragma_table_info('Accounts') WHERE name = 'Color'")
+            .SingleAsync(cancellationToken);
+        if (existing > 0)
+        {
+            return;
+        }
+
+        await context.Database.ExecuteSqlRawAsync("ALTER TABLE Accounts ADD COLUMN Color TEXT NULL;", cancellationToken);
     }
 
     /// <summary>

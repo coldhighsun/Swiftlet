@@ -50,6 +50,8 @@ public class PresentationTests
     public void Color_Palette_HasContrastWithWhite()
     {
         Avatar.Palette.Should().NotBeEmpty().And.OnlyContain(c => ThemeTests.Contrast(Color.Parse(c), Colors.White) >= 4.5);
+        Swiftlet.Domain.Accounts.AccountColors.Palette.Should()
+            .OnlyContain(c => ThemeTests.Contrast(Color.Parse(c), Colors.White) >= 4.5);
     }
 
     /// <summary>

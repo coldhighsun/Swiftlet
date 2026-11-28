@@ -11,7 +11,9 @@ namespace Swiftlet.Application.Accounts;
 /// </summary>
 /// <param name="Provider">The identity provider.</param>
 /// <param name="DisplayName">The name typed by the user; defaults to the name reported by the provider.</param>
-public sealed record AddOAuthAccountCommand(OAuthProvider Provider, string? DisplayName = null) : ICommand<Guid>, ILogDetails
+/// <param name="Color">The color as <c>#RRGGBB</c>; omitted to pick one no other account uses.</param>
+public sealed record AddOAuthAccountCommand(OAuthProvider Provider, string? DisplayName = null, string? Color = null)
+    : ICommand<Guid>, ILogDetails
 {
     /// <inheritdoc />
     public string DescribeForLog(LogNames names)
@@ -63,7 +65,8 @@ public sealed class AddOAuthAccountCommandHandler(
             preset.Smtp,
             timeProvider.GetUtcNow(),
             command.Provider,
-            hasCustomName);
+            hasCustomName,
+            command.Color ?? AccountColors.PickUnused(existing.Select(a => a.EffectiveColor), Random.Shared));
 
         await OAuthTokenStorage.SaveAsync(secrets, account.Id, authorization.Tokens, cancellationToken);
         try

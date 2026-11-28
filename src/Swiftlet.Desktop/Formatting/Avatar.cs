@@ -1,4 +1,5 @@
 using System.Globalization;
+using Swiftlet.Domain.Accounts;
 
 namespace Swiftlet.Desktop.Formatting;
 
@@ -10,8 +11,7 @@ public static class Avatar
     /// <summary>
     /// Gets the background colors; every one keeps white text readable.
     /// </summary>
-    public static IReadOnlyList<string> Palette { get; } =
-        ["#0E7C9B", "#2F6FB0", "#6A55B5", "#A8478A", "#B5483C", "#9A6400", "#3F7D3A", "#546A7B"];
+    public static IReadOnlyList<string> Palette => AccountColors.Derivable;
 
     /// <summary>
     /// Gets the first character of the name, or of the address when there is no name.
@@ -32,13 +32,6 @@ public static class Avatar
     /// <returns>The color as <c>#RRGGBB</c>.</returns>
     public static string Color(string? address)
     {
-        // FNV-1a: string.GetHashCode differs between runs.
-        var hash = 2166136261u;
-        foreach (var character in (address ?? string.Empty).Trim().ToLowerInvariant())
-        {
-            hash = unchecked((hash ^ character) * 16777619u);
-        }
-
-        return Palette[(int)(hash % (uint)Palette.Count)];
+        return AccountColors.Derive(address);
     }
 }

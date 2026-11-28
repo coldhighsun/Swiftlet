@@ -78,6 +78,7 @@ public sealed class AvaloniaDialogService(IServiceProvider services) : IDialogSe
         }
 
         var viewModel = services.GetRequiredService<AddAccountViewModel>();
+        await viewModel.LoadAsync();
         var window = new AddAccountWindow { DataContext = viewModel };
         viewModel.CloseRequested += (_, added) => window.Close(added);
         return await window.ShowDialog<bool>(owner);

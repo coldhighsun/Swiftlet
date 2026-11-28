@@ -623,6 +623,76 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies both account dialogs offer every color inside the window, mark the current one and take a click, in both
+    /// themes.
+    /// </summary>
+    /// <param name="edit">Whether the account settings dialog is shown, otherwise the add-account dialog.</param>
+    /// <param name="dark">Whether the dark theme is used.</param>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task AccountDialogs_ColorSwatches_SelectByClick(bool edit, bool dark)
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var palette = Swiftlet.Domain.Accounts.AccountColors.Palette;
+                var application = Avalonia.Application.Current!;
+                application.RequestedThemeVariant = dark ? Avalonia.Styling.ThemeVariant.Dark : Avalonia.Styling.ThemeVariant.Light;
+                try
+                {
+                    LocalizationManager.Instance.SetPreference("zh-Hans");
+                    Window window;
+                    Func<string?> selected;
+                    if (edit)
+                    {
+                        var viewModel = new EditAccountViewModel(new FakeDispatcher(), TestLocalizer.Chinese());
+                        viewModel.Load(TestData.Account(), []);
+                        window = new EditAccountWindow { DataContext = viewModel };
+                        selected = () => viewModel.Color;
+                    }
+                    else
+                    {
+                        var viewModel = new AddAccountViewModel(new FakeDispatcher(), TestLocalizer.Chinese());
+                        await viewModel.LoadAsync();
+                        viewModel.Color = palette[0];
+                        window = new AddAccountWindow { DataContext = viewModel };
+                        selected = () => viewModel.Color;
+                    }
+
+                    Render(window, $"account-colors-{(edit ? "edit" : "add")}-{(dark ? "dark" : "light")}");
+
+                    var swatches = window.FindControl<ListBox>("ColorSwatches")!;
+                    var items = swatches.GetVisualDescendants().OfType<ListBoxItem>().ToList();
+                    items.Should().HaveCount(palette.Count);
+                    items.Single(i => i.IsSelected).DataContext.Should().Be(selected());
+                    foreach (var item in items)
+                    {
+                        item.Bounds.Width.Should().BeGreaterThan(0);
+                        item.TranslatePoint(new Point(item.Bounds.Width, 0), window)!.Value.X.Should().BeLessThanOrEqualTo(window.ClientSize.Width);
+                        Avalonia.Automation.AutomationProperties.GetName(item).Should().Be((string)item.DataContext!);
+                    }
+
+                    var target = items[^1];
+                    var center = target.TranslatePoint(new Point(target.Bounds.Width / 2, target.Bounds.Height / 2), window)!.Value;
+                    window.MouseDown(center, MouseButton.Left);
+                    window.MouseUp(center, MouseButton.Left);
+                    Dispatcher.UIThread.RunJobs();
+
+                    selected().Should().Be(palette[^1]);
+                    window.Close();
+                }
+                finally
+                {
+                    application.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Default;
+                }
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Verifies the add-account dialog links an address to its provider's app password page, without an underline.
     /// </summary>
     /// <param name="language">The UI language.</param>

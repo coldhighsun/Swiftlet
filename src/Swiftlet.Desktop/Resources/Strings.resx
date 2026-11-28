@@ -141,6 +141,7 @@
   <data name="AddAccount_OAuthNotConfigured" xml:space="preserve"><value>{0} sign-in is not configured yet. {1}</value></data>
   <data name="AddAccount_SignInFailed" xml:space="preserve"><value>Sign-in failed: {0}</value></data>
   <data name="AddAccount_HintUnknown" xml:space="preserve"><value>Unrecognized mail provider; please enter the server settings.</value></data>
+  <data name="Account_Color" xml:space="preserve"><value>Color</value></data>
   <data name="EditAccount_Title" xml:space="preserve"><value>Account settings</value></data>
   <data name="EditAccount_DisplayName" xml:space="preserve"><value>Display name</value></data>
   <data name="EditAccount_SyncInterval" xml:space="preserve"><value>Sync interval</value></data>

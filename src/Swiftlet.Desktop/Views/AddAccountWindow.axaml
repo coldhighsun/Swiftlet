@@ -10,6 +10,12 @@
   <StackPanel Margin="24" Spacing="12">
     <PathIcon Data="{StaticResource Icon.Logo}" Width="48" Height="40" HorizontalAlignment="Center"
               Foreground="{DynamicResource Brush.Accent}" />
+    <!-- Above both ways of signing in, because it applies to either. -->
+    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+      <TextBlock Text="{loc:Loc Account_Color}" VerticalAlignment="Center" />
+      <ListBox Grid.Column="1" x:Name="ColorSwatches" Classes="swatches" ItemsSource="{Binding ColorOptions}"
+               SelectedItem="{Binding Color}" AutomationProperties.Name="{loc:Loc Account_Color}" />
+    </Grid>
     <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
       <!-- Google sign-in is hidden until the project has its own Google client (see CLAUDE.md, "Remaining work").
            To restore it, show this button again and move the Microsoft button back to the second column only. -->

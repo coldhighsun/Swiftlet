@@ -87,6 +87,46 @@ public class EditAccountViewModelTests
         command.Password.Should().BeNull();
     }
 
+    [Fact]
+    public async Task SaveAsync_ColorUntouched_ShowsTheCurrentOneAndSendsNone()
+    {
+        var dispatcher = new FakeDispatcher();
+        dispatcher.On<UpdateAccountCommand>(_ => new UpdateAccountResult(false));
+        var account = TestData.Account();
+        var viewModel = Create(dispatcher, account);
+
+        viewModel.Color.Should().Be(account.EffectiveColor);
+        viewModel.ColorOptions.Should().Equal(AccountColors.Palette);
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        dispatcher.Sent<UpdateAccountCommand>().Single().Color.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task SaveAsync_ColorChanged_SendsIt()
+    {
+        var dispatcher = new FakeDispatcher();
+        dispatcher.On<UpdateAccountCommand>(_ => new UpdateAccountResult(false));
+        var viewModel = Create(dispatcher, TestData.Account());
+        viewModel.Color = "#C2185B";
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        dispatcher.Sent<UpdateAccountCommand>().Single().Color.Should().Be("#C2185B");
+    }
+
+    [Fact]
+    public void Load_ColorOutsideThePalette_OffersIt()
+    {
+        var account = TestData.Account();
+        account.ChangeColor("#123456");
+
+        var viewModel = Create(new FakeDispatcher(), account);
+
+        viewModel.Color.Should().Be("#123456");
+        viewModel.ColorOptions.Should().HaveCount(AccountColors.Palette.Count + 1).And.Contain("#123456");
+    }
+
     [Theory]
     [InlineData("abc", "465")]
     [InlineData("0", "465")]

@@ -173,6 +173,40 @@ public class SchemaInitializerTests
     }
 
     /// <summary>
+    /// Verifies a global store of an earlier version gains the color column once, with no color chosen.
+    /// </summary>
+    [Fact]
+    public async Task InitializeGlobal_AccountsWithoutColorColumn_AddsColumnIdempotently()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var connection = new SqliteConnection("DataSource=:memory:");
+        await connection.OpenAsync(ct);
+        await using (var setup = connection.CreateCommand())
+        {
+            setup.CommandText =
+                """
+                CREATE TABLE Accounts (Id TEXT NOT NULL PRIMARY KEY, DisplayName TEXT, EmailAddress TEXT, AuthMethod INTEGER, CreatedAt INTEGER NOT NULL DEFAULT 0);
+                INSERT INTO Accounts (Id, DisplayName, EmailAddress, AuthMethod) VALUES ('a', 'me', 'me@example.com', 0);
+                """;
+            await setup.ExecuteNonQueryAsync(ct);
+        }
+
+        var options = new DbContextOptionsBuilder<GlobalDbContext>().UseSqlite(connection).Options;
+        await using var context = new GlobalDbContext(options);
+
+        await SqliteSchemaInitializer.InitializeGlobalAsync(context, ct);
+        var unchosen = await context.Database
+            .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM Accounts WHERE Color IS NULL")
+            .SingleAsync(ct);
+        await context.Database.ExecuteSqlRawAsync("UPDATE Accounts SET Color = '#C2185B'", ct);
+        await SqliteSchemaInitializer.InitializeGlobalAsync(context, ct);
+
+        unchosen.Should().Be(1);
+        var kept = await context.Database.SqlQueryRaw<string>("SELECT Color AS Value FROM Accounts").SingleAsync(ct);
+        kept.Should().Be("#C2185B");
+    }
+
+    /// <summary>
     /// Verifies a global store of an earlier version gains the archive folder column once, with no folder chosen.
     /// </summary>
     [Fact]

@@ -14,12 +14,14 @@ namespace Swiftlet.Application.Accounts;
 /// <param name="Password">The password or app-specific password.</param>
 /// <param name="Imap">The IMAP endpoint; omitted to use the provider preset.</param>
 /// <param name="Smtp">The SMTP endpoint; omitted to use the provider preset.</param>
+/// <param name="Color">The color as <c>#RRGGBB</c>; omitted to pick one no other account uses.</param>
 public sealed record AddAccountCommand(
     string DisplayName,
     string EmailAddress,
     string Password,
     ServerEndpoint? Imap = null,
-    ServerEndpoint? Smtp = null) : ICommand<Guid>, ILogDetails
+    ServerEndpoint? Smtp = null,
+    string? Color = null) : ICommand<Guid>, ILogDetails
 {
     /// <inheritdoc />
     public string DescribeForLog(LogNames names)
@@ -79,7 +81,8 @@ public sealed class AddAccountCommandHandler(
             imap,
             smtp,
             timeProvider.GetUtcNow(),
-            hasCustomDisplayName: hasCustomName);
+            hasCustomDisplayName: hasCustomName,
+            color: command.Color ?? AccountColors.PickUnused(existing.Select(a => a.EffectiveColor), Random.Shared));
 
         var key = AccountSecrets.PasswordKey(account.Id);
         await secrets.SetAsync(key, command.Password, cancellationToken);

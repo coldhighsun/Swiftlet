@@ -63,6 +63,31 @@ public class AccountAndSendCommandTests
     }
 
     /// <summary>
+    /// Verifies a chosen color is stored, and an account added without one gets a color no other account shows.
+    /// </summary>
+    [Fact]
+    public async Task AddAccount_Color_KeepsTheChosenOneOrPicksAnUnusedOne()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await TestDatabase.CreateAsync(ct);
+        var handler = new AddAccountCommandHandler(
+            db.CreateAccountRepository(), new InMemorySecretStore(), new FakeImapSessionFactory(), TimeProvider.System);
+
+        var chosen = await handler.Handle(new AddAccountCommand("", "me@gmail.com", "pw", Color: "#C2185B"), ct);
+        for (var i = 1; i < AccountColors.Palette.Count; i++)
+        {
+            // Own endpoint instances: one context cannot track a preset's instance for two accounts.
+            var server = new ServerEndpoint("mail.example.com", 993, true);
+            await handler.Handle(new AddAccountCommand("", $"me{i}@gmail.com", "pw", server, server with { Port = 465 }), ct);
+        }
+
+        await using var verify = db.CreateVerifier();
+        var accounts = await verify.Accounts().GetAllAsync(ct);
+        accounts.Single(a => a.Id == chosen).Color.Should().Be("#C2185B");
+        accounts.Select(a => a.Color).Should().BeEquivalentTo(AccountColors.Palette);
+    }
+
+    /// <summary>
     /// Verifies an unknown provider requires explicit server settings.
     /// </summary>
     [Fact]
