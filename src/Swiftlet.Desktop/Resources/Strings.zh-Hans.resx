@@ -76,6 +76,7 @@
   <data name="Status_AttachmentOpened" xml:space="preserve"><value>已打开 {0}</value></data>
   <data name="Status_AttachmentNotOpened" xml:space="preserve"><value>系统无法打开 {0}，请下载后处理。</value></data>
   <data name="Status_AttachmentOpenBlocked" xml:space="preserve"><value>{0} 可能运行程序，不能直接打开。如果信任发件人，请下载。</value></data>
+  <data name="Status_MessageGone" xml:space="preserve"><value>这封邮件已不在原处，未做任何更改。</value></data>
   <data name="Reader_DownloadAttachment" xml:space="preserve"><value>下载附件</value></data>
   <data name="Error_Flag" xml:space="preserve"><value>标记失败</value></data>
   <data name="Error_MarkRead" xml:space="preserve"><value>标记已读失败</value></data>

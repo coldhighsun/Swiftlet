@@ -1,6 +1,7 @@
 using Swiftlet.Application.Accounts;
 using Swiftlet.Domain.Messages;
 using Swiftlet.Domain.Labels;
+using Swiftlet.Desktop.ViewModels.Main;
 using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Folders;
 
@@ -126,6 +127,12 @@ public interface IDialogService
     /// </summary>
     /// <returns>The chosen path, or <see langword="null"/> if cancelled.</returns>
     Task<string?> PickContactFileAsync();
+
+    /// <summary>
+    /// Opens the window showing one message, or brings the one already open for this view model to the front.
+    /// </summary>
+    /// <param name="viewModel">The content of the window; it is detached when the window closes.</param>
+    void ShowMessage(MessageWindowViewModel viewModel);
 
     /// <summary>
     /// Opens a compose window.

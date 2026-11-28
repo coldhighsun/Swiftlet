@@ -934,11 +934,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// </summary>
     /// <returns>A task that completes when the state has been saved.</returns>
     [RelayCommand(CanExecute = nameof(HasSelectedMessage))]
-    private async Task ToggleFlagAsync()
+    private Task ToggleFlagAsync() => ToggleFlagOfAsync(SelectedMessage!);
+
+    /// <summary>
+    /// Toggles the flagged (starred) state of a message, which need not be the selected or even a listed one.
+    /// </summary>
+    /// <param name="item">The message.</param>
+    /// <returns>A task that completes when the state has been saved.</returns>
+    internal async Task ToggleFlagOfAsync(MessageItemViewModel item)
     {
-        var item = SelectedMessage!;
         var flagged = !item.IsFlagged;
-        item.IsFlagged = flagged;
+
+        // A message window can hold another object than the list does for the same message.
+        List<MessageItemViewModel> shown = [item, .. Messages.Where(m => m.Id == item.Id && !ReferenceEquals(m, item))];
+        shown.ForEach(m => m.IsFlagged = flagged);
         try
         {
             await _dispatcher.SendAsync(new SetMessageFlaggedCommand(item.Message.AccountId, item.Id, flagged));
@@ -946,7 +955,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Roll back the optimistic update and tell the user; a failed star must not crash the UI.
-            item.IsFlagged = !flagged;
+            shown.ForEach(m => m.IsFlagged = !flagged);
             StatusText = _localizer.Format("Error_Format", _localizer["Error_Flag"], ex.Message);
         }
     }
@@ -1579,7 +1588,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// </summary>
     private void RefreshContactNames()
     {
-        foreach (var message in Messages)
+        foreach (var message in ShownMessages())
         {
             message.RefreshContacts();
         }
@@ -1845,7 +1854,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             folder.RefreshLanguage();
         }
 
-        foreach (var message in Messages)
+        foreach (var message in ShownMessages())
         {
             message.RefreshLanguage();
         }
@@ -2782,6 +2791,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 target.Add(CreateItem(message));
             }
         }
+
+        UpdateMessageWindows(messages);
 
         // Kept items too: the same message may come from a view that marked accounts differently.
         foreach (var item in target)

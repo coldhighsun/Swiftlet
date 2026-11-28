@@ -467,6 +467,93 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies a double click on a message row asks for the window of that message, and a single click does not.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_DoubleClickMessage_OpensMessageWindow()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var scenario = new MainWindowViewModelTests.Scenario();
+                await scenario.StartAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-double-click");
+                var row = window.GetVisualDescendants().OfType<ListBox>().Single()
+                    .GetVisualDescendants().OfType<ListBoxItem>().ElementAt(1);
+                var point = row.TranslatePoint(new Point(40, 10), window)!.Value;
+
+                window.MouseDown(point, MouseButton.Left);
+                window.MouseUp(point, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+                scenario.Dialogs.MessageWindows.Should().BeEmpty();
+
+                window.MouseDown(point, MouseButton.Left);
+                window.MouseUp(point, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+                await scenario.ViewModel.WhenIdleAsync();
+
+                scenario.Dialogs.MessageWindows.Should().ContainSingle()
+                    .Which.Item.Should().BeSameAs(scenario.ViewModel.Messages[1]);
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies the message window shows the whole message with its actions and without the AI panel, and Escape closes it.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    /// <param name="dark">Whether the dark theme is used.</param>
+    [Theory]
+    [InlineData("zh-Hans", false)]
+    [InlineData("en", true)]
+    public async Task MessageWindow_Shown_DisplaysMessageAndClosesOnEscape(string language, bool dark)
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Messages[1].AddAttachment("report.pdf", "application/pdf", 1000);
+                await scenario.StartAsync();
+                scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+                await scenario.ViewModel.WhenIdleAsync();
+                scenario.ViewModel.OpenMessageWindow(scenario.ViewModel.Messages[0]);
+                var window = new MessageWindow { DataContext = scenario.Dialogs.MessageWindows.Single() };
+                var closed = false;
+                window.Closed += (_, _) => closed = true;
+                var application = Avalonia.Application.Current!;
+                application.RequestedThemeVariant = dark ? Avalonia.Styling.ThemeVariant.Dark : Avalonia.Styling.ThemeVariant.Light;
+                try
+                {
+                    Render(window, $"message-window-{language}", language);
+                }
+                finally
+                {
+                    // The snapshot is taken; the checks below do not depend on the theme.
+                    application.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Default;
+                }
+
+                window.WindowState.Should().Be(WindowState.Maximized);
+                window.Title.Should().Be("Hello 2");
+                window.GetVisualDescendants().OfType<ScrollViewer>().Single(v => v.Name == "AttachmentScroller")
+                    .IsVisible.Should().BeTrue();
+                window.GetVisualDescendants().OfType<AiPanel>().Single().IsVisible.Should().BeFalse();
+                window.GetVisualDescendants().OfType<Button>()
+                    .Select(AutomationProperties.GetName)
+                    .Should().Contain(language == "en"
+                        ? ["Reply", "Forward", "Archive", "Delete"]
+                        : ["回复", "转发", "归档", "删除"]);
+
+                window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
+                Dispatcher.UIThread.RunJobs();
+
+                closed.Should().BeTrue();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Finds the scrolling area of the attachments in the reading pane.
     /// </summary>
     /// <param name="window">The main window.</param>
