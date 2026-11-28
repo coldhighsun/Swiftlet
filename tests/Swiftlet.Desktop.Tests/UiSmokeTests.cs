@@ -384,9 +384,96 @@ public class UiSmokeTests
                 window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Text == "选择一封邮件阅读")
                     .Should().OnlyContain(t => !t.IsEffectivelyVisible);
                 UiQueries.ButtonCaptions(window).Should().Contain(c => c != null && c.Contains("quarterly-report.pdf", StringComparison.Ordinal));
+                var attachment = scenario.ViewModel.Messages[0].Attachments[0];
+                var buttons = window.GetVisualDescendants().OfType<Button>().Where(b => b.DataContext == attachment).ToList();
+                buttons.Should().HaveCount(2);
+                var open = buttons.Single(b => b.Classes.Contains("attachment"));
+                open.Command.Should().BeSameAs(attachment.OpenCommand);
+                open.Cursor?.ToString().Should().Be("Hand");
+                var download = buttons.Single(b => !b.Classes.Contains("attachment"));
+                download.Command.Should().BeSameAs(attachment.SaveCommand);
+                Avalonia.Automation.AutomationProperties.GetName(download).Should().Be("下载附件");
                 window.Close();
             },
             TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies very many attachments scroll in a limited area instead of pushing the body out of sight, and that the
+    /// next message starts at the top again.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_ManyAttachments_ScrollInLimitedHeight()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var scenario = new MainWindowViewModelTests.Scenario();
+                for (var i = 1; i <= 30; i++)
+                {
+                    scenario.Messages[0].AddAttachment($"older-{i}.pdf", "application/pdf", 1000);
+                    scenario.Messages[1].AddAttachment($"report-{i}.pdf", "application/pdf", 1000);
+                }
+
+                await scenario.StartAsync();
+                scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+                await scenario.ViewModel.WhenIdleAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-many-attachments");
+
+                var list = AttachmentScroller(window);
+                list.Bounds.Height.Should().BeLessThanOrEqualTo(76).And.BeGreaterThan(60);
+                list.Extent.Height.Should().BeGreaterThan(list.Viewport.Height);
+                window.GetVisualDescendants().OfType<ScrollViewer>().Single(v => v.Content is SelectableTextBlock)
+                    .Bounds.Height.Should().BeGreaterThan(300);
+
+                list.Offset = new Avalonia.Vector(0, 200);
+                window.UpdateLayout();
+                list.Offset.Y.Should().Be(200);
+                scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[1];
+                await scenario.ViewModel.WhenIdleAsync();
+                Dispatcher.UIThread.RunJobs();
+                window.UpdateLayout();
+
+                AttachmentScroller(window).Offset.Y.Should().Be(0);
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies a single attachment takes only the height it needs.
+    /// </summary>
+    [Fact]
+    public async Task MainWindow_OneAttachment_DoesNotScroll()
+    {
+        await DispatchAsync(
+            async () =>
+            {
+                var scenario = new MainWindowViewModelTests.Scenario();
+                scenario.Messages[1].AddAttachment("report.pdf", "application/pdf", 1000);
+                await scenario.StartAsync();
+                scenario.ViewModel.SelectedMessage = scenario.ViewModel.Messages[0];
+                await scenario.ViewModel.WhenIdleAsync();
+                var window = new MainWindow { DataContext = scenario.ViewModel };
+                Render(window, "main-window-one-attachment");
+
+                var list = AttachmentScroller(window);
+                list.Bounds.Height.Should().BeLessThan(70);
+                list.Extent.Height.Should().BeLessThanOrEqualTo(list.Viewport.Height);
+                window.Close();
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Finds the scrolling area of the attachments in the reading pane.
+    /// </summary>
+    /// <param name="window">The main window.</param>
+    /// <returns>The scroll viewer.</returns>
+    private static ScrollViewer AttachmentScroller(MainWindow window)
+    {
+        return window.GetVisualDescendants().OfType<ScrollViewer>().Single(v => v.Name == "AttachmentScroller");
     }
 
     /// <summary>
@@ -2603,7 +2690,7 @@ public class UiSmokeTests
                 var message = TestData.Message(account, TestData.Folder(account, "INBOX", Swiftlet.Domain.Folders.FolderRole.Inbox), 1, "Hello");
                 message.AddAttachment("notes.txt", "text/plain", 2048);
                 var attachment = new Swiftlet.Desktop.ViewModels.Main.AttachmentItemViewModel(
-                    account.Id, message.Attachments[0], _ => Task.CompletedTask);
+                    account.Id, message.Attachments[0], _ => Task.CompletedTask, _ => Task.CompletedTask);
                 var viewModel = new Swiftlet.Desktop.ViewModels.Main.AttachmentPreviewViewModel(attachment, TestLocalizer.Chinese());
                 var window = new AttachmentPreviewWindow { DataContext = viewModel };
                 Render(window, "attachment-preview-loading");
@@ -2617,6 +2704,9 @@ public class UiSmokeTests
                 var text = window.FindControl<TextBlock>("PreviewText")!;
                 text.IsVisible.Should().BeTrue();
                 text.Text.Should().Contain("second line");
+                var hint = window.FindControl<TextBlock>("PreviewHint")!;
+                hint.IsEffectivelyVisible.Should().BeTrue();
+                hint.Text.Should().Be("点击附件即可打开");
                 window.Close();
                 return Task.CompletedTask;
             },

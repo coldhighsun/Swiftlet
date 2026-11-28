@@ -1921,7 +1921,40 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             var downloaded = await _dispatcher.SendAsync(
                 new DownloadAttachmentQuery(attachment.AccountId, attachment.Attachment.MessageId, attachment.Attachment.Id));
             await File.WriteAllBytesAsync(path, downloaded.Content);
+            AttachmentFiles.MarkFromInternet(path, _logger);
             StatusText = _localizer.Format("Status_Saved", path);
+        });
+    }
+
+    /// <summary>
+    /// Downloads an attachment of the selected message and opens it. Programs, scripts and the like are only offered for
+    /// saving, so nothing a sender attached runs with one click.
+    /// </summary>
+    /// <param name="attachment">The attachment.</param>
+    /// <returns>A task that completes when the system has been asked to open the file.</returns>
+    private async Task OpenAttachmentAsync(AttachmentItemViewModel attachment)
+    {
+        var fileName = attachment.Attachment.FileName;
+        if (!AttachmentFiles.CanOpen(fileName))
+        {
+            StatusText = _localizer.Format("Status_AttachmentOpenBlocked", fileName);
+            return;
+        }
+
+        using (_logger.BeginMailScope(AccountName(attachment.AccountId)))
+        {
+            _logger.LogInformation("Opening attachment {Ordinal} of message {MessageId}", attachment.Attachment.Ordinal, attachment.Attachment.MessageId);
+        }
+
+        await GuardedAsync("Error_OpenAttachment", async () =>
+        {
+            StatusText = _localizer.Format("Status_Downloading", fileName);
+            var downloaded = await _dispatcher.SendAsync(
+                new DownloadAttachmentQuery(attachment.AccountId, attachment.Attachment.MessageId, attachment.Attachment.Id));
+            var opened = await _dialogs.OpenAttachmentAsync(fileName, downloaded.Content);
+            StatusText = opened
+                ? _localizer.Format("Status_AttachmentOpened", fileName)
+                : _localizer.Format("Status_AttachmentNotOpened", fileName);
         });
     }
 
@@ -2563,6 +2596,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         return new MessageItemViewModel(
             message,
+            OpenAttachmentAsync,
             SaveAttachmentAsync,
             _localizer,
             RememberRemoteImagesAsync,

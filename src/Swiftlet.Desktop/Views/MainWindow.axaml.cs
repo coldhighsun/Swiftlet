@@ -34,6 +34,11 @@ public partial class MainWindow : Window
     private readonly AttachmentHoverController _attachmentHover;
 
     /// <summary>
+    /// The message whose attachments the reading pane listed last.
+    /// </summary>
+    private Guid? _attachmentsMessageId;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="MainWindow"/> class.
     /// </summary>
     public MainWindow()
@@ -51,6 +56,8 @@ public partial class MainWindow : Window
         // The attachment buttons live in a data template, so the pointer is tracked on the window and the button under it is looked up.
         AddHandler(PointerMovedEvent, OnPointerMovedOverAttachments, RoutingStrategies.Bubble, handledEventsToo: true);
         AddHandler(PointerPressedEvent, (_, _) => _attachmentHover.Leave(), RoutingStrategies.Tunnel, handledEventsToo: true);
+        // Scrolling moves the attachments under a resting pointer without a pointer movement.
+        AddHandler(PointerWheelChangedEvent, (_, _) => _attachmentHover.Leave(), RoutingStrategies.Tunnel, handledEventsToo: true);
         PointerExited += (_, _) => _attachmentHover.Leave();
         Deactivated += (_, _) => _attachmentHover.Leave();
     }
@@ -95,6 +102,21 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Shows the attachments of another message from the top. The reading pane reuses its controls, which would keep the
+    /// scroll position; a reload of the same message keeps it on purpose.
+    /// </summary>
+    /// <param name="sender">The scroll viewer of the attachments.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OnAttachmentsDataContextChanged(object? sender, EventArgs e)
+    {
+        if (sender is ScrollViewer { DataContext: MessageItemViewModel item } scroller && item.Message.Id != _attachmentsMessageId)
+        {
+            _attachmentsMessageId = item.Message.Id;
+            scroller.Offset = default;
+        }
+    }
+
+    /// <summary>
     /// Fills the "move to" and "add to contacts" submenus for the selection the context menu was opened on.
     /// </summary>
     /// <param name="sender">The event sender.</param>
@@ -121,14 +143,15 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Starts or stops the attachment preview depending on whether the pointer is over an attachment button.
+    /// Starts or stops the attachment preview depending on whether the pointer is over the button of an attachment that
+    /// opens it; the download button beside it has its own tooltip.
     /// </summary>
     /// <param name="sender">The event sender.</param>
     /// <param name="e">The event arguments.</param>
     private void OnPointerMovedOverAttachments(object? sender, PointerEventArgs e)
     {
         var button = (e.Source as Visual)?.FindAncestorOfType<Button>(includeSelf: true);
-        if (button?.DataContext is AttachmentItemViewModel attachment)
+        if (button?.DataContext is AttachmentItemViewModel attachment && button.Classes.Contains("attachment"))
         {
             _attachmentHover.Enter(attachment, button);
         }

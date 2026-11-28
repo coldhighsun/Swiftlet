@@ -397,6 +397,23 @@ internal sealed class FakeDialogService : IDialogService
     /// </summary>
     public Exception? OpenFolderError { get; set; }
 
+    /// <summary>
+    /// Gets the attachments that were asked to be opened.
+    /// </summary>
+    public List<(string FileName, byte[] Content)> OpenedAttachments { get; } = [];
+
+    /// <summary>
+    /// Gets or sets a value indicating whether opening an attachment works.
+    /// </summary>
+    public bool OpenAttachmentResult { get; set; } = true;
+
+    /// <inheritdoc />
+    public Task<bool> OpenAttachmentAsync(string fileName, ReadOnlyMemory<byte> content)
+    {
+        OpenedAttachments.Add((fileName, content.ToArray()));
+        return Task.FromResult(OpenAttachmentResult);
+    }
+
     /// <inheritdoc />
     public Task<bool> OpenFolderAsync(string path)
     {

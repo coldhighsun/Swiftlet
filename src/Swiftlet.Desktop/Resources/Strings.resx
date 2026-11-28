@@ -48,6 +48,8 @@
   <data name="Preview_Loading" xml:space="preserve"><value>Loading preview…</value></data>
   <data name="Preview_NotAvailable" xml:space="preserve"><value>No preview available</value></data>
   <data name="Preview_TooLarge" xml:space="preserve"><value>File too large to preview</value></data>
+  <data name="Preview_ClickToOpen" xml:space="preserve"><value>Click the attachment to open it</value></data>
+  <data name="Preview_DownloadOnly" xml:space="preserve"><value>Cannot be opened directly. Use the download button.</value></data>
   <data name="Preview_MoreEntries" xml:space="preserve"><value>… and {0} more</value></data>
   <data name="Reader_LoadImages" xml:space="preserve"><value>Load images</value></data>
   <data name="Reader_AlwaysAllowSender" xml:space="preserve"><value>Always load images from {0}</value></data>
@@ -70,6 +72,11 @@
   <data name="Error_Search" xml:space="preserve"><value>Search failed</value></data>
   <data name="Error_LoadMessages" xml:space="preserve"><value>Failed to load messages</value></data>
   <data name="Error_SaveAttachment" xml:space="preserve"><value>Failed to save attachment</value></data>
+  <data name="Error_OpenAttachment" xml:space="preserve"><value>Failed to open attachment</value></data>
+  <data name="Status_AttachmentOpened" xml:space="preserve"><value>Opened {0}</value></data>
+  <data name="Status_AttachmentNotOpened" xml:space="preserve"><value>The system could not open {0}. Download it instead.</value></data>
+  <data name="Status_AttachmentOpenBlocked" xml:space="preserve"><value>{0} could run a program, so it is not opened from here. Download it if you trust the sender.</value></data>
+  <data name="Reader_DownloadAttachment" xml:space="preserve"><value>Download attachment</value></data>
   <data name="Error_Flag" xml:space="preserve"><value>Failed to update star</value></data>
   <data name="Error_MarkRead" xml:space="preserve"><value>Failed to mark as read</value></data>
   <data name="Error_InlineImages" xml:space="preserve"><value>Failed to load images embedded in the message</value></data>

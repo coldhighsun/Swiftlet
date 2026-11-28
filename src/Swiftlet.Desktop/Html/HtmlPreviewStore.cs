@@ -1,11 +1,13 @@
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
+using Swiftlet.Desktop.Services;
 
 namespace Swiftlet.Desktop.Html;
 
 /// <summary>
-/// Owns the temporary files holding mail bodies that are viewed in an external browser. The files are plain text, so they
-/// are kept in one directory per run that is deleted on exit; the browser may read them at any time before that.
+/// Owns the temporary files that other programs read: mail bodies viewed in an external browser and opened attachments.
+/// They are not encrypted, so they are kept in one directory per run that is deleted on exit; the other program may read
+/// them at any time before that.
 /// </summary>
 /// <param name="root">The directory the preview directory is created in.</param>
 /// <param name="logger">The logger; optional.</param>
@@ -35,6 +37,24 @@ public sealed partial class HtmlPreviewStore(string root, ILogger<HtmlPreviewSto
         CreatePrivateDirectory(_directory);
         var path = Path.Combine(_directory, $"{Guid.NewGuid():N}.html");
         File.WriteAllText(path, document);
+        return path;
+    }
+
+    /// <summary>
+    /// Writes an attachment that is about to be opened, under its own name in a directory of its own.
+    /// </summary>
+    /// <param name="fileName">The name from the message; it is made safe before use.</param>
+    /// <param name="content">The file content.</param>
+    /// <returns>The path of the file.</returns>
+    public async Task<string> WriteAttachmentAsync(string fileName, ReadOnlyMemory<byte> content)
+    {
+        _directory ??= Path.Combine(root, $"{DirectoryPrefix}{Guid.NewGuid():N}");
+        CreatePrivateDirectory(_directory);
+        var directory = Path.Combine(_directory, Guid.NewGuid().ToString("N"));
+        CreatePrivateDirectory(directory);
+        var path = Path.Combine(directory, AttachmentFiles.SafeName(fileName));
+        await File.WriteAllBytesAsync(path, content);
+        AttachmentFiles.MarkFromInternet(path, logger);
         return path;
     }
 

@@ -1737,6 +1737,76 @@ public class MainWindowViewModelTests
     }
 
     /// <summary>
+    /// Verifies opening an attachment downloads it and hands it to the system.
+    /// </summary>
+    [Fact]
+    public async Task AttachmentOpenCommand_Document_DownloadsAndOpensIt()
+    {
+        var scenario = new Scenario();
+        scenario.Messages[1].AddAttachment("report.pdf", "application/pdf", 3);
+        scenario.Dispatcher.On<DownloadAttachmentQuery>(_ => new DownloadedAttachment("report.pdf", "application/pdf", new byte[] { 7, 8, 9 }));
+        await scenario.StartAsync();
+
+        await scenario.ViewModel.Messages[0].Attachments[0].OpenCommand.ExecuteAsync(null);
+
+        var opened = scenario.Dialogs.OpenedAttachments.Should().ContainSingle().Subject;
+        opened.FileName.Should().Be("report.pdf");
+        opened.Content.Should().Equal(7, 8, 9);
+        scenario.ViewModel.StatusText.Should().Contain("report.pdf");
+    }
+
+    /// <summary>
+    /// Verifies a program is neither downloaded nor opened, and the user is told to save it instead.
+    /// </summary>
+    [Fact]
+    public async Task AttachmentOpenCommand_Program_DownloadsNothingAndExplains()
+    {
+        var scenario = new Scenario();
+        scenario.Messages[1].AddAttachment("invoice.pdf.exe", "application/pdf", 3);
+        await scenario.StartAsync();
+
+        await scenario.ViewModel.Messages[0].Attachments[0].OpenCommand.ExecuteAsync(null);
+
+        scenario.Dispatcher.Sent<DownloadAttachmentQuery>().Should().BeEmpty();
+        scenario.Dialogs.OpenedAttachments.Should().BeEmpty();
+        scenario.ViewModel.StatusText.Should().Contain("invoice.pdf.exe").And.Contain("下载");
+    }
+
+    /// <summary>
+    /// Verifies a failing download is reported and nothing is opened.
+    /// </summary>
+    [Fact]
+    public async Task AttachmentOpenCommand_DownloadFails_ReportsError()
+    {
+        var scenario = new Scenario();
+        scenario.Messages[1].AddAttachment("report.pdf", "application/pdf", 3);
+        scenario.Dispatcher.On<DownloadAttachmentQuery>(_ => throw new InvalidOperationException("gone"));
+        await scenario.StartAsync();
+
+        await scenario.ViewModel.Messages[0].Attachments[0].OpenCommand.ExecuteAsync(null);
+
+        scenario.Dialogs.OpenedAttachments.Should().BeEmpty();
+        scenario.ViewModel.StatusText.Should().Contain("gone");
+    }
+
+    /// <summary>
+    /// Verifies a refusal by the system is reported.
+    /// </summary>
+    [Fact]
+    public async Task AttachmentOpenCommand_SystemRefuses_ReportsIt()
+    {
+        var scenario = new Scenario();
+        scenario.Messages[1].AddAttachment("data.xyz", "application/octet-stream", 3);
+        scenario.Dialogs.OpenAttachmentResult = false;
+        scenario.Dispatcher.On<DownloadAttachmentQuery>(_ => new DownloadedAttachment("data.xyz", "application/octet-stream", new byte[] { 1 }));
+        await scenario.StartAsync();
+
+        await scenario.ViewModel.Messages[0].Attachments[0].OpenCommand.ExecuteAsync(null);
+
+        scenario.ViewModel.StatusText.Should().Contain("无法打开").And.Contain("data.xyz");
+    }
+
+    /// <summary>
     /// Verifies a refresh picks up folders that appeared after the first load without losing the selection.
     /// </summary>
     [Fact]

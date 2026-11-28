@@ -94,7 +94,7 @@ public class PresentationTests
         var account = TestData.Account();
         var message = TestData.Message(account, TestData.Folder(account, "INBOX", FolderRole.Inbox), 1);
         var clock = ClockAt("2026-01-01T23:00:00Z");
-        var item = new MessageItemViewModel(message, _ => Task.CompletedTask, TestLocalizer.Chinese(), timeProvider: clock);
+        var item = new MessageItemViewModel(message, _ => Task.CompletedTask, _ => Task.CompletedTask, TestLocalizer.Chinese(), timeProvider: clock);
         item.ListTimeText.Should().Be("00:01");
         var changed = new List<string?>();
         item.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
@@ -115,7 +115,7 @@ public class PresentationTests
         var account = TestData.Account();
         var message = TestData.Message(account, TestData.Folder(account, "INBOX", FolderRole.Inbox), 1);
         var localizer = TestLocalizer.Chinese();
-        var item = new MessageItemViewModel(message, _ => Task.CompletedTask, localizer, timeProvider: ClockAt("2026-01-02T10:00:00Z"));
+        var item = new MessageItemViewModel(message, _ => Task.CompletedTask, _ => Task.CompletedTask, localizer, timeProvider: ClockAt("2026-01-02T10:00:00Z"));
         var changed = new List<string?>();
         item.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
 
@@ -135,7 +135,7 @@ public class PresentationTests
         var account = TestData.Account();
         var message = TestData.Message(account, TestData.Folder(account, "INBOX", FolderRole.Inbox), 1);
         message.AddAttachment("report.pdf", "application/pdf", 1_250_000);
-        var item = new MessageItemViewModel(message, _ => Task.CompletedTask, TestLocalizer.English());
+        var item = new MessageItemViewModel(message, _ => Task.CompletedTask, _ => Task.CompletedTask, TestLocalizer.English());
         var changed = new List<string?>();
         item.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
 

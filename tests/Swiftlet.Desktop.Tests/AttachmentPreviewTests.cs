@@ -30,7 +30,7 @@ public class AttachmentPreviewTests
         var account = TestData.Account();
         var message = TestData.Message(account, TestData.Folder(account, "INBOX", FolderRole.Inbox), 1, "Hello");
         message.AddAttachment(fileName, "text/plain", 2048);
-        return new AttachmentItemViewModel(account.Id, message.Attachments[0], _ => Task.CompletedTask);
+        return new AttachmentItemViewModel(account.Id, message.Attachments[0], _ => Task.CompletedTask, _ => Task.CompletedTask);
     }
 
     /// <summary>
@@ -57,6 +57,24 @@ public class AttachmentPreviewTests
         viewModel.HasMessage.Should().BeTrue();
         viewModel.HasText.Should().BeFalse();
         viewModel.HasImage.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies the preview tells that a click opens the file, or that a program can only be downloaded, also after the
+    /// content has loaded.
+    /// </summary>
+    /// <param name="fileName">The file name.</param>
+    /// <param name="expected">The hint.</param>
+    [Theory]
+    [InlineData("report.txt", "Click the attachment to open it")]
+    [InlineData("setup.exe", "Cannot be opened directly. Use the download button.")]
+    public void ActionHint_FileType_TellsWhatAClickDoes(string fileName, string expected)
+    {
+        var viewModel = Preview(Attachment(fileName));
+
+        viewModel.Apply(null);
+
+        viewModel.ActionHint.Should().Be(expected);
     }
 
     /// <summary>
