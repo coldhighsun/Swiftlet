@@ -9,8 +9,10 @@
       <TextBlock Classes="title" Text="{loc:Loc Settings_PagePerformance}" />
       <Border Classes="card">
         <StackPanel Spacing="8">
-          <CheckBox Content="{loc:Loc Settings_HardwareRendering}" IsChecked="{Binding UseHardwareRendering}" />
-          <TextBlock Classes="caption" Text="{loc:Loc Settings_HardwareRenderingHint}" TextWrapping="Wrap" Margin="28,0,0,0" />
+          <TextBlock Classes="section" Text="{loc:Loc Settings_SaveMemory}" />
+          <TextBlock Classes="caption" Text="{loc:Loc Settings_SaveMemoryHint}" TextWrapping="Wrap" />
+          <CheckBox Content="{loc:Loc Settings_SoftwareRendering}" IsChecked="{Binding UseSoftwareRendering}" Margin="0,8,0,0" />
+          <TextBlock Classes="caption" Text="{loc:Loc Settings_SoftwareRenderingHint}" TextWrapping="Wrap" Margin="28,0,0,0" />
           <CheckBox Content="{loc:Loc Settings_ReleaseWebView}" IsChecked="{Binding ReleaseWebViewWhenHidden}" Margin="0,8,0,0" />
           <TextBlock Classes="caption" Text="{loc:Loc Settings_ReleaseWebViewHint}" TextWrapping="Wrap" Margin="28,0,0,0" />
         </StackPanel>

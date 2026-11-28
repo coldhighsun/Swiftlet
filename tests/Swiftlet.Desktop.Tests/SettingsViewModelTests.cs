@@ -453,17 +453,35 @@ public class SettingsViewModelTests
     }
 
     /// <summary>
-    /// Verifies switching hardware rendering off saves the choice.
+    /// Verifies checking software rendering saves hardware rendering as off.
     /// </summary>
     [Fact]
-    public void UseHardwareRendering_Toggle_SavesValue()
+    public void UseSoftwareRendering_Toggle_SavesInvertedValue()
     {
         var settings = new FakeAppSettings();
         var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules());
-        viewModel.UseHardwareRendering.Should().BeTrue();
+        viewModel.UseSoftwareRendering.Should().BeFalse();
 
-        viewModel.UseHardwareRendering = false;
+        viewModel.UseSoftwareRendering = true;
 
+        settings.UseHardwareRendering.Should().BeFalse();
+
+        viewModel.UseSoftwareRendering = false;
+
+        settings.UseHardwareRendering.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies the checkbox is checked when hardware rendering is stored as off.
+    /// </summary>
+    [Fact]
+    public void UseSoftwareRendering_HardwareRenderingStoredOff_IsChecked()
+    {
+        var settings = new FakeAppSettings { UseHardwareRendering = false };
+
+        var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules());
+
+        viewModel.UseSoftwareRendering.Should().BeTrue();
         settings.UseHardwareRendering.Should().BeFalse();
     }
 
@@ -471,14 +489,14 @@ public class SettingsViewModelTests
     /// Verifies a failed save of the rendering choice is reported and the checkbox returns to the stored value.
     /// </summary>
     [Fact]
-    public void UseHardwareRendering_SaveFails_ShowsErrorAndRevertsValue()
+    public void UseSoftwareRendering_SaveFails_ShowsErrorAndRevertsValue()
     {
         var settings = new FakeAppSettings { Failure = new IOException("disk full") };
         var viewModel = new SettingsViewModel(settings, TestLocalizer.English(), new FakeRemoteImageRules());
 
-        viewModel.UseHardwareRendering = false;
+        viewModel.UseSoftwareRendering = true;
 
-        viewModel.UseHardwareRendering.Should().BeTrue();
+        viewModel.UseSoftwareRendering.Should().BeFalse();
         viewModel.ErrorText.Should().Contain("disk full");
     }
 
