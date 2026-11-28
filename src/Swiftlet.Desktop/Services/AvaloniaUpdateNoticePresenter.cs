@@ -1,3 +1,4 @@
+using Swiftlet.Desktop.Controls;
 using Swiftlet.Desktop.ViewModels.Update;
 using Swiftlet.Desktop.Views;
 
@@ -46,6 +47,9 @@ public sealed class AvaloniaUpdateNoticePresenter : IUpdateNoticePresenter
     {
         var window = _window;
         _window = null;
-        window?.Close();
+        if (window is not null)
+        {
+            _ = Entrance.CloseWithFadeAsync(window, window.Card);
+        }
     }
 }

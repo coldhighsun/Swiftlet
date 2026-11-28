@@ -652,6 +652,24 @@ internal sealed class FakeAppSettings : IAppSettings
     }
 
     /// <inheritdoc />
+    public bool EnableAnimations { get; set; } = true;
+
+    /// <inheritdoc />
+    public event EventHandler? EnableAnimationsChanged;
+
+    /// <inheritdoc />
+    public void SetEnableAnimations(bool value)
+    {
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+
+        EnableAnimations = value;
+        EnableAnimationsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <inheritdoc />
     public string TrayUnreadStyle { get; set; } = Swiftlet.Desktop.Settings.TrayUnreadStyle.Dot;
 
     /// <inheritdoc />

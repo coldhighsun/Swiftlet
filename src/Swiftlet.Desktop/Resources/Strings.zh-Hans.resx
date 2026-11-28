@@ -261,6 +261,8 @@
   <data name="Settings_SoftwareRenderingHint" xml:space="preserve"><value>改由处理器而非显卡绘制界面。内存占用明显减少，但滚动和缩放窗口时处理器占用会升高；画面显示异常时也可尝试开启。重启应用后生效（请从托盘图标退出，仅关闭窗口可能不够）。</value></data>
   <data name="Settings_ReleaseWebView" xml:space="preserve"><value>隐藏到托盘时释放邮件显示组件</value></data>
   <data name="Settings_ReleaseWebViewHint" xml:space="preserve"><value>主窗口隐藏时关闭用于显示 HTML 邮件的组件，从而释放内存。重新显示窗口时会再次加载当前邮件：正文会稍慢出现，并回到顶部。</value></data>
+  <data name="Settings_NoAnimations" xml:space="preserve"><value>关闭界面动画</value></data>
+  <data name="Settings_NoAnimationsHint" xml:space="preserve"><value>面板和弹出窗口不再淡入或滑动，颜色直接切换，同步图标不旋转。可节省处理器占用，尤其是在使用软件渲染时。立即生效。</value></data>
   <data name="Settings_TrayUnread" xml:space="preserve"><value>托盘未读提示</value></data>
   <data name="Settings_TrayUnreadDot" xml:space="preserve"><value>右下角红点</value></data>
   <data name="Settings_TrayUnreadBlink" xml:space="preserve"><value>图标闪烁</value></data>

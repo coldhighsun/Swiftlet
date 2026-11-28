@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Swiftlet.Application.Sync;
+using Swiftlet.Desktop.Controls;
 using Swiftlet.Desktop.Hosting;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
@@ -67,6 +68,10 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
             if (services.GetService<IAppSettings>() is { } settings)
             {
                 services.GetService<IThemeApplier>()?.Apply(settings.Theme);
+                Motion.Apply(this, settings.EnableAnimations);
+
+                // The settings window changes the choice on the UI thread, so it applies at once.
+                settings.EnableAnimationsChanged += (_, _) => Motion.Apply(this, settings.EnableAnimations);
             }
 
             if (startup is null || startup.IsStarted)
@@ -147,7 +152,8 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
 
             if (splash is { } finished)
             {
-                finished.Window.Close();
+                // The next window has taken over, so the splash screen may take a moment to disappear.
+                await Entrance.CloseWithFadeAsync(finished.Window, finished.Window.Card);
             }
             else
             {

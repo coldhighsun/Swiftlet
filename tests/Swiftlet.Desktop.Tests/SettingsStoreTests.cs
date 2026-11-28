@@ -227,6 +227,24 @@ public class SettingsStoreTests : IDisposable
     }
 
     /// <summary>
+    /// Verifies animations are on unless switched off, and the choice is saved and announced.
+    /// </summary>
+    [Fact]
+    public void EnableAnimations_DefaultsOnAndIsSavedAndAnnounced()
+    {
+        var store = new AppSettings(StorePath);
+        store.EnableAnimations.Should().BeTrue();
+        var announced = 0;
+        store.EnableAnimationsChanged += (_, _) => announced++;
+
+        store.SetEnableAnimations(false);
+        store.SetCloseToTray(false);
+
+        announced.Should().Be(1);
+        new AppSettings(StorePath).EnableAnimations.Should().BeFalse();
+    }
+
+    /// <summary>
     /// Verifies the tray style defaults to the dot, is saved and announced.
     /// </summary>
     [Fact]

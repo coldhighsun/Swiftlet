@@ -67,7 +67,7 @@
             BorderBrush="{DynamicResource Brush.Border}">
       <Grid ColumnDefinitions="*,Auto">
         <TextBlock Classes="caption" Text="{Binding StatusText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-        <ProgressBar Grid.Column="1" Width="120" IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
+        <ProgressBar Grid.Column="1" Width="120" IsIndeterminate="True" ctl:Entrance.Effect="Fade" IsVisible="{Binding IsBusy}" />
       </Grid>
     </Border>
 
@@ -139,7 +139,7 @@
                                VerticalAlignment="Center" />
                   </Border>
                   <DockPanel Grid.Column="1" HorizontalAlignment="Left">
-                    <TextBlock DockPanel.Dock="Right" Classes="caption badge" Text="{Binding UnreadText}" IsVisible="{Binding HasUnread}"
+                    <TextBlock DockPanel.Dock="Right" Classes="caption badge" ctl:Entrance.Effect="Pop" Text="{Binding UnreadText}" IsVisible="{Binding HasUnread}"
                                Margin="8,0,0,0" VerticalAlignment="Center" />
                     <TextBlock Text="{Binding DisplayName}" Classes.unread="{Binding HasUnread}" VerticalAlignment="Center"
                                TextTrimming="CharacterEllipsis" />
@@ -151,7 +151,7 @@
                   <PathIcon Data="{StaticResource Icon.AllInboxes}" />
                   <!-- The badge is measured first, so it follows the name and stays visible when the name is trimmed. -->
                   <DockPanel Grid.Column="1" HorizontalAlignment="Left">
-                    <TextBlock DockPanel.Dock="Right" Classes="caption badge" Text="{Binding UnreadText}" IsVisible="{Binding HasUnread}"
+                    <TextBlock DockPanel.Dock="Right" Classes="caption badge" ctl:Entrance.Effect="Pop" Text="{Binding UnreadText}" IsVisible="{Binding HasUnread}"
                                Margin="8,0,0,0" VerticalAlignment="Center" />
                     <TextBlock Text="{Binding Name}" Classes.unread="{Binding HasUnread}" TextTrimming="CharacterEllipsis" />
                   </DockPanel>
@@ -174,7 +174,7 @@
                   </Grid.ContextMenu>
                   <PathIcon Data="{Binding IconKey, Converter={x:Static conv:IconKeyConverter.Instance}}" />
                   <DockPanel Grid.Column="1" HorizontalAlignment="Left">
-                    <TextBlock DockPanel.Dock="Right" Classes="caption badge" Text="{Binding UnreadText}" IsVisible="{Binding HasUnread}"
+                    <TextBlock DockPanel.Dock="Right" Classes="caption badge" ctl:Entrance.Effect="Pop" Text="{Binding UnreadText}" IsVisible="{Binding HasUnread}"
                                Margin="8,0,0,0" VerticalAlignment="Center" />
                     <TextBlock Text="{Binding Name}" Classes.unread="{Binding HasUnread}" TextTrimming="CharacterEllipsis" />
                   </DockPanel>
@@ -215,12 +215,12 @@
             </ToggleButton>
             <Button Grid.Column="2" Classes="icon" Command="{Binding SyncCommand}"
                     ToolTip.Tip="{loc:Loc Toolbar_Sync}" AutomationProperties.Name="{loc:Loc Toolbar_Sync}">
-              <PathIcon Data="{StaticResource Icon.Sync}" />
+              <PathIcon Data="{StaticResource Icon.Sync}" Classes.spinning="{Binding SyncCommand.IsRunning}" />
             </Button>
           </Grid>
 
           <!-- The height is limited so the list stays usable in a low window; the conditions scroll, the buttons stay. -->
-          <Border x:Name="SearchFilters" DockPanel.Dock="Top" Classes="card filters" IsVisible="{Binding Filter.IsExpanded}">
+          <Border x:Name="SearchFilters" DockPanel.Dock="Top" Classes="card filters" ctl:Entrance.Effect="SlideDown" IsVisible="{Binding Filter.IsExpanded}">
             <DockPanel MaxHeight="360">
               <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="12,8,12,12">
                 <Button Content="{loc:Loc Search_Clear}" Command="{Binding ClearSearchFiltersCommand}" />
@@ -386,19 +386,19 @@
                 </DataTemplate>
               </ListBox.ItemTemplate>
             </ListBox>
-            <StackPanel Classes="empty"
+            <StackPanel Classes="empty" ctl:Entrance.Effect="Fade"
                         IsVisible="{Binding ListEmptyState, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static main:EmptyState.NoAccounts}}">
               <PathIcon Data="{StaticResource Icon.AddAccount}" />
               <TextBlock Classes="secondary" Text="{loc:Loc Empty_NoAccounts}" />
               <Button Classes="accent" HorizontalAlignment="Center" Command="{Binding AddAccountCommand}"
                       Content="{loc:Loc Toolbar_AddAccount}" />
             </StackPanel>
-            <StackPanel Classes="empty"
+            <StackPanel Classes="empty" ctl:Entrance.Effect="Fade"
                         IsVisible="{Binding ListEmptyState, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static main:EmptyState.EmptyView}}">
               <PathIcon Data="{StaticResource Icon.Mail}" />
               <TextBlock Classes="secondary" Text="{loc:Loc Empty_View}" />
             </StackPanel>
-            <StackPanel Classes="empty"
+            <StackPanel Classes="empty" ctl:Entrance.Effect="Fade"
                         IsVisible="{Binding ListEmptyState, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static main:EmptyState.NoSearchResults}}">
               <PathIcon Data="{StaticResource Icon.Search}" />
               <TextBlock Classes="secondary" Text="{loc:Loc Empty_Search}" />
@@ -412,7 +412,7 @@
       <Border x:Name="ReaderPane" Grid.Column="4" Background="{DynamicResource Brush.Surface}" BorderThickness="1,0,0,0"
               BorderBrush="{DynamicResource Brush.Border}" IsVisible="{Binding !IsAccountPageShown}">
         <DockPanel>
-          <Border x:Name="NewMailBar" DockPanel.Dock="Top" Padding="12,4" Background="{DynamicResource Brush.AccentSubtle}"
+          <Border x:Name="NewMailBar" ctl:Entrance.Effect="Fade" DockPanel.Dock="Top" Padding="12,4" Background="{DynamicResource Brush.AccentSubtle}"
                   BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Brush.Border}" IsVisible="{Binding NewMail, Converter={x:Static ObjectConverters.IsNotNull}}">
             <StackPanel Orientation="Horizontal" Spacing="8" DataContext="{Binding NewMail}">
               <TextBlock Classes="caption" VerticalAlignment="Center" Text="{loc:Loc Reader_NewMail}" />
@@ -427,7 +427,7 @@
               </Button>
             </StackPanel>
           </Border>
-          <WrapPanel x:Name="ReaderActions" DockPanel.Dock="Top" Margin="8" IsVisible="{Binding !IsNoMessageSelected}">
+          <WrapPanel x:Name="ReaderActions" ctl:Entrance.Effect="Fade" DockPanel.Dock="Top" Margin="8" IsVisible="{Binding !IsNoMessageSelected}">
             <Button Classes="icon" Command="{Binding ReplyCommand}"
                     ToolTip.Tip="{loc:Loc Toolbar_Reply}" AutomationProperties.Name="{loc:Loc Toolbar_Reply}">
               <StackPanel Orientation="Horizontal" Spacing="8">
@@ -496,7 +496,7 @@
             </Button>
           </WrapPanel>
           <Grid>
-            <StackPanel Classes="empty" IsVisible="{Binding IsNoMessageSelected}">
+            <StackPanel Classes="empty" ctl:Entrance.Effect="Fade" IsVisible="{Binding IsNoMessageSelected}">
               <PathIcon Data="{StaticResource Icon.Mail}" />
               <TextBlock Classes="secondary" Text="{loc:Loc Reader_Placeholder}" />
             </StackPanel>
@@ -577,10 +577,10 @@
                     <Border Height="1" Margin="0,0,0,12" Background="{DynamicResource Brush.Border}" />
                   </StackPanel>
                   <!-- In the layout, not in a popup: the native web view below would cover one. -->
-                  <views:AiPanel DockPanel.Dock="Top"
+                  <views:AiPanel DockPanel.Dock="Top" ctl:Entrance.Effect="Fade"
                                  DataContext="{Binding $parent[Window].((main:MainWindowViewModel)DataContext).AiAssist}"
                                  IsVisible="{Binding IsOpen, FallbackValue=False}" />
-                  <Border DockPanel.Dock="Top" IsVisible="{Binding HasBlockedRemoteImages}" Padding="12,8" Margin="0,0,0,8"
+                  <Border DockPanel.Dock="Top" IsVisible="{Binding HasBlockedRemoteImages}" ctl:Entrance.Effect="Fade" Padding="12,8" Margin="0,0,0,8"
                           Background="{DynamicResource Brush.WarningBg}" CornerRadius="8">
                     <DockPanel>
                       <SplitButton DockPanel.Dock="Right" Content="{loc:Loc Reader_LoadImages}" Command="{Binding LoadRemoteImagesCommand}">
@@ -611,7 +611,7 @@
       </Border>
 
       <!-- Takes the place of the message list and the reading pane while an account is selected. -->
-      <ContentControl x:Name="AccountPane" Grid.Column="2" Grid.ColumnSpan="3" Content="{Binding AccountPage}"
+      <ContentControl x:Name="AccountPane" ctl:Entrance.Effect="Fade" Grid.Column="2" Grid.ColumnSpan="3" Content="{Binding AccountPage}"
                       IsVisible="{Binding IsAccountPageShown}" HorizontalContentAlignment="Stretch"
                       VerticalContentAlignment="Stretch">
         <ContentControl.ContentTemplate>

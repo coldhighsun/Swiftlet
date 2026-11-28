@@ -68,6 +68,22 @@ public interface IAppSettings : ISyncSettings
     void SetReleaseWebViewWhenHidden(bool value);
 
     /// <summary>
+    /// Gets a value indicating whether the user interface is animated.
+    /// </summary>
+    bool EnableAnimations { get; }
+
+    /// <summary>
+    /// Raised after a changed <see cref="EnableAnimations"/> was saved, so the animations can follow at once.
+    /// </summary>
+    event EventHandler? EnableAnimationsChanged;
+
+    /// <summary>
+    /// Changes whether the user interface is animated, and saves the choice.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    void SetEnableAnimations(bool value);
+
+    /// <summary>
     /// Gets a value indicating whether newly arrived mail is announced with a pop-up.
     /// </summary>
     bool ShowNewMailNotifications { get; }
@@ -214,6 +230,11 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
     private volatile bool _releaseWebViewWhenHidden;
 
     /// <summary>
+    /// The in-memory value, read when the application starts and when it changes.
+    /// </summary>
+    private volatile bool _enableAnimations;
+
+    /// <summary>
     /// The in-memory language preference, guarded by <see cref="_gate"/>; kept so a corrupt file never resets it.
     /// </summary>
     private string? _language;
@@ -269,6 +290,7 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
         _startMinimized = file.StartMinimized ?? false;
         _useHardwareRendering = file.UseHardwareRendering ?? true;
         _releaseWebViewWhenHidden = file.ReleaseWebViewWhenHidden ?? false;
+        _enableAnimations = file.EnableAnimations ?? true;
         _theme = ThemePreference.Normalize(
             file.Theme is { ValueKind: JsonValueKind.String } theme ? theme.GetString() : null);
         _trayUnreadStyle = Settings.TrayUnreadStyle.Normalize(
@@ -299,6 +321,7 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
     /// <param name="Ai">The AI settings, without the API key; raw JSON for the same reason as the theme.</param>
     /// <param name="UseHardwareRendering">Whether the graphics card may draw the application.</param>
     /// <param name="ReleaseWebViewWhenHidden">Whether the web view is released while the main window is hidden.</param>
+    /// <param name="EnableAnimations">Whether the user interface is animated.</param>
     private sealed record SettingsFile(
         string? Language,
         bool? SyncServerDeletions,
@@ -314,7 +337,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
         JsonElement? UpdateCheck = null,
         JsonElement? Ai = null,
         bool? UseHardwareRendering = null,
-        bool? ReleaseWebViewWhenHidden = null);
+        bool? ReleaseWebViewWhenHidden = null,
+        bool? EnableAnimations = null);
 
     /// <inheritdoc />
     public bool RemoveServerDeletedMessages => _removeServerDeletedMessages;
@@ -339,6 +363,12 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
 
     /// <inheritdoc />
     public bool ReleaseWebViewWhenHidden => _releaseWebViewWhenHidden;
+
+    /// <inheritdoc />
+    public bool EnableAnimations => _enableAnimations;
+
+    /// <inheritdoc />
+    public event EventHandler? EnableAnimationsChanged;
 
     /// <inheritdoc />
     public string TrayUnreadStyle => _trayUnreadStyle;
@@ -514,6 +544,19 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
     }
 
     /// <inheritdoc />
+    public void SetEnableAnimations(bool value)
+    {
+        lock (_gate)
+        {
+            Write(Snapshot() with { EnableAnimations = value });
+            _enableAnimations = value;
+        }
+
+        // Outside the lock, so a listener may read the settings from any thread.
+        EnableAnimationsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <inheritdoc />
     public void SetTrayUnreadStyle(string value)
     {
         var style = Settings.TrayUnreadStyle.Normalize(value);
@@ -573,7 +616,8 @@ public sealed class AppSettings : ILanguagePreferenceStore, IAppSettings, IAiSet
             SerializeUpdateCheckState(_updateCheckState),
             JsonSerializer.SerializeToElement(_ai, AiOptions),
             _useHardwareRendering,
-            _releaseWebViewWhenHidden);
+            _releaseWebViewWhenHidden,
+            _enableAnimations);
     }
 
     /// <summary>

@@ -1,0 +1,46 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:hosting="using:Swiftlet.Desktop.Hosting">
+  <!-- Added to the application only while animations are switched on (Hosting/Motion). Color changes under the pointer
+       and on selection are softened, and the sync icon spins. The transitions sit on template parts where possible, so
+       the transitions a theme puts on the control itself (the press effect of buttons) stay. Their content is built by
+       Motion. -->
+  <Style Selector=":is(Button) /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Transitions" Value="{x:Static hosting:Motion.BackgroundTransitions}" />
+  </Style>
+
+  <!-- The template of a text link has no named part, so the transition is on the link itself. -->
+  <Style Selector="HyperlinkButton.link">
+    <Setter Property="Transitions" Value="{x:Static hosting:Motion.LinkTransitions}" />
+  </Style>
+
+  <Style Selector="ListBoxItem /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Transitions" Value="{x:Static hosting:Motion.RowTransitions}" />
+  </Style>
+
+  <Style Selector="TreeViewItem /template/ Border#PART_LayoutRoot">
+    <Setter Property="Transitions" Value="{x:Static hosting:Motion.BackgroundTransitions}" />
+  </Style>
+
+  <Style Selector="TabItem /template/ Border#PART_LayoutRoot">
+    <Setter Property="Transitions" Value="{x:Static hosting:Motion.BackgroundTransitions}" />
+  </Style>
+
+  <!-- The rows of the contacts window draw their own hover and selection. -->
+  <Style Selector="Border.row">
+    <Setter Property="Transitions" Value="{x:Static hosting:Motion.BackgroundTransitions}" />
+  </Style>
+
+  <Style Selector="PathIcon.spinning">
+    <Style.Animations>
+      <Animation Duration="0:0:1" IterationCount="INFINITE">
+        <KeyFrame Cue="0%">
+          <Setter Property="RotateTransform.Angle" Value="0" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="RotateTransform.Angle" Value="360" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+</Styles>

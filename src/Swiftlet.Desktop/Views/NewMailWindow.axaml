@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ctl="using:Swiftlet.Desktop.Controls"
         xmlns:vm="using:Swiftlet.Desktop.ViewModels"
         xmlns:loc="using:Swiftlet.Desktop.Localization"
         x:Class="Swiftlet.Desktop.Views.NewMailWindow"
@@ -30,7 +31,7 @@
     </Style>
   </Window.Styles>
   <!-- The window itself is transparent, so only this card with its round corners is seen. -->
-  <Border x:Name="Card" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}"
+  <Border x:Name="Card" ctl:Entrance.Effect="SlideUp" ctl:Entrance.OnAttach="True" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}"
           BorderThickness="1" CornerRadius="12" ClipToBounds="True">
     <StackPanel>
       <Grid ColumnDefinitions="*,Auto">
