@@ -18,8 +18,14 @@ permissions:
 jobs:
   # ── Build & Test ─────────────────────────────────────────────────────────────
   build-and-test:
-    name: Build & Test
-    runs-on: windows-latest
+    name: Build & Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      # A failure on one platform must not hide the results of the others.
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
 
     steps:
       - name: Checkout
