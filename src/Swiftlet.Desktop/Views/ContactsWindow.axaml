@@ -180,8 +180,10 @@
             <WrapPanel ItemSpacing="8" LineSpacing="8">
               <Button Classes="accent" Content="{loc:Loc Contacts_Add}" Command="{Binding AddSelectedCollectedCommand}" />
               <Button Content="{loc:Loc Contacts_Write}" Command="{Binding WriteCollectedCommand}" />
-              <Button Classes="danger" Content="{loc:Loc Contacts_Remove}"
-                      Command="{Binding RemoveSelectedCollectedCommand}" />
+              <Button Classes="icon danger" Command="{Binding RemoveSelectedCollectedCommand}"
+                      ToolTip.Tip="{loc:Loc Contacts_Remove}" AutomationProperties.Name="{loc:Loc Contacts_Remove}">
+                <PathIcon Data="{StaticResource Icon.Delete}" />
+              </Button>
             </WrapPanel>
           </StackPanel>
           <StackPanel IsVisible="{Binding IsManyCollectedShown}" Spacing="16" Margin="24" HorizontalAlignment="Center"
@@ -190,8 +192,10 @@
                        TextWrapping="Wrap" />
             <WrapPanel ItemSpacing="8" LineSpacing="8" HorizontalAlignment="Center">
               <Button Classes="accent" Content="{loc:Loc Contacts_Add}" Command="{Binding AddSelectedCollectedCommand}" />
-              <Button Classes="danger" Content="{loc:Loc Contacts_Remove}"
-                      Command="{Binding RemoveSelectedCollectedCommand}" />
+              <Button Classes="icon danger" Command="{Binding RemoveSelectedCollectedCommand}"
+                      ToolTip.Tip="{loc:Loc Contacts_Remove}" AutomationProperties.Name="{loc:Loc Contacts_Remove}">
+                <PathIcon Data="{StaticResource Icon.Delete}" />
+              </Button>
             </WrapPanel>
           </StackPanel>
         </Panel>

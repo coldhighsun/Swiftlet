@@ -49,11 +49,11 @@
                     <Border Grid.Column="1" Classes="tag" VerticalAlignment="Center">
                       <TextBlock Classes="caption" Text="{Binding KindText}" />
                     </Border>
-                    <Button Grid.Column="2" Classes="icon" CommandParameter="{Binding}"
+                    <Button Grid.Column="2" Classes="icon danger" CommandParameter="{Binding}"
                             Command="{Binding $parent[UserControl].((settings:SettingsViewModel)DataContext).RemoveRemoteImageRuleCommand}"
                             ToolTip.Tip="{loc:Loc Settings_RemoteImagesRemove}"
                             AutomationProperties.Name="{loc:Loc Settings_RemoteImagesRemove}">
-                      <PathIcon Data="{StaticResource Icon.Delete}" Width="16" Height="16" />
+                      <PathIcon Data="{StaticResource Icon.Delete}" />
                     </Button>
                   </Grid>
                 </DataTemplate>
