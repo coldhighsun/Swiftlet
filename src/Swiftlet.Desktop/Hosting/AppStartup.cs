@@ -8,9 +8,12 @@ namespace Swiftlet.Desktop.Hosting;
 /// Runs the part of the startup that may only happen once the databases are ready.
 /// </summary>
 /// <param name="host">The host of the background services.</param>
-/// <param name="initializeDatabase">Creates and upgrades the database schemas.</param>
+/// <param name="initializeDatabase">Creates and upgrades the database schemas, reporting its steps if asked to.</param>
 /// <param name="logger">The logger; optional.</param>
-public sealed class AppStartup(IHost host, Func<IServiceProvider, Task> initializeDatabase, ILogger<AppStartup>? logger = null)
+public sealed class AppStartup(
+    IHost host,
+    Func<IServiceProvider, IProgress<StartupProgress>?, Task> initializeDatabase,
+    ILogger<AppStartup>? logger = null)
 {
     /// <summary>
     /// Gets a value indicating whether the databases are initialized and the background services run.
@@ -21,11 +24,13 @@ public sealed class AppStartup(IHost host, Func<IServiceProvider, Task> initiali
     /// Starts without asking the user when the databases need no conversion and have no problem.
     /// </summary>
     /// <param name="protection">Prepares the databases.</param>
+    /// <param name="progress">Told which step the startup reached; optional.</param>
     /// <returns>Whether the application started; otherwise the startup window has to take over.</returns>
-    public async Task<bool> TryStartQuietlyAsync(IDatabaseProtection protection)
+    public async Task<bool> TryStartQuietlyAsync(IDatabaseProtection protection, IProgress<StartupProgress>? progress = null)
     {
         ArgumentNullException.ThrowIfNull(protection);
 
+        progress?.Report(new StartupProgress(StartupStage.CheckingDatabase));
         try
         {
             var assessment = await protection.AssessAsync();
@@ -47,22 +52,24 @@ public sealed class AppStartup(IHost host, Func<IServiceProvider, Task> initiali
             return false;
         }
 
-        await StartAsync();
+        await StartAsync(progress);
         return true;
     }
 
     /// <summary>
     /// Initializes the databases and starts the background services; does nothing when already started.
     /// </summary>
+    /// <param name="progress">Told which step the startup reached; optional.</param>
     /// <returns>A task that completes when the application has started.</returns>
-    public async Task StartAsync()
+    public async Task StartAsync(IProgress<StartupProgress>? progress = null)
     {
         if (IsStarted)
         {
             return;
         }
 
-        await initializeDatabase(host.Services);
+        await initializeDatabase(host.Services, progress);
+        progress?.Report(new StartupProgress(StartupStage.StartingServices));
         await host.StartAsync();
         IsStarted = true;
     }

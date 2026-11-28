@@ -52,11 +52,59 @@ public sealed class AppStartupTests
     {
         return new AppStartup(
             new RecordingHost(_events),
-            _ =>
+            (_, progress) =>
             {
                 _events.Add("database");
+                progress?.Report(new StartupProgress(StartupStage.OpeningDatabase));
                 return Task.CompletedTask;
             });
+    }
+
+    /// <summary>
+    /// Records the reported steps in order.
+    /// </summary>
+    private sealed class RecordingProgress : IProgress<StartupProgress>
+    {
+        /// <summary>
+        /// Gets the reported steps.
+        /// </summary>
+        public List<StartupStage> Stages { get; } = [];
+
+        /// <inheritdoc />
+        public void Report(StartupProgress value)
+        {
+            Stages.Add(value.Stage);
+        }
+    }
+
+    /// <summary>
+    /// Verifies a quiet start reports its steps in order.
+    /// </summary>
+    [Fact]
+    public async Task TryStartQuietlyAsync_NothingToDo_ReportsStepsInOrder()
+    {
+        var progress = new RecordingProgress();
+
+        await Create().TryStartQuietlyAsync(new FakeDatabaseProtection(), progress);
+
+        progress.Stages.Should().Equal(StartupStage.CheckingDatabase, StartupStage.OpeningDatabase, StartupStage.StartingServices);
+    }
+
+    /// <summary>
+    /// Verifies nothing beyond the check is reported when the startup window has to take over.
+    /// </summary>
+    [Fact]
+    public async Task TryStartQuietlyAsync_ConversionPending_ReportsOnlyTheCheck()
+    {
+        var protection = new FakeDatabaseProtection
+        {
+            Assessment = new DatabaseProtectionAssessment(new DatabaseProtectionResult(DatabaseProtectionProblem.None), 1),
+        };
+        var progress = new RecordingProgress();
+
+        await Create().TryStartQuietlyAsync(protection, progress);
+
+        progress.Stages.Should().Equal(StartupStage.CheckingDatabase);
     }
 
     /// <summary>

@@ -112,9 +112,6 @@ internal static class Program
         previews.RemoveLeftovers();
         var startup = new AppStartup(host, InitializeDatabaseAsync, host.Services.GetService<ILogger<AppStartup>>());
 
-        // Usually the databases are ready at once; otherwise the application shows the startup window first.
-        var protection = host.Services.GetRequiredService<IDatabaseProtection>();
-        Task.Run(() => startup.TryStartQuietlyAsync(protection)).GetAwaiter().GetResult();
         try
         {
             BuildAvaloniaApp(host.Services, startup).StartWithClassicDesktopLifetime(args);
@@ -203,9 +200,11 @@ internal static class Program
     /// Creates the database schema before anything reads from it.
     /// </summary>
     /// <param name="services">The service provider.</param>
+    /// <param name="progress">Told which database is being opened; optional.</param>
     /// <returns>A task that completes when the schema is ready.</returns>
-    private static async Task InitializeDatabaseAsync(IServiceProvider services)
+    private static async Task InitializeDatabaseAsync(IServiceProvider services, IProgress<StartupProgress>? progress)
     {
+        progress?.Report(new StartupProgress(StartupStage.OpeningDatabase));
         await using var scope = services.CreateAsyncScope();
         if (services.GetRequiredService<IDatabaseProtection>().Status == DatabaseProtectionStatus.NotEncryptedNoKeychain)
         {
@@ -220,9 +219,11 @@ internal static class Program
 
         // Existing account databases are opened once so their schema upgrades run before the UI reads them.
         var factory = scope.ServiceProvider.GetRequiredService<IAccountDbContextFactory>();
-        foreach (var accountId in await global.Accounts.AsNoTracking().Select(a => a.Id).ToListAsync())
+        var accountIds = await global.Accounts.AsNoTracking().Select(a => a.Id).ToListAsync();
+        for (var index = 0; index < accountIds.Count; index++)
         {
-            await using var accountContext = await factory.CreateAsync(accountId);
+            progress?.Report(new StartupProgress(StartupStage.OpeningAccount, index + 1, accountIds.Count));
+            await using var accountContext = await factory.CreateAsync(accountIds[index]);
         }
     }
 }

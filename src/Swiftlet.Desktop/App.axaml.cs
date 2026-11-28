@@ -36,6 +36,11 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
     }
 
     /// <summary>
+    /// How long the splash screen is shown at least, so that a fast start does not only flash it.
+    /// </summary>
+    private static readonly TimeSpan MinimumSplashDuration = TimeSpan.FromSeconds(1);
+
+    /// <summary>
     /// Brings the current main window to the front.
     /// </summary>
     private WindowActivator? _activator;
@@ -49,8 +54,8 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
     }
 
     /// <summary>
-    /// Creates the first window once the framework is initialized: the main window, or the startup window while the
-    /// databases are not ready.
+    /// Creates the first window once the framework is initialized: the splash screen while the application starts, or
+    /// the main window when it already has. A hidden start has no splash screen.
     /// </summary>
     public override void OnFrameworkInitializationCompleted()
     {
@@ -66,21 +71,95 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
 
             if (startup is null || startup.IsStarted)
             {
-                var main = CreateMainWindow();
-                AdoptMain(desktop, main);
-                KeepInTray(desktop, main);
-                AnnounceNewMail(desktop, main);
-                WatchForUpdates(desktop, main);
+                // The framework shows the main window on its own.
+                ShowMain(desktop, CreateMainWindow());
+                ShowWindowOnRequest();
+            }
+            else if (services.GetService<IAppSettings>() is { StartMinimized: true })
+            {
+                // No window exists while preparing, so only the application itself may end the process. A request to
+                // show the window is kept until there is one.
+                desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+                Dispatcher.UIThread.Post(() => _ = LaunchAsync(desktop, startup, null));
             }
             else
             {
-                Adopt(desktop, CreateStartupWindow(desktop, startup));
-            }
+                var viewModel = new SplashViewModel(
+                    services.GetRequiredService<ILocalizer>(),
+                    services.GetRequiredService<IUiThread>());
+                var splash = new SplashWindow { DataContext = viewModel };
 
-            ShowWindowOnRequest();
+                // Started once the splash screen is open, so that it is on screen during the work.
+                splash.Opened += (_, _) => _ = LaunchAsync(desktop, startup, (splash, viewModel));
+                Adopt(desktop, splash);
+                ShowWindowOnRequest();
+            }
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>
+    /// Starts the application and replaces the splash screen with the main window, or with the startup window when the
+    /// databases need the user.
+    /// </summary>
+    /// <param name="desktop">The desktop lifetime.</param>
+    /// <param name="pending">Starts the application once the databases are ready.</param>
+    /// <param name="splash">The splash screen and its view model; <see langword="null"/> for a hidden start.</param>
+    /// <returns>A task that completes when the next window has taken over.</returns>
+    private async Task LaunchAsync(
+        IClassicDesktopStyleApplicationLifetime desktop,
+        AppStartup pending,
+        (SplashWindow Window, SplashViewModel ViewModel)? splash)
+    {
+        try
+        {
+            var protection = services.GetRequiredService<IDatabaseProtection>();
+            var started = await SplashStartup.RunAsync(
+                () => pending.TryStartQuietlyAsync(protection, splash?.ViewModel),
+                splash is null ? TimeSpan.Zero : MinimumSplashDuration,
+                TimeProvider.System);
+
+            // The new window takes over before the splash screen closes, so closing it does not end the application.
+            if (started)
+            {
+                if (splash is { } shown)
+                {
+                    shown.ViewModel.Report(new StartupProgress(StartupStage.LoadingWindow));
+
+                    // Creating the window blocks the UI thread, so the text is drawn first.
+                    await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+                }
+
+                var main = CreateMainWindow();
+                if (!ShowMain(desktop, main))
+                {
+                    main.Show();
+                }
+            }
+            else
+            {
+                desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
+                var window = CreateStartupWindow(desktop, pending);
+                Adopt(desktop, window);
+                window.Show();
+            }
+
+            if (splash is { } finished)
+            {
+                finished.Window.Close();
+            }
+            else
+            {
+                ShowWindowOnRequest();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Nothing awaits this task; without databases or background services nothing can work.
+            services.GetService<ILogger<App>>()?.LogCritical(ex, "Starting the application failed");
+            desktop.Shutdown(1);
+        }
     }
 
     /// <summary>
@@ -136,6 +215,21 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
         window.Closed += (_, _) => desktop.Shutdown();
         window.Opened += (_, _) => desktop.MainWindow ??= window;
         return true;
+    }
+
+    /// <summary>
+    /// Makes a new main window the main window and starts everything that works beside it.
+    /// </summary>
+    /// <param name="desktop">The desktop lifetime.</param>
+    /// <param name="window">The main window.</param>
+    /// <returns><see langword="true"/> if the window was left hidden.</returns>
+    private bool ShowMain(IClassicDesktopStyleApplicationLifetime desktop, MainWindow window)
+    {
+        var hidden = AdoptMain(desktop, window);
+        KeepInTray(desktop, window);
+        AnnounceNewMail(desktop, window);
+        WatchForUpdates(desktop, window);
+        return hidden;
     }
 
     /// <summary>
@@ -260,15 +354,11 @@ public sealed class App(IServiceProvider services, AppStartup? startup) : Avalon
         {
             try
             {
-                await Task.Run(pending.StartAsync);
+                await Task.Run(() => pending.StartAsync());
                 var main = CreateMainWindow();
 
                 // The main window takes over first, so closing the startup window does not end the application.
-                var hidden = AdoptMain(desktop, main);
-                KeepInTray(desktop, main);
-                AnnounceNewMail(desktop, main);
-                WatchForUpdates(desktop, main);
-                if (!hidden)
+                if (!ShowMain(desktop, main))
                 {
                     main.Show();
                 }
