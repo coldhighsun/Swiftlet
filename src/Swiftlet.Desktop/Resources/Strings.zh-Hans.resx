@@ -161,6 +161,7 @@
   <data name="Compose_To" xml:space="preserve"><value>收件人</value></data>
   <data name="Compose_Cc" xml:space="preserve"><value>抄送</value></data>
   <data name="Compose_Bcc" xml:space="preserve"><value>密送</value></data>
+  <data name="Compose_ShowCcBcc" xml:space="preserve"><value>抄送/密送</value></data>
   <data name="Compose_Subject" xml:space="preserve"><value>主题</value></data>
   <data name="Compose_RecipientsPlaceholder" xml:space="preserve"><value>多个地址用逗号或分号分隔</value></data>
   <data name="Compose_AddAttachment" xml:space="preserve"><value>添加附件…</value></data>

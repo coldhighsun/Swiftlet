@@ -54,7 +54,7 @@
 
     <Border Classes="card" Padding="12" ClipToBounds="True">
       <DockPanel>
-        <Grid DockPanel.Dock="Top" ColumnDefinitions="80,*" RowDefinitions="44,44,44,44,44">
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="80,*" RowDefinitions="44,44,Auto,44">
           <Border Grid.Row="0" Grid.ColumnSpan="2" Classes="separator" />
           <TextBlock Grid.Row="0" Classes="secondary" Text="{loc:Loc Compose_From}" VerticalAlignment="Center" />
           <ComboBox Grid.Row="0" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Center"
@@ -68,22 +68,32 @@
           </ComboBox>
           <Border Grid.Row="1" Grid.ColumnSpan="2" Classes="separator" />
           <TextBlock Grid.Row="1" Classes="secondary" Text="{loc:Loc Compose_To}" VerticalAlignment="Center" />
-          <ctl:RecipientBox Grid.Row="1" Grid.Column="1" Classes="flat" VerticalAlignment="Center" HorizontalAlignment="Stretch"
-                            Text="{Binding To, Mode=TwoWay}" ItemsSource="{Binding Suggestions}" PlaceholderText="{loc:Loc Compose_RecipientsPlaceholder}"
-                            AutomationProperties.Name="{loc:Loc Compose_To}" ItemTemplate="{StaticResource SuggestionTemplate}" />
-          <Border Grid.Row="2" Grid.ColumnSpan="2" Classes="separator" />
-          <TextBlock Grid.Row="2" Classes="secondary" Text="{loc:Loc Compose_Cc}" VerticalAlignment="Center" />
-          <ctl:RecipientBox Grid.Row="2" Grid.Column="1" Classes="flat" VerticalAlignment="Center" HorizontalAlignment="Stretch"
-                            Text="{Binding Cc, Mode=TwoWay}" ItemsSource="{Binding Suggestions}"
-                            AutomationProperties.Name="{loc:Loc Compose_Cc}" ItemTemplate="{StaticResource SuggestionTemplate}" />
+          <DockPanel Grid.Row="1" Grid.Column="1">
+            <Button DockPanel.Dock="Right" Classes="icon" Padding="8,4" Margin="8,0,0,0" VerticalAlignment="Center"
+                    Foreground="{DynamicResource Brush.TextSecondary}"
+                    Content="{loc:Loc Compose_ShowCcBcc}" Command="{Binding ShowCcBccCommand}"
+                    IsVisible="{Binding !IsCcBccShown}" />
+            <ctl:RecipientBox Classes="flat" VerticalAlignment="Center" HorizontalAlignment="Stretch"
+                              Text="{Binding To, Mode=TwoWay}" ItemsSource="{Binding Suggestions}" PlaceholderText="{loc:Loc Compose_RecipientsPlaceholder}"
+                              AutomationProperties.Name="{loc:Loc Compose_To}" ItemTemplate="{StaticResource SuggestionTemplate}" />
+          </DockPanel>
+          <!-- One block, so both rows come into view together. Its row takes no height while it is hidden. -->
+          <Grid x:Name="CcBccRows" Grid.Row="2" Grid.ColumnSpan="2" ColumnDefinitions="80,*" RowDefinitions="44,44"
+                ctl:Entrance.Effect="SlideDown" IsVisible="{Binding IsCcBccShown}">
+            <Border Grid.Row="0" Grid.ColumnSpan="2" Classes="separator" />
+            <TextBlock Grid.Row="0" Classes="secondary" Text="{loc:Loc Compose_Cc}" VerticalAlignment="Center" />
+            <ctl:RecipientBox x:Name="CcBox" Grid.Row="0" Grid.Column="1" Classes="flat" VerticalAlignment="Center" HorizontalAlignment="Stretch"
+                              Text="{Binding Cc, Mode=TwoWay}" ItemsSource="{Binding Suggestions}"
+                              AutomationProperties.Name="{loc:Loc Compose_Cc}" ItemTemplate="{StaticResource SuggestionTemplate}" />
+            <Border Grid.Row="1" Grid.ColumnSpan="2" Classes="separator" />
+            <TextBlock Grid.Row="1" Classes="secondary" Text="{loc:Loc Compose_Bcc}" VerticalAlignment="Center" />
+            <ctl:RecipientBox Grid.Row="1" Grid.Column="1" Classes="flat" VerticalAlignment="Center" HorizontalAlignment="Stretch"
+                              Text="{Binding Bcc, Mode=TwoWay}" ItemsSource="{Binding Suggestions}"
+                              AutomationProperties.Name="{loc:Loc Compose_Bcc}" ItemTemplate="{StaticResource SuggestionTemplate}" />
+          </Grid>
           <Border Grid.Row="3" Grid.ColumnSpan="2" Classes="separator" />
-          <TextBlock Grid.Row="3" Classes="secondary" Text="{loc:Loc Compose_Bcc}" VerticalAlignment="Center" />
-          <ctl:RecipientBox Grid.Row="3" Grid.Column="1" Classes="flat" VerticalAlignment="Center" HorizontalAlignment="Stretch"
-                            Text="{Binding Bcc, Mode=TwoWay}" ItemsSource="{Binding Suggestions}"
-                            AutomationProperties.Name="{loc:Loc Compose_Bcc}" ItemTemplate="{StaticResource SuggestionTemplate}" />
-          <Border Grid.Row="4" Grid.ColumnSpan="2" Classes="separator" />
-          <TextBlock Grid.Row="4" Classes="secondary" Text="{loc:Loc Compose_Subject}" VerticalAlignment="Center" />
-          <TextBox Grid.Row="4" Grid.Column="1" Classes="flat" Text="{Binding Subject}" VerticalAlignment="Center" />
+          <TextBlock Grid.Row="3" Classes="secondary" Text="{loc:Loc Compose_Subject}" VerticalAlignment="Center" />
+          <TextBox Grid.Row="3" Grid.Column="1" Classes="flat" Text="{Binding Subject}" VerticalAlignment="Center" />
         </Grid>
 
         <ItemsControl DockPanel.Dock="Bottom" ItemsSource="{Binding Attachments}">

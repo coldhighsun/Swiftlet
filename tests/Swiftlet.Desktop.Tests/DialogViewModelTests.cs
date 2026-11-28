@@ -278,6 +278,21 @@ public class DialogViewModelTests
     }
 
     /// <summary>
+    /// Verifies a new window starts without the Cc and Bcc fields and keeps them once they are asked for.
+    /// </summary>
+    [Fact]
+    public void ShowCcBccCommand_NewMessage_ShowsTheFieldsAndKeepsThem()
+    {
+        var viewModel = CreateCompose(new FakeDispatcher());
+        viewModel.IsCcBccShown.Should().BeFalse();
+
+        viewModel.ShowCcBccCommand.Execute(null);
+        viewModel.ShowCcBccCommand.Execute(null);
+
+        viewModel.IsCcBccShown.Should().BeTrue();
+    }
+
+    /// <summary>
     /// Verifies sending without recipients fails fast.
     /// </summary>
     [Fact]

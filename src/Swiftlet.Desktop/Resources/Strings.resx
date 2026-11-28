@@ -161,6 +161,7 @@
   <data name="Compose_To" xml:space="preserve"><value>To</value></data>
   <data name="Compose_Cc" xml:space="preserve"><value>Cc</value></data>
   <data name="Compose_Bcc" xml:space="preserve"><value>Bcc</value></data>
+  <data name="Compose_ShowCcBcc" xml:space="preserve"><value>Cc/Bcc</value></data>
   <data name="Compose_Subject" xml:space="preserve"><value>Subject</value></data>
   <data name="Compose_RecipientsPlaceholder" xml:space="preserve"><value>Separate addresses with commas or semicolons</value></data>
   <data name="Compose_AddAttachment" xml:space="preserve"><value>Add attachment…</value></data>

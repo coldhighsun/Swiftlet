@@ -817,6 +817,48 @@ public class UiSmokeTests
     }
 
     /// <summary>
+    /// Verifies the Cc and Bcc fields appear only on request, and the focus then moves to Cc.
+    /// </summary>
+    /// <param name="language">The UI language.</param>
+    /// <param name="caption">The expected caption of the button that shows the fields.</param>
+    [Theory]
+    [InlineData("zh-Hans", "抄送/密送")]
+    [InlineData("en", "Cc/Bcc")]
+    public async Task ComposeWindow_ShowCcBcc_RevealsTheFieldsAndFocusesCc(string language, string caption)
+    {
+        await DispatchAsync(
+            () =>
+            {
+                LocalizationManager.Instance.SetPreference(language);
+                var account = TestData.Account();
+                var viewModel = new ComposeViewModel(
+                    new FakeDispatcher(),
+                    new FakeDialogService(),
+                    language == "en" ? TestLocalizer.English() : TestLocalizer.Chinese(),
+                    [account],
+                    new ComposeRequest(ComposeMode.New, account.Id, string.Empty, string.Empty, string.Empty, null));
+                var window = new ComposeWindow { DataContext = viewModel };
+                Render(window, $"compose-cc-hidden-{language}", language);
+                var boxes = window.GetVisualDescendants().OfType<RecipientBox>().ToList();
+                var button = window.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == caption);
+
+                boxes.Select(b => b.IsEffectivelyVisible).Should().Equal(true, false, false);
+                button.IsEffectivelyVisible.Should().BeTrue();
+
+                button.Command!.Execute(null);
+                Dispatcher.UIThread.RunJobs();
+
+                Snapshot(window, $"compose-cc-shown-{language}");
+                boxes.Select(b => b.IsEffectivelyVisible).Should().Equal(true, true, true);
+                button.IsEffectivelyVisible.Should().BeFalse();
+                boxes[1].IsKeyboardFocusWithin.Should().BeTrue();
+                window.Close();
+                return Task.CompletedTask;
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Verifies the tree shows the unified inbox, accounts and labels, and the toolbar has a delete button, in both languages.
     /// </summary>
     /// <param name="language">The UI language.</param>
