@@ -87,7 +87,7 @@ public sealed partial class AccountNodeViewModel(MailAccount account) : Observab
     /// <summary>
     /// Gets the text shown in the tree: the name the user gave the account, otherwise its address.
     /// </summary>
-    public string DisplayName => Account.HasCustomDisplayName ? Account.DisplayName : Account.EmailAddress;
+    public string DisplayName => AddressText.AccountName(Account);
 
     /// <summary>
     /// Gets the initial shown in the account's avatar; taken from the text the tree shows.

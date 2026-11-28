@@ -1,4 +1,5 @@
 using Swiftlet.Desktop.Services;
+using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Contacts;
 
 namespace Swiftlet.Desktop.Formatting;
@@ -51,6 +52,17 @@ public static class AddressText
         }
 
         return string.IsNullOrWhiteSpace(name) ? address : name;
+    }
+
+    /// <summary>
+    /// Gets how an own account is named: the name the user gave it, otherwise its address.
+    /// </summary>
+    /// <param name="account">The account.</param>
+    /// <returns>The name.</returns>
+    public static string AccountName(MailAccount account)
+    {
+        ArgumentNullException.ThrowIfNull(account);
+        return account.HasCustomDisplayName ? account.DisplayName : account.EmailAddress;
     }
 
     /// <summary>

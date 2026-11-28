@@ -350,8 +350,19 @@
                         <PathIcon Data="{StaticResource Icon.StarFilled}" Width="14" Height="14" IsVisible="{Binding IsFlagged}"
                                   Foreground="{DynamicResource Brush.Star}" />
                       </StackPanel>
-                      <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Classes="caption" Text="{Binding Preview}"
-                                 TextTrimming="CharacterEllipsis" />
+                      <!-- The account mark sits outside the time column, so a long name never narrows the lines above. -->
+                      <DockPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2">
+                        <Grid x:Name="AccountTag" DockPanel.Dock="Right" ColumnDefinitions="Auto,Auto" ColumnSpacing="4"
+                              Margin="8,0,0,0" Background="Transparent" ToolTip.Tip="{Binding AccountTag.Address}"
+                              IsVisible="{Binding AccountTag, Converter={x:Static ObjectConverters.IsNotNull}}">
+                          <Border Width="8" Height="8" CornerRadius="4" Background="{Binding AccountTag.Brush}"
+                                  VerticalAlignment="Center" />
+                          <!-- Trimmed in the middle, so the domain of a long address stays readable. -->
+                          <TextBlock Grid.Column="1" Classes="caption" Text="{Binding AccountTag.Name}" MaxWidth="130"
+                                     TextTrimming="PrefixCharacterEllipsis" />
+                        </Grid>
+                        <TextBlock Classes="caption" Text="{Binding Preview}" TextTrimming="CharacterEllipsis" />
+                      </DockPanel>
                       <ItemsControl Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" ItemsSource="{Binding Labels}"
                                     IsVisible="{Binding HasLabels}" Margin="0,2,0,0">
                         <ItemsControl.ItemsPanel>

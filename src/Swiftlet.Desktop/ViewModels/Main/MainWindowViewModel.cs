@@ -2143,6 +2143,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         ApplyStoredAccountOrder();
         await ReloadLabelsAsync();
 
+        // An account may have been renamed, added or removed.
+        foreach (var item in Messages)
+        {
+            ApplyAccountTag(item);
+        }
+
         // The unified inbox is the view at startup and whenever the selected node disappears.
         if (SelectedNode is null && Accounts.Count > 0)
         {
@@ -2512,7 +2518,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 var listed = Messages.Select(m => m.Id).ToHashSet();
                 foreach (var message in page.Where(m => listed.Add(m.Id)))
                 {
-                    Messages.Add(CreateItem(message));
+                    var item = CreateItem(message);
+                    ApplyAccountTag(item);
+                    Messages.Add(item);
                 }
             });
         }
@@ -2564,6 +2572,21 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Marks a listed message with its account when the list can mix accounts: the unified inbox, a label or a search
+    /// across all accounts, and only while there is more than one account.
+    /// </summary>
+    /// <param name="item">The item.</param>
+    private void ApplyAccountTag(MessageItemViewModel item)
+    {
+        var mixed = _shownSearch is { } search
+            ? search.AccountId is null && search.FolderId is null
+            : SelectedNode is UnifiedInboxNodeViewModel or LabelNodeViewModel;
+        item.ShowAccount(mixed && _accounts.Count > 1
+            ? _accounts.FirstOrDefault(a => a.Id == item.Message.AccountId)
+            : null);
+    }
+
+    /// <summary>
     /// Replaces the message list, keeping the current selection when the message is still listed.
     /// </summary>
     /// <param name="messages">The new messages.</param>
@@ -2589,6 +2612,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             {
                 target.Add(CreateItem(message));
             }
+        }
+
+        // Kept items too: the same message may come from a view that marked accounts differently.
+        foreach (var item in target)
+        {
+            ApplyAccountTag(item);
         }
 
         if (SelectedMessage is { } selected && !target.Contains(selected))

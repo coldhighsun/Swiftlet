@@ -8,6 +8,7 @@ using Swiftlet.Desktop.Formatting;
 using Swiftlet.Desktop.Html;
 using Swiftlet.Desktop.Localization;
 using Swiftlet.Desktop.Services;
+using Swiftlet.Domain.Accounts;
 using Swiftlet.Domain.Messages;
 
 namespace Swiftlet.Desktop.ViewModels.Main;
@@ -210,6 +211,33 @@ public sealed partial class MessageItemViewModel : ObservableObject
 
         // The day may have changed since the item was shown.
         OnPropertyChanged(nameof(ListTimeText));
+    }
+
+    /// <summary>
+    /// Gets the mark naming the account of the message, or <see langword="null"/> when the list needs none.
+    /// </summary>
+    [ObservableProperty]
+    public partial AccountTagViewModel? AccountTag { get; private set; }
+
+    /// <summary>
+    /// Marks the row with an account, or removes the mark.
+    /// </summary>
+    /// <param name="account">The account of the message, or <see langword="null"/> for no mark.</param>
+    public void ShowAccount(MailAccount? account)
+    {
+        if (account is null)
+        {
+            AccountTag = null;
+            return;
+        }
+
+        var name = AddressText.AccountName(account);
+
+        // An unchanged mark is kept, so a periodic refresh redraws nothing.
+        if (AccountTag?.Name != name || AccountTag.Address != account.EmailAddress)
+        {
+            AccountTag = new AccountTagViewModel(name, account.EmailAddress);
+        }
     }
 
     /// <summary>
