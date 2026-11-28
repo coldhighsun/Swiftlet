@@ -1,7 +1,6 @@
 using System.IO.Compression;
 using System.Text;
 using System.Xml;
-using ImageMagick;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Swiftlet.Application.Abstractions;
@@ -18,12 +17,7 @@ public sealed class AttachmentPreviewer(ILogger<AttachmentPreviewer>? logger = n
     /// <summary>
     /// The longest side of a thumbnail, in pixels.
     /// </summary>
-    internal const uint MaxThumbnailSide = 480;
-
-    /// <summary>
-    /// The most pixels an image may have before it is refused (guards against decompression bombs).
-    /// </summary>
-    private const long MaxPixels = 100_000_000;
+    internal const int MaxThumbnailSide = 480;
 
     /// <summary>
     /// The number of bytes read from the start of a text file.
@@ -61,12 +55,20 @@ public sealed class AttachmentPreviewer(ILogger<AttachmentPreviewer>? logger = n
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
     /// <summary>
-    /// Extensions of images that are decoded with Magick.NET.
+    /// Extensions of images that get a thumbnail.
     /// </summary>
     private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".png", ".jpg", ".jpeg", ".jfif", ".gif", ".bmp", ".webp", ".tif", ".tiff", ".heic", ".heif", ".ico", ".psd",
-        ".svg", ".tga", ".avif",
+        ".png", ".jpg", ".jpeg", ".jfif", ".gif", ".bmp", ".webp", ".ico",
+    };
+
+    /// <summary>
+    /// Content types of images that get a thumbnail, for files whose extension says nothing.
+    /// </summary>
+    private static readonly HashSet<string> ImageTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "image/png", "image/jpeg", "image/jpg", "image/pjpeg", "image/gif", "image/bmp", "image/webp", "image/x-icon",
+        "image/vnd.microsoft.icon",
     };
 
     /// <summary>
@@ -115,7 +117,7 @@ public sealed class AttachmentPreviewer(ILogger<AttachmentPreviewer>? logger = n
                 _ => CreateOffice(fileName, content),
             };
         }
-        catch (Exception ex) when (ex is MagickException or InvalidDataException or XmlException or IOException
+        catch (Exception ex) when (ex is InvalidDataException or XmlException or IOException
             or NotSupportedException or ArgumentException)
         {
             // Corrupt, truncated or unsupported content is the normal reason; the preview then simply says so.
@@ -154,7 +156,7 @@ public sealed class AttachmentPreviewer(ILogger<AttachmentPreviewer>? logger = n
         }
 
         var type = contentType ?? string.Empty;
-        if (type.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        if (ImageTypes.Contains(type))
         {
             return FileKind.Image;
         }
@@ -176,32 +178,10 @@ public sealed class AttachmentPreviewer(ILogger<AttachmentPreviewer>? logger = n
     /// <returns>The preview.</returns>
     private static AttachmentPreview CreateImage(ReadOnlyMemory<byte> content)
     {
-        var bytes = content.ToArray();
-        var info = new MagickImageInfo(bytes);
-        if ((long)info.Width * info.Height > MaxPixels)
-        {
-            return AttachmentPreview.Unsupported;
-        }
-
-        using var image = new MagickImage(bytes);
-        if (image.Width > MaxThumbnailSide || image.Height > MaxThumbnailSide)
-        {
-            image.Resize(MaxThumbnailSide, MaxThumbnailSide);
-        }
-
-        // Respect the camera orientation; transparency needs PNG, everything else is smaller as JPEG.
-        image.AutoOrient();
-        if (image.HasAlpha)
-        {
-            image.Format = MagickFormat.Png;
-        }
-        else
-        {
-            image.Format = MagickFormat.Jpeg;
-            image.Quality = 80;
-        }
-
-        return new AttachmentPreview(AttachmentPreviewKind.Image, Image: image.ToByteArray());
+        // Transparency needs PNG; everything else is smaller as JPEG.
+        return ImageScaler.Scale(content.Span, MaxThumbnailSide, 80, keepAlpha: true) is { } thumbnail
+            ? new AttachmentPreview(AttachmentPreviewKind.Image, Image: thumbnail.Content)
+            : AttachmentPreview.Unsupported;
     }
 
     /// <summary>

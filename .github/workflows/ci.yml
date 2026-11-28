@@ -184,7 +184,7 @@ jobs:
           path: artifacts/installer/Swiftlet-${{ needs.version.outputs.tag }}-linux-x64.tar.gz
 
   # ── macOS package ────────────────────────────────────────────────────────────
-  # Apple silicon only: Magick.NET 15 has no native library for Intel Macs (osx-x64).
+  # Apple silicon only; no package for Intel Macs (osx-x64) is built.
   package-macos:
     name: Package (macOS)
     needs: version

@@ -22,6 +22,16 @@ internal static class InlineImageExtractor
     private const int MaxSourceBytes = 25 * 1024 * 1024;
 
     /// <summary>
+    /// The longest side of a scaled-down image.
+    /// </summary>
+    private const int MaxScaledSide = 2048;
+
+    /// <summary>
+    /// The JPEG quality of scaled-down images.
+    /// </summary>
+    private const int JpegQuality = 85;
+
+    /// <summary>
     /// The largest total size of the images taken from one message.
     /// </summary>
     private const int MaxTotalBytes = 10 * 1024 * 1024;
@@ -61,7 +71,6 @@ internal static class InlineImageExtractor
         {
             var mimeType = part.ContentType.MimeType;
             var fileName = part.FileName ?? part.ContentType.Name;
-            var isHeic = HeicConverter.IsHeic(mimeType) || HeicConverter.IsHeicFile(mimeType, fileName);
             if (string.IsNullOrWhiteSpace(part.ContentId) || part.Content is null)
             {
                 continue;
@@ -80,7 +89,7 @@ internal static class InlineImageExtractor
                 continue;
             }
 
-            if (!isHeic && !AllowedTypes.Contains(mimeType))
+            if (!AllowedTypes.Contains(mimeType))
             {
                 logger.LogWarning("Inline image {ContentId} skipped: unsupported type {MimeType}", id, mimeType);
                 continue;
@@ -97,7 +106,7 @@ internal static class InlineImageExtractor
             var bytes = buffer.ToArray();
             var type = mimeType.ToLowerInvariant();
 
-            // HEIC cannot be shown by the web view, and images over the size limit (phone photos) are scaled down.
+            // Images over the size limit (phone photos) are scaled down.
             // Large GIFs are skipped rather than converted, which would lose the animation.
             var oversized = bytes.Length > MaxImageBytes;
             if (oversized && type == "image/gif")
@@ -106,17 +115,17 @@ internal static class InlineImageExtractor
                 continue;
             }
 
-            if (isHeic || oversized)
+            if (oversized)
             {
-                if (HeicConverter.ToJpeg(bytes, logger) is not { } jpeg)
+                if (ImageScaler.Scale(bytes, MaxScaledSide, JpegQuality, keepAlpha: false) is not { } scaled)
                 {
                     logger.LogWarning("Inline image {ContentId} skipped: conversion failed", id);
                     continue;
                 }
 
-                logger.LogInformation("Inline image {ContentId} converted to JPEG: {From} to {To} bytes", id, bytes.Length, jpeg.Length);
-                bytes = jpeg;
-                type = "image/jpeg";
+                logger.LogInformation("Inline image {ContentId} converted to JPEG: {From} to {To} bytes", id, bytes.Length, scaled.Content.Length);
+                bytes = scaled.Content;
+                type = scaled.ContentType;
             }
 
             if (total + bytes.Length > MaxTotalBytes)
