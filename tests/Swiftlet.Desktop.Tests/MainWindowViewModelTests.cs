@@ -2456,6 +2456,52 @@ public class MainWindowViewModelTests
     }
 
     /// <summary>
+    /// Verifies marking a folder read sends the command without asking and updates the listed rows and badges.
+    /// </summary>
+    [Fact]
+    public async Task MarkFolderRead_UnreadFolder_UpdatesRowsAndCounts()
+    {
+        var scenario = new Scenario();
+        scenario.Dispatcher.On<MarkFolderReadCommand>(_ =>
+        {
+            scenario.Messages.ForEach(m => m.SetRead(true));
+            return 2;
+        });
+        await scenario.StartAsync();
+        var node = scenario.ViewModel.Accounts[0].Folders.Single(f => f.Folder.Id == scenario.Inbox.Id);
+        var changed = new List<string?>();
+        scenario.ViewModel.Messages[0].PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        await scenario.ViewModel.MarkFolderReadCommand.ExecuteAsync(node);
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.Dispatcher.Sent<MarkFolderReadCommand>().Should().ContainSingle().Which.FolderId.Should().Be(scenario.Inbox.Id);
+        scenario.Dialogs.Confirmations.Should().BeEmpty();
+        scenario.ViewModel.Messages.Should().OnlyContain(m => m.IsRead);
+        changed.Should().Contain(nameof(MessageItemViewModel.IsUnread));
+        node.UnreadCount.Should().Be(0);
+        scenario.ViewModel.UnifiedInbox.UnreadCount.Should().Be(0);
+    }
+
+    /// <summary>
+    /// Verifies a failure to mark a folder read is shown and leaves the rows unread.
+    /// </summary>
+    [Fact]
+    public async Task MarkFolderRead_Fails_KeepsRowsUnreadAndShowsError()
+    {
+        var scenario = new Scenario();
+        scenario.Dispatcher.On<MarkFolderReadCommand>(_ => throw new IOException("disk full"));
+        await scenario.StartAsync();
+        var node = scenario.ViewModel.Accounts[0].Folders.Single(f => f.Folder.Id == scenario.Inbox.Id);
+
+        await scenario.ViewModel.MarkFolderReadCommand.ExecuteAsync(node);
+        await scenario.ViewModel.WhenIdleAsync();
+
+        scenario.ViewModel.Messages.Should().OnlyContain(m => !m.IsRead);
+        scenario.ViewModel.StatusText.Should().Contain("disk full").And.Contain("标记已读失败");
+    }
+
+    /// <summary>
     /// Verifies emptying a folder confirms with the folder and the kind of deletion, then queues it.
     /// </summary>
     /// <param name="hasTrash">Whether the account has a Trash folder.</param>

@@ -2049,7 +2049,7 @@ public class UiSmokeTests
     }
 
     /// <summary>
-    /// Verifies folder nodes offer deleting all messages, except for All Mail.
+    /// Verifies folder nodes offer marking all as read while they have unread mail, and deleting all messages except for All Mail.
     /// </summary>
     [Fact]
     public async Task MainWindow_FolderNodeContextMenu_OffersDeleteAllExceptForAllMail()
@@ -2074,10 +2074,11 @@ public class UiSmokeTests
                     var menu = row.ContextMenu!;
                     menu.Open(row);
                     Dispatcher.UIThread.RunJobs();
-                    var item = menu.Items.OfType<MenuItem>().Should().ContainSingle().Which;
-                    item.Header.Should().Be("Delete all messages");
-                    item.IsEffectivelyEnabled.Should().Be(folder.CanEmpty);
-                    item.CommandParameter.Should().BeSameAs(folder);
+                    var items = menu.Items.OfType<MenuItem>().ToList();
+                    items.Select(i => i.Header).Should().Equal("Mark all as read", "Delete all messages");
+                    items[0].IsEffectivelyEnabled.Should().Be(folder.HasUnread);
+                    items[1].IsEffectivelyEnabled.Should().Be(folder.CanEmpty);
+                    items.Should().OnlyContain(i => ReferenceEquals(i.CommandParameter, folder));
                     menu.Close();
                 }
 
