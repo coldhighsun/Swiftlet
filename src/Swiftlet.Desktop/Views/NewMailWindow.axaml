@@ -17,6 +17,17 @@
     <Style Selector="Button#OpenButton:pressed /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="Transparent" />
     </Style>
+    <!-- The round arrow buttons inside the pager. -->
+    <Style Selector="Button.pager">
+      <Setter Property="Width" Value="24" />
+      <Setter Property="Height" Value="24" />
+      <Setter Property="MinWidth" Value="24" />
+      <Setter Property="MinHeight" Value="24" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
   </Window.Styles>
   <!-- The window itself is transparent, so only this card with its round corners is seen. -->
   <Border x:Name="Card" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}"
@@ -43,40 +54,45 @@
         </StackPanel>
       </Button>
 
-      <Grid ColumnDefinitions="*,Auto" Margin="16,4,16,0">
-        <TextBlock Classes="caption" Text="{Binding AccountAddress}" TextTrimming="CharacterEllipsis" MaxLines="1"
-                   ToolTip.Tip="{Binding AccountAddress}" />
-        <TextBlock Grid.Column="1" Classes="caption" Text="{Binding Position}" Margin="8,0,0,0"
-                   IsVisible="{Binding HasSeveral}" />
-      </Grid>
+      <TextBlock Classes="caption" Text="{Binding AccountAddress}" Margin="16,4,16,0"
+                 TextTrimming="CharacterEllipsis" MaxLines="1" ToolTip.Tip="{Binding AccountAddress}" />
       <TextBlock Classes="error" Text="{Binding Error}" Margin="16,4,16,0" TextWrapping="Wrap"
                  IsVisible="{Binding HasError}" />
 
-      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto" Margin="8,4,8,8">
-        <Button x:Name="PreviousButton" Classes="icon" Command="{Binding PreviousCommand}"
-                IsVisible="{Binding HasSeveral}" ToolTip.Tip="{loc:Loc Notification_Previous}"
-                AutomationProperties.Name="{loc:Loc Notification_Previous}">
-          <PathIcon Data="{StaticResource Icon.ChevronLeft}" />
-        </Button>
-        <Button x:Name="NextButton" Grid.Column="1" Classes="icon" Command="{Binding NextCommand}"
-                IsVisible="{Binding HasSeveral}" ToolTip.Tip="{loc:Loc Notification_Next}"
-                AutomationProperties.Name="{loc:Loc Notification_Next}">
-          <PathIcon Data="{StaticResource Icon.ChevronRight}" />
-        </Button>
-        <Button x:Name="StarButton" Grid.Column="3" Classes="icon" Command="{Binding StarCommand}"
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" Margin="16,4,8,8">
+        <!-- A compact pill, so moving between messages weighs less than the actions on the shown one. -->
+        <Border x:Name="Pager" Height="28" Padding="1" CornerRadius="12" BorderThickness="1"
+                HorizontalAlignment="Left" VerticalAlignment="Center" IsVisible="{Binding HasSeveral}"
+                Background="{DynamicResource Brush.WindowBg}" BorderBrush="{DynamicResource Brush.Border}">
+          <StackPanel Orientation="Horizontal">
+            <Button x:Name="PreviousButton" Classes="icon pager" Command="{Binding PreviousCommand}"
+                    ToolTip.Tip="{loc:Loc Notification_Previous}"
+                    AutomationProperties.Name="{loc:Loc Notification_Previous}">
+              <PathIcon Data="{StaticResource Icon.ChevronLeft}" Width="10" Height="10" />
+            </Button>
+            <TextBlock Classes="caption" Text="{Binding Position}" MinWidth="32" Margin="2,0"
+                       TextAlignment="Center" VerticalAlignment="Center" />
+            <Button x:Name="NextButton" Classes="icon pager" Command="{Binding NextCommand}"
+                    ToolTip.Tip="{loc:Loc Notification_Next}"
+                    AutomationProperties.Name="{loc:Loc Notification_Next}">
+              <PathIcon Data="{StaticResource Icon.ChevronRight}" Width="10" Height="10" />
+            </Button>
+          </StackPanel>
+        </Border>
+        <Button x:Name="StarButton" Grid.Column="2" Classes="icon" Command="{Binding StarCommand}"
                 ToolTip.Tip="{loc:Loc Notification_Star}" AutomationProperties.Name="{loc:Loc Notification_Star}">
           <PathIcon Data="{StaticResource Icon.Star}" />
         </Button>
-        <Button x:Name="MarkReadButton" Grid.Column="4" Classes="icon" Command="{Binding MarkReadCommand}"
+        <Button x:Name="MarkReadButton" Grid.Column="3" Classes="icon" Command="{Binding MarkReadCommand}"
                 ToolTip.Tip="{loc:Loc Notification_MarkRead}" AutomationProperties.Name="{loc:Loc Notification_MarkRead}">
           <PathIcon Data="{StaticResource Icon.MailRead}" />
         </Button>
-        <Button x:Name="ArchiveButton" Grid.Column="5" Classes="icon" Command="{Binding ArchiveCommand}"
+        <Button x:Name="ArchiveButton" Grid.Column="4" Classes="icon" Command="{Binding ArchiveCommand}"
                 ToolTip.Tip="{Binding ArchiveHint}" ToolTip.ShowOnDisabled="True"
                 AutomationProperties.Name="{loc:Loc Toolbar_Archive}">
           <PathIcon Data="{StaticResource Icon.Archive}" />
         </Button>
-        <Button x:Name="DeleteButton" Grid.Column="6" Classes="icon danger" Command="{Binding DeleteCommand}"
+        <Button x:Name="DeleteButton" Grid.Column="5" Classes="icon danger" Command="{Binding DeleteCommand}"
                 ToolTip.Tip="{Binding DeleteHint}" ToolTip.ShowOnDisabled="True"
                 AutomationProperties.Name="{loc:Loc Toolbar_Delete}">
           <PathIcon Data="{StaticResource Icon.Delete}" />
