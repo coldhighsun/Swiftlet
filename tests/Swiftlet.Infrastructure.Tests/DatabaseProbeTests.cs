@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
 using Swiftlet.Infrastructure.Persistence.Encryption;
@@ -136,12 +137,22 @@ public sealed class DatabaseProbeTests : IDisposable
     }
 
     /// <summary>
-    /// Copies a file another connection still has open.
+    /// Copies a file another connection still has open and locked.
     /// </summary>
     /// <param name="from">The source.</param>
     /// <param name="to">The target.</param>
     private static void Copy(string from, string to)
     {
+        // On macOS the advisory lock .NET takes on every opened file conflicts with the locks SQLite holds,
+        // so the file is copied by a program that takes none.
+        if (!OperatingSystem.IsWindows())
+        {
+            using var process = Process.Start("cp", [from, to]);
+            process.WaitForExit();
+            process.ExitCode.Should().Be(0);
+            return;
+        }
+
         using var input = new FileStream(from, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         using var output = new FileStream(to, FileMode.Create, FileAccess.Write);
         input.CopyTo(output);
